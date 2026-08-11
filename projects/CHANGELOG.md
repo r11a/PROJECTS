@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0
+
+- Added operational task center with project, owner, due date, priority, type, effort, status, editing, admin-only deletion and calendar history.
+- Added project milestones with ownership, progress, target dates, delay state and automatic calendar history.
+- Added real payment and collection management with references, due dates, status, audit logging and automatic project balance synchronization.
+- Rebuilt the project workspace: live overview, tasks, milestones, project team, equipment, forms, documents, finance and activity timeline.
+- Added project team assignments independently from software access permissions.
+- Added equipment allocation with quantity, location, status, serial number and notes.
+- Added management reports based on live PostgreSQL data and CSV export.
+- Connected all sidebar management shortcuts to dedicated working screens.
+- Added project filters and live map search.
+- Added custom-field activation and deletion controls.
+- Removed remaining hard-coded dashboard counts and made actions navigate to their actual workspaces.
+- Improved responsive behavior for project resources, operational lists, forms and reports.
+- Added migration `006_project_operations.sql` and expanded health/version metadata.
+
 ## 0.5.5
 
 - Refined the sidebar brand into a single balanced icon-and-name row.

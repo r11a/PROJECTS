@@ -13,9 +13,12 @@ import { activity, clients, milestones, stageMeta } from './data';
 import { AlertCenter, CalendarWorkspace, ClientsWorkspace, InsightsTile, OperationalSettings } from './Operational';
 import { FormsWorkspace } from './FormsWorkspace';
 import { MasterDataWorkspace } from './MasterDataWorkspace';
+import { FinanceWorkspace, ReportsWorkspace, TasksWorkspace } from './Workspaces';
+import { ProjectWorkspace } from './ProjectWorkspace';
 import './operational.css';
 import './forms-workspace.css';
 import './master-data.css';
+import './workspaces.css';
 import projectsMark from './assets/projects-mark.svg';
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
@@ -24,7 +27,8 @@ const actionNamesForDashboard = { create: 'יצר רשומה', update: 'עדכן
 // Vite loads this bundle from <application base>/assets/. Deriving the base
 // from the bundle URL works whether the Ingress page URL ends with a slash or
 // not, and also keeps the standalone interface rooted at /.
-const applicationBase = new URL('.', import.meta.url).pathname.replace(/\/assets\/$/, '').replace(/\/$/, '');
+const bundlePath = new URL(import.meta.url).pathname;
+const applicationBase = bundlePath.includes('/assets/') ? bundlePath.replace(/\/assets\/[^/]+$/, '').replace(/\/$/, '') : '';
 export const apiRoot = `${applicationBase}/api`;
 
 export async function api(path, options = {}) {
@@ -41,6 +45,7 @@ export async function api(path, options = {}) {
     error.status = response.status;
     throw error;
   }
+  if (options.method && options.method !== 'GET' && /^\/operations\/(tasks|payments)/.test(path)) window.dispatchEvent(new Event('projects:data-changed'));
   return body;
 }
 
@@ -109,6 +114,7 @@ function App() {
     setProfessionals(professionalsResult.professionals);
     return { settingsResult, teamResult, clientsResult, professionalsResult };
   };
+  const loadProjects = () => api('/projects').then((result) => { setProjects(result.projects); setSelectedProject((current) => current ? result.projects.find((item) => item.id === current.id) || current : current); return result.projects; });
 
   useEffect(() => {
     api('/auth/me').then(({ user: currentUser }) => {
@@ -119,6 +125,7 @@ function App() {
       else setStartupError(error.message || 'שרת הנתונים אינו זמין');
     }).finally(() => setLoading(false));
   }, []);
+  useEffect(() => { if (!user) return undefined; const refresh = () => loadProjects().catch(() => {}); window.addEventListener('projects:data-changed', refresh); return () => window.removeEventListener('projects:data-changed', refresh); }, [user?.id]);
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(''), 2600);
@@ -174,7 +181,8 @@ function App() {
     return haystack.includes(search.toLowerCase()) && (stageFilter === 'all' || project.stage === stageFilter);
   });
 
-  const pageTitle = selectedProject && page === 'project' ? selectedProject.name : page === 'users' ? 'משתמשים והרשאות' : page === 'settings' ? 'גיבוי ומערכת' : nav.find((item) => item.id === page)?.label || 'תמונת מצב';
+  const secondaryTitles = { tasks: 'משימות ואבני דרך', reports: 'דוחות וניתוחים', users: 'משתמשים והרשאות', settings: 'הגדרות ומערכת' };
+  const pageTitle = selectedProject && page === 'project' ? selectedProject.name : secondaryTitles[page] || nav.find((item) => item.id === page)?.label || 'תמונת מצב';
   const todayLabel = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
   const company = configuration.settings.company || {};
   const companyLogo = company.logo?.storedName ? `${apiRoot}/settings/company-logo?v=${encodeURIComponent(company.logo.updatedAt || '')}` : '';
@@ -196,12 +204,12 @@ function App() {
             </button>;
           })}
           <span className="nav-label nav-second">ניהול</span>
-          <button onClick={() => setPage('calendar')}><ClipboardCheck size={19} /><span>משימות ואבני דרך</span></button>
+          <button className={page === 'tasks' ? 'active' : ''} onClick={() => setPage('tasks')}><ClipboardCheck size={19} /><span>משימות ואבני דרך</span>{insights?.stats?.overdue > 0 && <em>{insights.stats.overdue}</em>}</button>
           <button className={page === 'master' ? 'active' : ''} onClick={() => setPage('master')}><Tag size={19} /><span>מערכות וקטלוגים</span></button>
-          <button onClick={() => setPage('finance')}><Activity size={19} /><span>דוחות וניתוחים</span></button>
+          <button className={page === 'reports' ? 'active' : ''} onClick={() => setPage('reports')}><Activity size={19} /><span>דוחות וניתוחים</span></button>
         </nav>
         <div className="sidebar-footer">
-          {user.role === 'admin' && <button className={page === 'settings' ? 'active' : ''} onClick={() => setPage('settings')}><Settings size={19} /><span>גיבוי ומערכת</span></button>}
+          {user.role === 'admin' && <button className={page === 'settings' ? 'active' : ''} onClick={() => setPage('settings')}><Settings size={19} /><span>הגדרות ומערכת</span></button>}
           <div className="user-card"><div className="avatar" style={{ background: user.avatarColor, color: '#fff' }}>{avatarGlyph(user)}<span /></div><div><strong>{user.displayName}</strong><span>{roleLabels[user.role]}</span></div><button className="logout-button" onClick={logout} title="יציאה"><LogOut size={17} /></button></div>
         </div>
       </aside>
@@ -216,7 +224,7 @@ function App() {
           </div>
           <div className="topbar-actions">
             <label className="global-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש בכל המערכת..." /><kbd>⌘ K</kbd></label>
-            <button className="icon-button"><Bell size={20} /><i /></button>
+            <button className="icon-button" onClick={() => setAlertsOpen(true)} title="התראות"><Bell size={20} />{insights?.alerts?.length > 0 && <i />}</button>
             {['admin', 'manager'].includes(user.role) && <button className="primary-button" onClick={() => setNewProjectOpen(true)}><Plus size={18} />פרויקט חדש</button>}
           </div>
         </header>
@@ -229,10 +237,12 @@ function App() {
           {page === 'clients' && <ClientsWorkspace api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} />}
           {page === 'master' && <MasterDataWorkspace api={api} apiRoot={apiRoot} user={user} users={team} clients={clientOptions} projects={projects} setNotice={setNotice} onDataChanged={loadReferenceData} />}
           {page === 'forms' && <FormsWorkspace api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} />}
-          {page === 'finance' && <FinancePage projects={projects} openProject={openProject} />}
+          {page === 'finance' && <FinanceWorkspace api={api} user={user} projects={projects} setNotice={setNotice} openProject={openProject} />}
+          {page === 'tasks' && <TasksWorkspace api={api} user={user} projects={projects} professionals={professionals} setNotice={setNotice} />}
+          {page === 'reports' && <ReportsWorkspace api={api} setNotice={setNotice} />}
           {page === 'users' && user.role === 'admin' && <UsersPage setNotice={setNotice} currentUser={user} onChanged={loadReferenceData} />}
           {page === 'settings' && user.role === 'admin' && <OperationalSettings api={api} apiRoot={apiRoot} setNotice={setNotice} onConfigurationChanged={setConfiguration} />}
-          {page === 'project' && selectedProject && <ProjectDetail project={projects.find((p) => p.id === selectedProject.id) || selectedProject} updateProject={updateProject} canEdit={['admin', 'manager', 'technician'].includes(user.role)} professionals={professionals} stageOptions={stageOptions} />}
+          {page === 'project' && selectedProject && <ProjectWorkspace project={projects.find((p) => p.id === selectedProject.id) || selectedProject} updateProject={updateProject} api={api} apiRoot={apiRoot} user={user} projects={projects} professionals={professionals} stageOptions={stageOptions} setNotice={setNotice} setPage={setPage} />}
         </div>
       </main>
       {newProjectOpen && <NewProjectModal onClose={() => setNewProjectOpen(false)} onCreate={createProject} professionals={professionals} clients={clientOptions} stageOptions={stageOptions} />}
@@ -313,10 +323,10 @@ function Dashboard({ projects, openProject, setPage, insights, user }) {
     <div className="dashboard-page">
       <section className="welcome-row"><div><h2>שלום, {user.displayName} <span>👋</span></h2><p>הנה תמונת המצב התפעולית המעודכנת.</p></div><div className="live-pill"><i />הנתונים מעודכנים עכשיו</div></section>
       <section className="kpi-grid">
-        <KpiCard icon={FolderKanban} tone="purple" label="פרויקטים פעילים" value={active.length} change="2 נוספו החודש" trend />
-        <KpiCard icon={TrendingUp} tone="blue" label="היקף פרויקטים פעילים" value={compactMoney(value)} change="12.4% מהחודש הקודם" trend />
-        <KpiCard icon={Gauge} tone="green" label="התקדמות ממוצעת" value={`${avg}%`} change="4.8% שיפור החודש" trend />
-        <KpiCard icon={CircleDollarSign} tone="orange" label="יתרה פתוחה לגבייה" value={compactMoney(unpaid)} change="3 תשלומים דורשים טיפול" alert />
+        <KpiCard icon={FolderKanban} tone="purple" label="פרויקטים פעילים" value={active.length} change={`${projects.length-active.length} פרויקטים הושלמו`} />
+        <KpiCard icon={TrendingUp} tone="blue" label="היקף פרויקטים פעילים" value={compactMoney(value)} change="לפי שווי החוזים המעודכן" />
+        <KpiCard icon={Gauge} tone="green" label="התקדמות ממוצעת" value={`${avg}%`} change={`ממוצע של ${active.length} פרויקטים פעילים`} />
+        <KpiCard icon={CircleDollarSign} tone="orange" label="יתרה פתוחה לגבייה" value={compactMoney(unpaid)} change={`${active.filter(p=>Number(p.paid)<Number(p.value)).length} פרויקטים עם יתרה`} alert />
       </section>
       <InsightsTile insights={insights} onNavigate={setPage} />
       <section className="dashboard-grid top">
@@ -331,6 +341,7 @@ function Dashboard({ projects, openProject, setPage, insights, user }) {
                 <StatusBadge stage={project.stage} compact /><ChevronLeft size={18} />
               </button>
             ))}
+            {!projects.some((p)=>p.flag)&&<div className="inline-empty">אין כרגע פרויקטים מסומנים לטיפול.</div>}
           </div>
         </div>
         <div className="panel stage-panel">
@@ -346,17 +357,17 @@ function Dashboard({ projects, openProject, setPage, insights, user }) {
       </section>
       <section className="dashboard-grid bottom">
         <div className="panel cash-panel">
-          <PanelHead title="גבייה לפי פרויקט" subtitle="חוזה מול תשלומים שהתקבלו · באלפי ₪" action="6 פרויקטים" />
+          <PanelHead title="גבייה לפי פרויקט" subtitle="חוזה מול תשלומים שהתקבלו · באלפי ₪" action={`${cashData.length} פרויקטים`} onAction={()=>setPage('finance')} />
           <div className="cash-legend"><span><i className="paid" />התקבל</span><span><i className="expected" />צפי</span></div>
           <ResponsiveContainer width="100%" height={235}>
             <BarChart data={cashData} barGap={5}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf0f6" /><XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#8b93a7', fontSize: 12 }} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#a1a8b7', fontSize: 11 }} /><Tooltip cursor={{ fill: '#f7f8fb' }} /><Bar dataKey="expected" fill="#e8ebf3" radius={[5, 5, 0, 0]} /><Bar dataKey="paid" fill="#6d5de8" radius={[5, 5, 0, 0]} /></BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="panel milestones-panel"><PanelHead title="אבני דרך קרובות" subtitle="7 הימים הקרובים" action="ללוח השנה" />
-          <div className="milestone-list">{upcomingMilestones.map((item, index) => <div className="milestone-item" key={item.id}><div className={`date-tile ${item.health < 70 ? 'risk' : index === 0 ? 'today' : 'soon'}`}><b>{item.due.split('.')[0] || '—'}</b><span>{item.due.split('.')[1] || ''}</span></div><div><strong>{item.nextMilestone}</strong><span>{item.name}</span></div>{item.health < 70 && <em>בסיכון</em>}<MoreHorizontal size={18} /></div>)}</div>
+        <div className="panel milestones-panel"><PanelHead title="אבני דרך קרובות" subtitle="היעדים הבאים בפרויקטים הפעילים" action="ללוח השנה" onAction={()=>setPage('calendar')} />
+          <div className="milestone-list">{upcomingMilestones.map((item, index) => { const dueParts=String(item.due||'').split('.'); return <div className="milestone-item" key={item.id}><div className={`date-tile ${item.health < 70 ? 'risk' : index === 0 ? 'today' : 'soon'}`}><b>{dueParts[0] || '—'}</b><span>{dueParts[1] || ''}</span></div><div><strong>{item.nextMilestone||'טרם הוגדרה אבן דרך'}</strong><span>{item.name}</span></div>{item.health < 70 && <em>בסיכון</em>}<MoreHorizontal size={18} /></div>})}</div>
         </div>
-        <div className="panel activity-panel"><PanelHead title="פעילות אחרונה" action="הצג הכל" />
-          <div className="activity-list">{(insights?.recentActivities || []).map((item) => <div className="activity-item" key={item.id}><div className="mini-avatar">{item.userName.slice(0,2)}</div><div><p>{item.userName} · {actionNamesForDashboard[item.action] || item.action}</p><strong>{item.entityType} {item.entityId || ''}</strong><span>{new Date(item.createdAt).toLocaleString('he-IL')}</span></div></div>)}</div>
+        <div className="panel activity-panel"><PanelHead title="פעילות אחרונה" action="Audit Log" onAction={()=>setPage(user.role==='admin'?'settings':'tasks')} />
+          <div className="activity-list">{(insights?.recentActivities || []).map((item) => <div className="activity-item" key={item.id}><div className="mini-avatar">{(item.userName||'מערכת').slice(0,2)}</div><div><p>{item.userName||'מערכת'} · {actionNamesForDashboard[item.action] || item.action}</p><strong>{item.entityType} {item.entityId || ''}</strong><span>{new Date(item.createdAt).toLocaleString('he-IL')}</span></div></div>)}{!(insights?.recentActivities||[]).length&&<div className="inline-empty">אין פעילות חדשה להצגה.</div>}</div>
         </div>
       </section>
     </div>
@@ -373,11 +384,16 @@ function PanelHead({ title, subtitle, action, onAction }) {
 
 function ProjectsPage({ projects, search, setSearch, stageFilter, setStageFilter, openProject }) {
   const [view, setView] = useState('table');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [manager, setManager] = useState(''); const [priority, setPriority] = useState(''); const [flagged, setFlagged] = useState(false);
+  const visibleProjects = projects.filter((project) => (!manager || project.manager === manager) && (!priority || project.priority === priority) && (!flagged || project.flag));
+  const managers = [...new Set(projects.map((project) => project.manager).filter(Boolean))];
   return <div className="section-page">
-    <div className="page-intro"><div><h2>כל הפרויקטים</h2><p>ניהול, מעקב ובקרה של {projects.length} פרויקטים בתצוגה הנוכחית</p></div><div className="view-switch"><button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}><ListFilter size={17} />טבלה</button><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}><FolderKanban size={17} />לוח</button></div></div>
-    <div className="toolbar panel"><label className="table-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש פרויקט, לקוח או מזהה..." /></label><div className="stage-chips"><button className={stageFilter === 'all' ? 'active' : ''} onClick={() => setStageFilter('all')}>הכל <b>{projects.length}</b></button>{Object.entries(stageMeta).slice(0, 5).map(([key, meta]) => <button key={key} className={stageFilter === key ? 'active' : ''} onClick={() => setStageFilter(key)}>{meta.label}</button>)}</div><button className="filter-button"><SlidersHorizontal size={17} />מסננים</button></div>
-    {view === 'table' ? <div className="panel projects-table-wrap"><table className="projects-table"><thead><tr><th>פרויקט</th><th>שלב נוכחי</th><th>התקדמות</th><th>מנהל פרויקט</th><th>אבן דרך הבאה</th><th>יתרה לגבייה</th><th /></tr></thead><tbody>{projects.map((project) => <tr key={project.id} onClick={() => openProject(project)}><td><div className="project-cell"><div className="project-thumb"><Home size={18} /></div><div><strong>{project.name}</strong><span>{project.id} · {project.location}</span></div>{project.flag && <Flag size={14} className="row-flag" />}</div></td><td><StatusBadge stage={project.stage} /></td><td><div className="table-progress"><div><i style={{ width: `${project.progress}%`, background: stageMeta[project.stage].color }} /></div><b>{project.progress}%</b></div></td><td><div className="manager-cell"><span>{project.ownerInitials}</span>{project.manager}</div></td><td><div className="milestone-cell"><strong>{project.nextMilestone}</strong><span><CalendarDays size={13} />{project.due}</span></div></td><td><strong className="money-cell">{money.format(project.value - project.paid)}</strong></td><td><button className="round-more"><MoreHorizontal size={18} /></button></td></tr>)}</tbody></table></div>
-    : <BoardView projects={projects} openProject={openProject} />}
+    <div className="page-intro"><div><h2>כל הפרויקטים</h2><p>ניהול, מעקב ובקרה של {visibleProjects.length} פרויקטים בתצוגה הנוכחית</p></div><div className="view-switch"><button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}><ListFilter size={17} />טבלה</button><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}><FolderKanban size={17} />לוח</button></div></div>
+    <div className="toolbar panel"><label className="table-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש פרויקט, לקוח או מזהה..." /></label><div className="stage-chips"><button className={stageFilter === 'all' ? 'active' : ''} onClick={() => setStageFilter('all')}>הכל <b>{projects.length}</b></button>{Object.entries(stageMeta).slice(0, 5).map(([key, meta]) => <button key={key} className={stageFilter === key ? 'active' : ''} onClick={() => setStageFilter(key)}>{meta.label}</button>)}</div><button className={`filter-button ${filtersOpen?'active':''}`} onClick={()=>setFiltersOpen(!filtersOpen)}><SlidersHorizontal size={17} />מסננים</button></div>
+    {filtersOpen&&<div className="advanced-project-filters panel"><label>מנהל פרויקט<select value={manager} onChange={e=>setManager(e.target.value)}><option value="">כולם</option>{managers.map(x=><option key={x}>{x}</option>)}</select></label><label>עדיפות<select value={priority} onChange={e=>setPriority(e.target.value)}><option value="">הכול</option><option value="low">נמוכה</option><option value="normal">רגילה</option><option value="high">גבוהה</option><option value="urgent">דחופה</option></select></label><label className="filter-checkbox"><input type="checkbox" checked={flagged} onChange={e=>setFlagged(e.target.checked)}/>פרויקטים מסומנים בלבד</label><button onClick={()=>{setManager('');setPriority('');setFlagged(false)}}>ניקוי מסננים</button></div>}
+    {view === 'table' ? <div className="panel projects-table-wrap"><table className="projects-table"><thead><tr><th>פרויקט</th><th>שלב נוכחי</th><th>התקדמות</th><th>מנהל פרויקט</th><th>אבן דרך הבאה</th><th>יתרה לגבייה</th><th /></tr></thead><tbody>{visibleProjects.map((project) => <tr key={project.id} onClick={() => openProject(project)}><td><div className="project-cell"><div className="project-thumb"><Home size={18} /></div><div><strong>{project.name}</strong><span>{project.id} · {project.location}</span></div>{project.flag && <Flag size={14} className="row-flag" />}</div></td><td><StatusBadge stage={project.stage} /></td><td><div className="table-progress"><div><i style={{ width: `${project.progress}%`, background: stageMeta[project.stage].color }} /></div><b>{project.progress}%</b></div></td><td><div className="manager-cell"><span>{project.ownerInitials}</span>{project.manager||'לא הוקצה'}</div></td><td><div className="milestone-cell"><strong>{project.nextMilestone||'לא הוגדר'}</strong><span><CalendarDays size={13} />{project.due||'ללא תאריך'}</span></div></td><td><strong className="money-cell">{money.format(project.value - project.paid)}</strong></td><td><button className="round-more" onClick={e=>{e.stopPropagation();openProject(project)}} title="פתיחת פרויקט"><MoreHorizontal size={18} /></button></td></tr>)}</tbody></table>{!visibleProjects.length&&<div className="inline-empty">לא נמצאו פרויקטים התואמים למסננים.</div>}</div>
+    : <BoardView projects={visibleProjects} openProject={openProject} />}
   </div>;
 }
 
@@ -387,9 +403,10 @@ function BoardView({ projects, openProject }) {
 
 function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
   const [selected, setSelected] = useState(null);
+  const [query,setQuery]=useState(''); const visible=projects.filter(p=>`${p.name} ${p.client} ${p.address} ${p.location}`.toLowerCase().includes(query.toLowerCase()));
   return <div className="map-page section-page"><div className="page-intro"><div><h2>מפת פרויקטים חיה</h2><p>תמונת מצב גאוגרפית של הפרויקטים הפעילים</p></div><div className="map-stat"><MapPin size={18} /><strong>{projects.length}</strong> מיקומים מוצגים</div></div>
-    <div className="map-workspace panel"><div className="map-sidebar"><label className="table-search"><Search size={17} /><input placeholder="חיפוש מיקום..." /></label><div className="map-filter-title"><span>פרויקטים</span><button><Filter size={15} />סינון</button></div><div className="map-project-list">{projects.map((p) => <button key={p.id} className={selected?.id === p.id ? 'active' : ''} onClick={() => setSelected(p)}><i style={{ background: stageMeta[p.stage].color }} /><div><strong>{p.name}</strong><span>{p.location} · {p.progress}%</span></div><ChevronLeft size={17} /></button>)}</div><div className="map-legend"><span>מקרא שלבים</span>{Object.entries(stageMeta).slice(0, 5).map(([key, meta]) => <button key={key} onClick={() => setStageFilter(stageFilter === key ? 'all' : key)} className={stageFilter === key ? 'active' : ''}><i style={{ background: meta.color }} />{meta.label}</button>)}</div></div>
-      <div className="leaflet-shell"><MapContainer center={[32.12, 34.83]} zoom={10} zoomControl={false} scrollWheelZoom><TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /><ZoomControl position="bottomleft" />{projects.map((p) => <ProjectMarker key={p.id} project={p} onOpen={openProject} />)}</MapContainer>{selected && <div className="floating-project-card"><button onClick={() => setSelected(null)}><X size={16} /></button><span className="eyebrow">{selected.id}</span><h3>{selected.name}</h3><p><MapPin size={14} />{selected.address}</p><StatusBadge stage={selected.stage} /><div className="floating-progress"><span>התקדמות</span><b>{selected.progress}%</b><div><i style={{ width: `${selected.progress}%`, background: stageMeta[selected.stage].color }} /></div></div><button className="open-project" onClick={() => openProject(selected)}>פתח תיק פרויקט <ArrowLeft size={15} /></button></div>}</div>
+    <div className="map-workspace panel"><div className="map-sidebar"><label className="table-search"><Search size={17} /><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="חיפוש כתובת, לקוח או פרויקט..." /></label><div className="map-filter-title"><span>{visible.length} פרויקטים</span><small>סינון לפי שלב במקרא</small></div><div className="map-project-list">{visible.map((p) => <button key={p.id} className={selected?.id === p.id ? 'active' : ''} onClick={() => setSelected(p)}><i style={{ background: stageMeta[p.stage].color }} /><div><strong>{p.name}</strong><span>{p.location} · {p.progress}%</span></div><ChevronLeft size={17} /></button>)}</div><div className="map-legend"><span>מקרא שלבים</span>{Object.entries(stageMeta).slice(0, 5).map(([key, meta]) => <button key={key} onClick={() => setStageFilter(stageFilter === key ? 'all' : key)} className={stageFilter === key ? 'active' : ''}><i style={{ background: meta.color }} />{meta.label}</button>)}</div></div>
+      <div className="leaflet-shell"><MapContainer center={[32.12, 34.83]} zoom={10} zoomControl={false} scrollWheelZoom><TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /><ZoomControl position="bottomleft" />{visible.map((p) => <ProjectMarker key={p.id} project={p} onOpen={openProject} />)}</MapContainer>{selected && <div className="floating-project-card"><button onClick={() => setSelected(null)}><X size={16} /></button><span className="eyebrow">{selected.id}</span><h3>{selected.name}</h3><p><MapPin size={14} />{selected.address}</p><StatusBadge stage={selected.stage} /><div className="floating-progress"><span>התקדמות</span><b>{selected.progress}%</b><div><i style={{ width: `${selected.progress}%`, background: stageMeta[selected.stage].color }} /></div></div><button className="open-project" onClick={() => openProject(selected)}>פתח תיק פרויקט <ArrowLeft size={15} /></button></div>}</div>
     </div></div>;
 }
 

@@ -30,7 +30,7 @@ RUN chmod +x /etc/services.d/nginx/run /etc/services.d/postgresql/run /etc/servi
     && rm -f /etc/nginx/http.d/default.conf
 
 LABEL \
-  io.hass.version="0.5.5" \
+  io.hass.version="0.6.0" \
   io.hass.type="app" \
   io.hass.arch="amd64"
 
