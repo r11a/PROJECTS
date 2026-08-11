@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Fixed settings refresh so saved company and system data cannot be replaced by a cached response.
+- Added authoritative save confirmation, dirty-state feedback and a clear text save button.
+- Raised the minimum working-area typography size while preserving the compact sidebar.
+- Added an end-to-end company-settings persistence check to the App container validation.
+
 ## 0.3.0
 
 - Added operational client cards with required name, address and phone fields.

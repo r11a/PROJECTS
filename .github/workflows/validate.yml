@@ -59,6 +59,13 @@ jobs:
           curl --fail --silent --cookie /tmp/projects-cookies \
             http://127.0.0.1:8686/api/settings | grep --quiet '"catalogs"'
           curl --fail --silent --cookie /tmp/projects-cookies \
+            --header 'Content-Type: application/json' \
+            --request PATCH \
+            --data '{"name":"PROJECTS CI COMPANY","companyNumber":"515151515","phone":"03-5555555","email":"ci@example.test","address":"Tel Aviv"}' \
+            http://127.0.0.1:8686/api/settings/company | grep --quiet 'PROJECTS CI COMPANY'
+          curl --fail --silent --cookie /tmp/projects-cookies \
+            http://127.0.0.1:8686/api/settings | grep --quiet 'PROJECTS CI COMPANY'
+          curl --fail --silent --cookie /tmp/projects-cookies \
             'http://127.0.0.1:8686/api/calendar?from=2026-01-01T00%3A00%3A00.000Z&to=2027-01-01T00%3A00%3A00.000Z' | grep --quiet '"events"'
           curl --fail --silent --cookie /tmp/projects-cookies \
             http://127.0.0.1:8686/api/insights | grep --quiet '"stats"'
