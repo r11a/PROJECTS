@@ -11,7 +11,9 @@ import { MapContainer, Marker, Popup, TileLayer, ZoomControl } from 'react-leafl
 import L from 'leaflet';
 import { activity, clients, milestones, stageMeta } from './data';
 import { AlertCenter, CalendarWorkspace, ClientsWorkspace, InsightsTile, OperationalSettings } from './Operational';
+import { FormsWorkspace } from './FormsWorkspace';
 import './operational.css';
+import './forms-workspace.css';
 import projectsMark from './assets/projects-mark.svg';
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
@@ -191,10 +193,10 @@ function App() {
           {page === 'projects' && <ProjectsPage projects={filteredProjects} search={search} setSearch={setSearch} stageFilter={stageFilter} setStageFilter={setStageFilter} openProject={openProject} />}
           {page === 'map' && <MapPage projects={filteredProjects} openProject={openProject} stageFilter={stageFilter} setStageFilter={setStageFilter} />}
           {page === 'clients' && <ClientsWorkspace api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} />}
-          {page === 'forms' && <FormsPage setNotice={setNotice} />}
+          {page === 'forms' && <FormsWorkspace api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} />}
           {page === 'finance' && <FinancePage projects={projects} openProject={openProject} />}
           {page === 'users' && user.role === 'admin' && <UsersPage setNotice={setNotice} />}
-          {page === 'settings' && user.role === 'admin' && <OperationalSettings api={api} setNotice={setNotice} />}
+          {page === 'settings' && user.role === 'admin' && <OperationalSettings api={api} apiRoot={apiRoot} setNotice={setNotice} />}
           {page === 'project' && selectedProject && <ProjectDetail project={projects.find((p) => p.id === selectedProject.id) || selectedProject} updateProject={updateProject} canEdit={['admin', 'manager', 'technician'].includes(user.role)} />}
         </div>
       </main>

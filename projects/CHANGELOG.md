@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- Replaced the static forms prototype with PostgreSQL-backed templates and completed-form records.
+- Added a dynamic template builder, draft/completed/approved workflow and client/project assignment.
+- Preserved a template-version snapshot with every filled form for future PDF and export fidelity.
+- Added role-aware editing, administrator-only deletion and Audit Log coverage.
+- Replaced placeholder document rows with actual uploaded client files.
+- Added a responsive phone layout with touch-size controls and contained horizontal scrolling.
+- Added persistent company-logo upload for branding and future reports.
+
 ## 0.3.1
 
 - Fixed settings refresh so saved company and system data cannot be replaced by a cached response.

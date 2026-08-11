@@ -181,7 +181,7 @@ function FileUpload({ clientId, api, onDone, setNotice }) {
   return <form className="file-drop" onSubmit={submit}><label><Upload size={25} /><strong>{file ? file.name : 'בחירת קובץ להעלאה'}</strong><span>PDF, תמונות, תוכניות, גיליונות או הזמנות · עד 50MB</span><input type="file" required onChange={(e) => setFile(e.target.files[0])} /></label><select value={category} onChange={(e) => setCategory(e.target.value)}><option>תוכנית</option><option>הזמנה</option><option>הצעת מחיר</option><option>צילום אתר</option><option>פרוטוקול</option><option>אחר</option></select><button className="ops-primary small" disabled={uploading}>{uploading ? <RefreshCw className="spin" size={15} /> : <Upload size={15} />}{uploading ? 'מעלה...' : 'העלאה'}</button></form>;
 }
 
-export function OperationalSettings({ api, setNotice }) {
+export function OperationalSettings({ api, apiRoot, setNotice }) {
   const [data, setData] = useState({ settings: {}, catalogs: [], customFields: [] });
   const [tab, setTab] = useState('business');
   const [audit, setAudit] = useState([]);
@@ -194,7 +194,7 @@ export function OperationalSettings({ api, setNotice }) {
   useEffect(() => { if (tab === 'backup') api('/system/backups').then((r) => setBackups(r.backups)).catch((e) => setNotice(e.message)); }, [tab]);
   const tabs = [['business','עסק ומערכת',Building2],['catalogs','קטלוגים ועיצוב',Palette],['fields','שדות מותאמים',Settings2],['audit','Audit Log',History],['backup','גיבוי ובריאות',Database]];
   return <div className="ops-page settings-workspace"><div className="ops-hero"><div><span className="ops-eyebrow"><Settings2 size={15} />מרכז שליטה</span><h2>המערכת מתאימה את עצמה לדרך שבה אתם עובדים</h2><p>שלטו בתהליך, במונחים, בצבעים, בסמלים ובמידע—בלי לשנות קוד.</p></div><span className="settings-health"><i />כל השירותים פעילים</span></div><nav className="settings-tabs">{tabs.map(([id,label,Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><Icon size={17} />{label}</button>)}</nav>
-    {tab === 'business' && <BusinessSettings settings={data.settings} api={api} onSaved={applySavedSetting} setNotice={setNotice} />}
+    {tab === 'business' && <BusinessSettings settings={data.settings} api={api} apiRoot={apiRoot} onSaved={applySavedSetting} setNotice={setNotice} />}
     {tab === 'catalogs' && <CatalogSettings catalogs={data.catalogs} api={api} reload={load} setNotice={setNotice} />}
     {tab === 'fields' && <CustomFields fields={data.customFields} api={api} reload={load} setNotice={setNotice} />}
     {tab === 'audit' && <AuditLog entries={audit} query={auditQuery} setQuery={setAuditQuery} />}
@@ -202,7 +202,7 @@ export function OperationalSettings({ api, setNotice }) {
   </div>;
 }
 
-function BusinessSettings({ settings, api, onSaved, setNotice }) {
+function BusinessSettings({ settings, api, apiRoot, onSaved, setNotice }) {
   const groups = [
     ['company','פרטי החברה','זהות העסק שתופיע במסמכים ובמערכת',[['name','שם החברה','text'],['companyNumber','ח.פ / עוסק','text'],['phone','טלפון','tel'],['email','דוא״ל','email'],['address','כתובת','text']]],
     ['localization','אזוריות וכספים','כללי ברירת מחדל לתאריכים וגבייה',[['currency','מטבע','select',['ILS','USD','EUR']],['vatRate','מע״מ (%)','number'],['timezone','אזור זמן','text'],['dateFormat','פורמט תאריך','select',['DD.MM.YYYY','YYYY-MM-DD']]]],
@@ -211,15 +211,17 @@ function BusinessSettings({ settings, api, onSaved, setNotice }) {
     ['notifications','התראות','אירועים שייצרו התראה',[['taskDue','משימה מתקרבת','boolean'],['paymentDue','גבייה מתקרבת','boolean'],['milestoneRisk','אבן דרך בסיכון','boolean'],['emailEnabled','שליחת מייל','boolean']]],
     ['backupPolicy','מדיניות גיבוי','תזמון ושמירת גרסאות',[['enabled','גיבוי אוטומטי','boolean'],['frequency','תדירות','select',['daily','weekly']],['retention','מספר גיבויים לשמירה','number'],['hour','שעת ביצוע','time']]],
   ];
-  return <div className="settings-card-grid">{groups.map(([key,title,subtitle,fields]) => <SettingCard key={key} settingKey={key} title={title} subtitle={subtitle} fields={fields} initial={settings[key] || {}} api={api} onSaved={onSaved} setNotice={setNotice} />)}</div>;
+  return <div className="settings-card-grid">{groups.map(([key,title,subtitle,fields]) => <SettingCard key={key} settingKey={key} title={title} subtitle={subtitle} fields={fields} initial={settings[key] || {}} api={api} apiRoot={apiRoot} onSaved={onSaved} setNotice={setNotice} />)}</div>;
 }
 
-function SettingCard({ settingKey, title, subtitle, fields, initial, api, onSaved, setNotice }) {
+function SettingCard({ settingKey, title, subtitle, fields, initial, api, apiRoot, onSaved, setNotice }) {
   const [form, setForm] = useState(initial); const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   useEffect(() => setForm(initial), [JSON.stringify(initial)]);
   const dirty = JSON.stringify(form) !== JSON.stringify(initial);
   const save = async (event) => { event.preventDefault(); if (!dirty || saving) return; setSaving(true); try { const result = await api(`/settings/${settingKey}`, { method: 'PATCH', body: JSON.stringify(form) }); onSaved(settingKey, result.setting.value); setNotice(`${title} נשמרו בהצלחה`); } catch (error) { setNotice(error.message); } finally { setSaving(false); } };
-  return <form className={`setting-card panel ${dirty ? 'dirty' : ''}`} onSubmit={save}><header><div><h3>{title}</h3><p>{subtitle}</p>{dirty && <small>יש שינויים שלא נשמרו</small>}</div><button type="submit" className="setting-save-button" disabled={saving || !dirty}>{saving ? <RefreshCw className="spin" size={17} /> : <Save size={17} />}<span>{saving ? 'שומר...' : dirty ? 'שמור' : 'נשמר'}</span></button></header><div>{fields.map(([key,label,type,options]) => type === 'boolean' ? <label className="setting-toggle" key={key}><span>{label}</span><input type="checkbox" checked={Boolean(form[key])} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} /><i /></label> : <label key={key}><span>{label}</span>{type === 'select' ? <select value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })}>{options.map((option) => <option key={option}>{option}</option>)}</select> : <input type={type} step={type === 'number' ? 'any' : undefined} value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: type === 'number' ? Number(e.target.value) : e.target.value })} />}</label>)}</div></form>;
+  const uploadLogo = async (event) => { const file = event.target.files?.[0]; if (!file) return; const body = new FormData(); body.append('logo', file); setUploadingLogo(true); try { const result = await api('/settings/company-logo', { method: 'POST', body }); onSaved('company', result.setting.value); setForm(result.setting.value); setNotice('לוגו החברה נשמר'); } catch (error) { setNotice(error.message); } finally { setUploadingLogo(false); event.target.value = ''; } };
+  return <form className={`setting-card panel ${dirty ? 'dirty' : ''}`} onSubmit={save}><header><div><h3>{title}</h3><p>{subtitle}</p>{dirty && <small>יש שינויים שלא נשמרו</small>}</div><button type="submit" className="setting-save-button" disabled={saving || !dirty}>{saving ? <RefreshCw className="spin" size={17} /> : <Save size={17} />}<span>{saving ? 'שומר...' : dirty ? 'שמור' : 'נשמר'}</span></button></header>{settingKey === 'company' && <div className="company-logo-control"><span>{form.logo?.storedName ? <img src={`${apiRoot}/settings/company-logo?v=${encodeURIComponent(form.logo.updatedAt || '')}`} alt="לוגו החברה" /> : <Building2 size={25} />}</span><div><strong>לוגו החברה</strong><small>PNG, JPG או WebP · עד 5MB</small></div><label className="ops-secondary small">{uploadingLogo ? 'מעלה...' : form.logo?.storedName ? 'החלפת לוגו' : 'העלאת לוגו'}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo} disabled={uploadingLogo} /></label></div>}<div>{fields.map(([key,label,type,options]) => type === 'boolean' ? <label className="setting-toggle" key={key}><span>{label}</span><input type="checkbox" checked={Boolean(form[key])} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} /><i /></label> : <label key={key}><span>{label}</span>{type === 'select' ? <select value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })}>{options.map((option) => <option key={option}>{option}</option>)}</select> : <input type={type} step={type === 'number' ? 'any' : undefined} value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: type === 'number' ? Number(e.target.value) : e.target.value })} />}</label>)}</div></form>;
 }
 
 function CatalogSettings({ catalogs, api, reload, setNotice }) {
