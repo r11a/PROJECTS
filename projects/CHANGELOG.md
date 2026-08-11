@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0
+
+- Separated login accounts from the professional directory so people can work on projects without application access.
+- Added a reusable professional directory with company/external affiliation, multiple roles, optional user linking and custom role creation.
+- Replaced fixed project-manager values with editable company professionals and migrated existing manager names automatically.
+- Added hierarchical system-type, system and component catalogs with manufacturer, model, SKU and usage protection.
+- Added a central 100MB document repository for plans, scans, PDFs, orders, photos and spreadsheets with client/project assignment, tags and versions.
+- Added administrator-only deletion, role-aware editing and Audit Log coverage for the new management records.
+- Connected the saved company name and logo to the application sidebar and improved responsive management layouts.
+
 ## 0.4.0
 
 - Replaced the static forms prototype with PostgreSQL-backed templates and completed-form records.

@@ -94,6 +94,11 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     response.json({ stats, suggestions, alerts: alerts.rows.map((row) => ({ key: `task:${row.id}`, taskId: row.id, title: row.title, dueDate: row.due_date, priority: row.priority, clientName: row.client_name, clientId: row.client_id })), recentActivities: recent.rows.map((row) => ({ id: row.id, action: row.action, entityType: row.entity_type, entityId: row.entity_id, userName: row.user_name, createdAt: row.created_at })) });
   });
 
+  router.get('/team', async (_request, response) => {
+    const result = await pool.query('SELECT id,username,display_name,role,active,avatar_color,avatar_icon FROM users ORDER BY active DESC,display_name');
+    response.json({ users: result.rows.map((row) => ({ id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, avatarColor: row.avatar_color, avatarIcon: row.avatar_icon })) });
+  });
+
   router.post('/alerts/snooze', async (request, response) => {
     const durations = { hour: '1 hour', day: '1 day', week: '1 week', month: '1 month' };
     const duration = durations[request.body.duration];

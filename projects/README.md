@@ -14,6 +14,9 @@ Premium project management for smart-home professionals, packaged as a Home Assi
 - Standalone users with role-based permissions
 - Audit logging, health checks and database backup/restore
 - Detailed customer cards, contacts, files, tasks and site inspections
+- Reusable company/external professional directory with multiple roles and optional user access
+- Hierarchical system types, systems and components
+- Central versioned document repository with project/client assignment and tags
 - Configurable catalogs, labels, flags and custom fields
 - Live day/week/month/detailed-month/year calendar with project filtering
 - Automatic operational insights and aggregated overdue-task snoozing

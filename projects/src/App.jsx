@@ -4,7 +4,7 @@ import {
   ChevronDown, ChevronLeft, CircleDollarSign, ClipboardCheck, Clock3, Command, CreditCard,
   FileText, Filter, Flag, FolderKanban, FormInput, Gauge, Home, LayoutDashboard, ListFilter,
   Database, LogOut, Mail, Map, MapPin, Menu, MessageSquare, MoreHorizontal, Phone, Plus, RotateCcw, Search, Settings,
-  ShieldCheck, SlidersHorizontal, Sparkles, Tag, TrendingUp, Upload, UserRound, Users, WalletCards, X,
+  ShieldCheck, SlidersHorizontal, Sparkles, Tag, Trash2, TrendingUp, Upload, UserRound, Users, WalletCards, X,
 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { MapContainer, Marker, Popup, TileLayer, ZoomControl } from 'react-leaflet';
@@ -12,8 +12,10 @@ import L from 'leaflet';
 import { activity, clients, milestones, stageMeta } from './data';
 import { AlertCenter, CalendarWorkspace, ClientsWorkspace, InsightsTile, OperationalSettings } from './Operational';
 import { FormsWorkspace } from './FormsWorkspace';
+import { MasterDataWorkspace } from './MasterDataWorkspace';
 import './operational.css';
 import './forms-workspace.css';
+import './master-data.css';
 import projectsMark from './assets/projects-mark.svg';
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
@@ -41,6 +43,7 @@ const nav = [
   { id: 'projects', label: 'פרויקטים', icon: FolderKanban, badge: 12 },
   { id: 'map', label: 'מפת פרויקטים', icon: Map },
   { id: 'clients', label: 'לקוחות ואנשי קשר', icon: Users },
+  { id: 'master', label: 'אנשי מקצוע ומאגרים', icon: Database },
   { id: 'forms', label: 'טפסים ומסמכים', icon: FormInput },
   { id: 'finance', label: 'תשלומים וגבייה', icon: WalletCards, badge: 3 },
 ];
@@ -85,9 +88,22 @@ function App() {
   const [notice, setNotice] = useState('');
   const [insights, setInsights] = useState(null);
   const [alertsOpen, setAlertsOpen] = useState(true);
+  const [configuration, setConfiguration] = useState({ settings: {}, catalogs: [], customFields: [] });
+  const [team, setTeam] = useState([]);
+  const [professionals, setProfessionals] = useState([]);
+  const [clientOptions, setClientOptions] = useState([]);
+
+  const loadReferenceData = async () => {
+    const [settingsResult, teamResult, clientsResult, professionalsResult] = await Promise.all([api('/settings'), api('/team'), api('/clients'), api('/professionals')]);
+    setConfiguration(settingsResult);
+    setTeam(teamResult.users);
+    setClientOptions(clientsResult.clients);
+    setProfessionals(professionalsResult.professionals);
+    return { settingsResult, teamResult, clientsResult, professionalsResult };
+  };
 
   useEffect(() => {
-    api('/auth/me').then(({ user: currentUser }) => Promise.all([currentUser, api('/projects')]))
+    api('/auth/me').then(({ user: currentUser }) => Promise.all([currentUser, api('/projects'), loadReferenceData()]))
       .then(([currentUser, result]) => { setUser(currentUser); setProjects(result.projects); })
       .catch(() => setUser(null)).finally(() => setLoading(false));
   }, []);
@@ -126,7 +142,7 @@ function App() {
 
   const login = async (credentials) => {
     const result = await api('/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
-    const projectResult = await api('/projects');
+    const [projectResult] = await Promise.all([api('/projects'), loadReferenceData()]);
     setUser(result.user);
     setProjects(projectResult.projects);
   };
@@ -147,13 +163,16 @@ function App() {
 
   const pageTitle = selectedProject && page === 'project' ? selectedProject.name : page === 'users' ? 'משתמשים והרשאות' : page === 'settings' ? 'גיבוי ומערכת' : nav.find((item) => item.id === page)?.label || 'תמונת מצב';
   const todayLabel = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
+  const company = configuration.settings.company || {};
+  const companyLogo = company.logo?.storedName ? `${apiRoot}/settings/company-logo?v=${encodeURIComponent(company.logo.updatedAt || '')}` : '';
+  const stageOptions = configuration.catalogs.filter((item) => item.category === 'stage' && item.active);
 
   return (
     <div className="app-shell">
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="brand"><div className="brand-mark"><img src={projectsMark} alt="" /></div><div><strong><b>PRO</b>JECTS</strong><span>SMART PROJECT MANAGEMENT</span></div></div>
         <button className="mobile-close" onClick={() => setSidebarOpen(false)} aria-label="סגור תפריט"><X /></button>
-        <div className="workspace-switch"><div className="workspace-logo">SH</div><div><strong>Smart Home Israel</strong><span>סביבת עבודה ראשית</span></div><ChevronDown size={16} /></div>
+        <div className="workspace-switch"><div className={`workspace-logo ${companyLogo ? 'has-company-logo' : ''}`}>{companyLogo ? <img src={companyLogo} alt="" /> : (company.name || 'SH').slice(0, 2)}</div><div><strong>{company.name || 'החברה שלי'}</strong><span>סביבת עבודה ראשית</span></div><ChevronDown size={16} /></div>
         <nav className="main-nav">
           <span className="nav-label">סביבת עבודה</span>
           {[...nav, ...(user.role === 'admin' ? [{ id: 'users', label: 'משתמשים והרשאות', icon: ShieldCheck }] : [])].map(({ id, label, icon: Icon, badge }) => (
@@ -162,9 +181,9 @@ function App() {
             </button>
           ))}
           <span className="nav-label nav-second">ניהול</span>
-          <button><ClipboardCheck size={19} /><span>משימות ואבני דרך</span><em>7</em></button>
-          <button><Tag size={19} /><span>מערכות וקטלוגים</span></button>
-          <button><Activity size={19} /><span>דוחות וניתוחים</span></button>
+          <button onClick={() => setPage('calendar')}><ClipboardCheck size={19} /><span>משימות ואבני דרך</span></button>
+          <button className={page === 'master' ? 'active' : ''} onClick={() => setPage('master')}><Tag size={19} /><span>מערכות וקטלוגים</span></button>
+          <button onClick={() => setPage('finance')}><Activity size={19} /><span>דוחות וניתוחים</span></button>
         </nav>
         <div className="sidebar-footer">
           {user.role === 'admin' && <button className={page === 'settings' ? 'active' : ''} onClick={() => setPage('settings')}><Settings size={19} /><span>גיבוי ומערכת</span></button>}
@@ -193,14 +212,15 @@ function App() {
           {page === 'projects' && <ProjectsPage projects={filteredProjects} search={search} setSearch={setSearch} stageFilter={stageFilter} setStageFilter={setStageFilter} openProject={openProject} />}
           {page === 'map' && <MapPage projects={filteredProjects} openProject={openProject} stageFilter={stageFilter} setStageFilter={setStageFilter} />}
           {page === 'clients' && <ClientsWorkspace api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} />}
+          {page === 'master' && <MasterDataWorkspace api={api} apiRoot={apiRoot} user={user} users={team} clients={clientOptions} projects={projects} setNotice={setNotice} onDataChanged={loadReferenceData} />}
           {page === 'forms' && <FormsWorkspace api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} />}
           {page === 'finance' && <FinancePage projects={projects} openProject={openProject} />}
-          {page === 'users' && user.role === 'admin' && <UsersPage setNotice={setNotice} />}
-          {page === 'settings' && user.role === 'admin' && <OperationalSettings api={api} apiRoot={apiRoot} setNotice={setNotice} />}
-          {page === 'project' && selectedProject && <ProjectDetail project={projects.find((p) => p.id === selectedProject.id) || selectedProject} updateProject={updateProject} canEdit={['admin', 'manager', 'technician'].includes(user.role)} />}
+          {page === 'users' && user.role === 'admin' && <UsersPage setNotice={setNotice} currentUser={user} onChanged={loadReferenceData} />}
+          {page === 'settings' && user.role === 'admin' && <OperationalSettings api={api} apiRoot={apiRoot} setNotice={setNotice} onConfigurationChanged={setConfiguration} />}
+          {page === 'project' && selectedProject && <ProjectDetail project={projects.find((p) => p.id === selectedProject.id) || selectedProject} updateProject={updateProject} canEdit={['admin', 'manager', 'technician'].includes(user.role)} professionals={professionals} stageOptions={stageOptions} />}
         </div>
       </main>
-      {newProjectOpen && <NewProjectModal onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
+      {newProjectOpen && <NewProjectModal onClose={() => setNewProjectOpen(false)} onCreate={createProject} professionals={professionals} clients={clientOptions} stageOptions={stageOptions} />}
       {alertsOpen && insights?.alerts?.length > 0 && <AlertCenter alerts={insights.alerts} api={api} setNotice={setNotice} onClose={() => setAlertsOpen(false)} onSnoozed={() => { setAlertsOpen(false); setInsights((current) => ({ ...current, alerts: [] })); }} />}
       {notice && <div className="toast"><CheckCircle2 size={19} />{notice}</div>}
     </div>
@@ -222,7 +242,7 @@ function LoginPage({ onLogin }) {
   return <div className="login-shell" dir="rtl"><div className="login-card"><div className="login-brand"><div className="brand-mark"><img src={projectsMark} alt="" /></div><strong><b>PRO</b>JECTS</strong><small>SMART PROJECT MANAGEMENT</small></div><div className="login-copy"><span>כניסה מאובטחת</span><h1>ברוכים הבאים</h1><p>התחברו למרחב ניהול הפרויקטים שלכם</p></div><form onSubmit={submit}><label>שם משתמש<input autoFocus autoComplete="username" required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" autoComplete="current-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <div className="login-error">{error}</div>}<button className="primary-button" disabled={submitting}>{submitting ? 'מתחבר...' : 'כניסה למערכת'} <ArrowLeft size={17} /></button></form><small className="login-hint">בכניסה דרך Home Assistant הזיהוי מתבצע אוטומטית.</small></div></div>;
 }
 
-function UsersPage({ setNotice }) {
+function UsersPage({ setNotice, currentUser, onChanged }) {
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState({ username: '', displayName: '', password: '', role: 'viewer', avatarColor: '#6957df', avatarIcon: 'user' });
   const loadUsers = () => api('/users').then((result) => setUsers(result.users)).catch((error) => setNotice(error.message));
@@ -232,14 +252,15 @@ function UsersPage({ setNotice }) {
     try {
       await api('/users', { method: 'POST', body: JSON.stringify(form) });
       setForm({ username: '', displayName: '', password: '', role: 'viewer', avatarColor: '#6957df', avatarIcon: 'user' });
-      setNotice('המשתמש נוצר'); loadUsers();
+      setNotice('המשתמש נוצר'); loadUsers(); onChanged?.();
     } catch (error) { setNotice(error.message); }
   };
   const updateUser = async (id, patch) => {
-    try { await api(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }); loadUsers(); setNotice('ההרשאה עודכנה'); }
+    try { await api(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }); loadUsers(); onChanged?.(); setNotice('ההרשאה עודכנה'); }
     catch (error) { setNotice(error.message); }
   };
-  return <div className="section-page users-page"><div className="page-intro"><div><h2>משתמשים והרשאות</h2><p>לכל משתמש זהות חזותית אישית; מותר לבחור צבע זהה למספר משתמשים.</p></div><span className="security-pill"><ShieldCheck size={17} />{users.length} משתמשים</span></div><div className="users-layout"><div className="panel users-list"><div className="panel-head"><div><h3>משתמשים פעילים</h3><span>צבע ואייקון מוצגים בלוח השנה ובפעילות</span></div></div>{users.map((item) => <div className="user-row visual-user-row" key={item.id}><div className="avatar" style={{ background:item.avatarColor,color:'#fff' }}>{avatarGlyph(item)}</div><div><strong>{item.displayName}</strong><span>{item.username || 'Home Assistant'} {item.haUserId && '· Ingress'}</span></div><select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><div className="user-appearance"><input aria-label="צבע משתמש" type="color" value={item.avatarColor} onChange={(e) => updateUser(item.id,{avatarColor:e.target.value})} /><select aria-label="אייקון משתמש" value={item.avatarIcon} onChange={(e) => updateUser(item.id,{avatarIcon:e.target.value})}>{Object.entries(avatarIcons).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div><label className="active-toggle"><input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} /><span /></label></div>)}</div><form className="panel create-user" onSubmit={createUser}><div className="panel-head"><div><h3>משתמש חדש</h3><span>לכניסה דרך הפורט העצמאי</span></div></div><label>שם תצוגה<input required value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label><label>שם משתמש<input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" minLength="8" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label><label>תפקיד<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><div className="new-user-appearance"><label>צבע<input type="color" value={form.avatarColor} onChange={(e) => setForm({ ...form, avatarColor:e.target.value })} /></label><label>אייקון<select value={form.avatarIcon} onChange={(e) => setForm({ ...form, avatarIcon:e.target.value })}>{Object.entries(avatarIcons).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><button className="primary-button"><Plus size={17} />יצירת משתמש</button></form></div></div>;
+  const deleteUser = async (item) => { if (!window.confirm(`למחוק את המשתמש „${item.displayName}”?`)) return; try { await api(`/users/${item.id}`, { method: 'DELETE' }); loadUsers(); onChanged?.(); setNotice('המשתמש נמחק'); } catch (error) { setNotice(error.message); } };
+  return <div className="section-page users-page"><div className="page-intro"><div><h2>משתמשים והרשאות כניסה</h2><p>כאן מנהלים גישה לתוכנה בלבד. תפקיד מקצועי ושיוך לפרויקט מנוהלים במאגר אנשי המקצוע.</p></div><span className="security-pill"><ShieldCheck size={17} />{users.length} משתמשים</span></div><div className="users-layout"><div className="panel users-list"><div className="panel-head"><div><h3>חשבונות מערכת</h3><span>אפשר לערוך, להשבית או למחוק; לא ניתן למחוק את המשתמש המחובר.</span></div></div>{users.map((item) => <div className="user-row visual-user-row" key={item.id}><div className="avatar" style={{ background:item.avatarColor,color:'#fff' }}>{avatarGlyph(item)}</div><div><strong>{item.displayName}</strong><span>{item.username || 'Home Assistant'} {item.haUserId && '· Ingress'}</span></div><select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><div className="user-appearance"><input aria-label="צבע משתמש" type="color" value={item.avatarColor} onChange={(e) => updateUser(item.id,{avatarColor:e.target.value})} /><select aria-label="אייקון משתמש" value={item.avatarIcon} onChange={(e) => updateUser(item.id,{avatarIcon:e.target.value})}>{Object.entries(avatarIcons).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div><label className="active-toggle"><input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} /><span /></label><button className="user-delete" disabled={String(item.id) === String(currentUser.id)} onClick={() => deleteUser(item)} title="מחיקת משתמש"><Trash2 size={16} /></button></div>)}</div><form className="panel create-user" onSubmit={createUser}><div className="panel-head"><div><h3>חשבון כניסה חדש</h3><span>לאחר היצירה אפשר לקשר אותו לאדם במאגר אנשי המקצוע</span></div></div><label>שם תצוגה<input required value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label><label>שם משתמש<input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" minLength="8" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label><label>הרשאת מערכת<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><div className="new-user-appearance"><label>צבע<input type="color" value={form.avatarColor} onChange={(e) => setForm({ ...form, avatarColor:e.target.value })} /></label><label>אייקון<select value={form.avatarIcon} onChange={(e) => setForm({ ...form, avatarIcon:e.target.value })}>{Object.entries(avatarIcons).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><button className="primary-button"><Plus size={17} />יצירת חשבון</button></form></div></div>;
 }
 
 function SystemPage({ setNotice }) {
@@ -372,7 +393,7 @@ function FinancePage({ projects, openProject }) {
   return <div className="section-page"><div className="page-intro"><div><h2>תשלומים וגבייה</h2><p>בקרת תזרים, אבני דרך לתשלום ויתרות פתוחות</p></div><button className="secondary-button"><FileText size={17} />הפקת דוח</button></div><div className="finance-hero"><div><span>היקף חוזים כולל</span><strong>{money.format(total)}</strong><small><TrendingUp size={14} />8.2% מהרבעון הקודם</small></div><div className="collection-ring" style={{ '--percent': `${Math.round(paid / total * 100) * 3.6}deg` }}><span><strong>{Math.round(paid / total * 100)}%</strong>נגבה</span></div><div className="finance-split"><div><i className="green" /><span>התקבל<strong>{money.format(paid)}</strong></span></div><div><i className="orange" /><span>יתרה פתוחה<strong>{money.format(total - paid)}</strong></span></div></div></div><div className="panel finance-table-wrap"><PanelHead title="מצב גבייה לפי פרויקט" subtitle="לחיצה על שורה תפתח את תיק הפרויקט" /><table className="projects-table finance-table"><thead><tr><th>פרויקט ולקוח</th><th>שווי חוזה</th><th>שולם</th><th>יתרה</th><th>אחוז גבייה</th><th>סטטוס</th></tr></thead><tbody>{projects.map((p) => { const percent = Math.round(p.paid / p.value * 100); const overdue = p.flag.includes('תשלום'); return <tr key={p.id} onClick={() => openProject(p)}><td><div className="project-cell"><div className="project-thumb"><Home size={17} /></div><div><strong>{p.name}</strong><span>{p.client}</span></div></div></td><td>{money.format(p.value)}</td><td className="paid-money">{money.format(p.paid)}</td><td><strong>{money.format(p.value - p.paid)}</strong></td><td><div className="collection-cell"><div><i style={{ width: `${percent}%` }} /></div><b>{percent}%</b></div></td><td><span className={`payment-state ${overdue ? 'overdue' : percent === 100 ? 'paid' : ''}`}>{overdue ? 'באיחור' : percent === 100 ? 'שולם' : 'תקין'}</span></td></tr>; })}</tbody></table></div></div>;
 }
 
-function ProjectDetail({ project, updateProject, canEdit }) {
+function ProjectDetail({ project, updateProject, canEdit, professionals, stageOptions }) {
   const [tab, setTab] = useState('overview');
   const dueAmount = project.value - project.paid;
   const projectMilestones = [
@@ -383,7 +404,7 @@ function ProjectDetail({ project, updateProject, canEdit }) {
     { title: 'מסירה והדרכת לקוח', status: 'future', date: '22.09.2026' },
   ];
   return <div className="project-detail">
-    <div className="project-hero panel"><div className="project-identity"><div className="project-home-icon"><Home size={27} /></div><div><div className="project-title-line"><h2>{project.name}</h2>{project.flag && <span className="hero-flag"><Flag size={14} />{project.flag}</span>}</div><p><UserRound size={15} />{project.client}<span>·</span><MapPin size={15} />{project.address}</p></div></div><div className="project-hero-actions"><button className="secondary-button" disabled={!canEdit}><MessageSquare size={16} />הוספת עדכון</button><button className="icon-button" disabled={!canEdit}><MoreHorizontal /></button></div><div className="hero-metrics"><div><span>שלב נוכחי</span><select disabled={!canEdit} value={project.stage} onChange={(e) => updateProject(project.id, { stage: e.target.value })}>{Object.entries(stageMeta).map(([key, meta]) => <option value={key} key={key}>{meta.label}</option>)}</select></div><div><span>התקדמות</span><strong>{project.progress}%</strong><input disabled={!canEdit} type="range" min="0" max="100" value={project.progress} onChange={(e) => updateProject(project.id, { progress: Number(e.target.value) })} style={{ '--range': `${project.progress}%` }} /></div><div><span>בריאות הפרויקט</span><strong className={project.health < 70 ? 'health-risk' : 'health-good'}>{project.health}/100</strong><small>{project.health < 70 ? 'דורש תשומת לב' : 'מתנהל כשורה'}</small></div><div><span>מנהל פרויקט</span><div className="manager-cell"><i>{project.ownerInitials}</i><strong>{project.manager}</strong></div></div><div><span>יעד לאבן דרך</span><strong>{project.due}</strong><small>{project.nextMilestone}</small></div></div></div>
+    <div className="project-hero panel"><div className="project-identity"><div className="project-home-icon"><Home size={27} /></div><div><div className="project-title-line"><h2>{project.name}</h2>{project.flag && <span className="hero-flag"><Flag size={14} />{project.flag}</span>}</div><p><UserRound size={15} />{project.client}<span>·</span><MapPin size={15} />{project.address}</p></div></div><div className="project-hero-actions"><button className="secondary-button" disabled={!canEdit}><MessageSquare size={16} />הוספת עדכון</button><button className="icon-button" disabled={!canEdit}><MoreHorizontal /></button></div><div className="hero-metrics"><div><span>שלב נוכחי</span><select disabled={!canEdit} value={project.stage} onChange={(e) => updateProject(project.id, { stage: e.target.value })}>{(stageOptions.length ? stageOptions.map((item) => [item.metadata?.key || item.name,item.name]) : Object.entries(stageMeta).map(([key,meta]) => [key,meta.label])).map(([key,label]) => <option value={key} key={key}>{label}</option>)}</select></div><div><span>התקדמות</span><strong>{project.progress}%</strong><input disabled={!canEdit} type="range" min="0" max="100" value={project.progress} onChange={(e) => updateProject(project.id, { progress: Number(e.target.value) })} style={{ '--range': `${project.progress}%` }} /></div><div><span>בריאות הפרויקט</span><strong className={project.health < 70 ? 'health-risk' : 'health-good'}>{project.health}/100</strong><small>{project.health < 70 ? 'דורש תשומת לב' : 'מתנהל כשורה'}</small></div><div><span>מנהל פרויקט</span><select className="project-manager-select" disabled={!canEdit} value={project.managerId || ''} onChange={(e) => { const manager = professionals.find((item) => String(item.id) === e.target.value); updateProject(project.id, { managerId: manager?.id || null, manager: manager?.displayName || '', ownerInitials: manager?.displayName?.slice(0,2) || '' }); }}><option value="">ללא מנהל</option>{professionals.filter((item) => item.active && item.affiliation === 'company' && item.roles.some((role) => role.key === 'project_manager')).map((item) => <option key={item.id} value={item.id}>{item.displayName}{item.linkedUserId ? ' · משתמש מערכת' : ''}</option>)}</select></div><div><span>יעד לאבן דרך</span><strong>{project.due}</strong><small>{project.nextMilestone}</small></div></div></div>
     <div className="detail-tabs">{[['overview','סקירה'],['tasks','משימות ואבני דרך'],['systems','מערכות'],['forms','טפסים וקבצים'],['finance','כספים'],['activity','פעילות']].map(([id, label]) => <button className={tab === id ? 'active' : ''} key={id} onClick={() => setTab(id)}>{label}{id === 'tasks' && <em>7</em>}</button>)}</div>
     {tab === 'overview' && <div className="detail-grid"><div className="detail-main"><div className="panel overview-card"><PanelHead title="התקדמות הפרויקט" subtitle={`${project.tasksDone} מתוך ${project.tasksTotal} משימות הושלמו`} /><div className="large-progress"><div><i style={{ width: `${project.progress}%`, background: stageMeta[project.stage].color }} /></div><strong>{project.progress}%</strong></div><div className="milestone-timeline">{projectMilestones.map((m, index) => <div className={m.status} key={`${m.title}-${index}`}><span>{m.status === 'done' ? <Check size={14} /> : ''}</span><div><strong>{m.title}</strong><small>{m.date}</small></div></div>)}</div></div><div className="panel systems-card"><PanelHead title="מערכות בפרויקט" action="ניהול מערכות" /><div className="system-tiles">{project.systems.map((system, index) => <div key={system}><span className={`system-icon s${index % 4}`}><Command size={18} /></span><strong>{system}</strong><small>{index < 2 ? 'התקנה בתהליך' : 'טרם התחיל'}</small><CheckCircle2 size={17} /></div>)}</div></div></div><div className="detail-side"><div className="panel contact-card"><PanelHead title="פרטי לקוח" /><div className="contact-person"><div className="client-avatar">{project.client.slice(0,2)}</div><div><strong>{project.client}</strong><span>לקוח ראשי</span></div></div><a href={`tel:${project.phone}`}><Phone size={16} />{project.phone}</a><a href={`mailto:${project.email}`}><Mail size={16} />{project.email}</a><p><MapPin size={16} />{project.address}</p><button>פתיחת כרטיס לקוח</button></div><div className="panel money-summary"><PanelHead title="סיכום כספי" /><div><span>שווי הפרויקט</span><strong>{money.format(project.value)}</strong></div><div><span>שולם עד כה</span><strong className="green-text">{money.format(project.paid)}</strong></div><div className="due-row"><span>יתרה לגבייה</span><strong>{money.format(dueAmount)}</strong></div><div className="money-progress"><i style={{ width: `${project.paid / project.value * 100}%` }} /></div><small>{Math.round(project.paid / project.value * 100)}% נגבה</small><button onClick={() => setTab('finance')}>לפירוט תשלומים <ChevronLeft size={15} /></button></div><div className="panel quick-notes"><PanelHead title="הערה מהירה" /><textarea placeholder="כתבו עדכון לצוות..." /><button>פרסום עדכון</button></div></div></div>}
     {tab !== 'overview' && <ProjectTabPlaceholder tab={tab} project={project} />}
@@ -402,13 +423,15 @@ function ProjectTabPlaceholder({ tab, project }) {
   return <div className="panel tab-placeholder"><div><Icon size={30} /></div><h3>{content[0]}</h3><p>{content[1]}</p><button className="secondary-button"><Plus size={17} />הוספת פריט</button></div>;
 }
 
-function NewProjectModal({ onClose, onCreate }) {
-  const [form, setForm] = useState({ name: '', client: '', location: '', manager: 'רונן לוי', value: '' });
+function NewProjectModal({ onClose, onCreate, professionals, clients, stageOptions }) {
+  const managers = professionals.filter((item) => item.active && item.affiliation === 'company' && item.roles.some((role) => role.key === 'project_manager'));
+  const [form, setForm] = useState({ name: '', clientId: '', location: '', managerId: managers[0]?.id || '', stage: stageOptions[0]?.metadata?.key || 'planning', value: '' });
   const submit = (event) => {
     event.preventDefault();
-    onCreate({ id: `PRJ-${1053 + Math.floor(Math.random() * 40)}`, name: form.name, client: form.client, location: form.location, address: form.location, lat: 32.08, lng: 34.82, stage: 'planning', progress: 5, manager: form.manager, ownerInitials: form.manager === 'רונן לוי' ? 'רל' : 'דג', value: Number(form.value) || 0, paid: 0, due: 'טרם נקבע', priority: 'normal', flag: '', systems: [], nextMilestone: 'פגישת אפיון ראשונית', phone: '', email: '', health: 95, tasksDone: 1, tasksTotal: 12 });
+    const client = clients.find((item) => String(item.id) === String(form.clientId)); const manager = managers.find((item) => String(item.id) === String(form.managerId));
+    onCreate({ name: form.name, clientId: client?.id || null, client: client?.name || '', location: form.location || client?.city || '', address: client?.address || form.location, lat: 32.08, lng: 34.82, stage: form.stage, progress: 0, managerId: manager?.id || null, manager: manager?.displayName || '', ownerInitials: manager?.displayName?.slice(0,2) || '', value: Number(form.value) || 0, paid: 0, due: '', priority: 'normal', flag: '', systems: [], nextMilestone: 'פגישת אפיון ראשונית', phone: client?.phone || '', email: client?.email || '', health: 100, tasksDone: 0, tasksTotal: 0 });
   };
-  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={(e) => e.stopPropagation()}><div className="modal-head"><div><span>פרויקט חדש</span><h2>בואו נתחיל מהפרטים הבסיסיים</h2></div><button onClick={onClose}><X /></button></div><form onSubmit={submit}><label>שם הפרויקט<input autoFocus required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="לדוגמה: וילה משפחת ישראלי" /></label><div className="form-row"><label>לקוח<input required value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} placeholder="שם הלקוח" /></label><label>עיר / מיקום<input required value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="תל אביב" /></label></div><div className="form-row"><label>מנהל פרויקט<select value={form.manager} onChange={(e) => setForm({ ...form, manager: e.target.value })}><option>רונן לוי</option><option>דניאל גולן</option><option>אורי קדם</option></select></label><label>שווי משוער<input type="number" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder="₪ 0" /></label></div><div className="template-choice"><span>תבנית עבודה</span><button type="button" className="selected"><CheckCircle2 size={19} /><div><strong>פרויקט בית חכם מלא</strong><small>12 שלבים · 34 משימות · 4 טפסים</small></div></button></div><div className="modal-actions"><button type="button" onClick={onClose}>ביטול</button><button className="primary-button" type="submit">יצירת פרויקט <ArrowLeft size={16} /></button></div></form></div></div>;
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={(e) => e.stopPropagation()}><div className="modal-head"><div><span>פרויקט חדש</span><h2>פרטי הפרויקט הבסיסיים</h2></div><button onClick={onClose}><X /></button></div><form onSubmit={submit}><label>שם הפרויקט<input autoFocus required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="לדוגמה: וילה משפחת ישראלי" /></label><div className="form-row"><label>לקוח<select required value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}><option value="">בחירת לקוח מהמאגר</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label><label>עיר / מיקום<input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="נלקח מכתובת הלקוח אם ריק" /></label></div><div className="form-row"><label>מנהל פרויקט<select value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })}><option value="">ללא מנהל</option>{managers.map((manager) => <option key={manager.id} value={manager.id}>{manager.displayName}</option>)}</select></label><label>שלב התחלתי<select value={form.stage} onChange={(e) => setForm({ ...form, stage:e.target.value })}>{(stageOptions.length ? stageOptions.map((item) => [item.metadata?.key || item.name,item.name]) : [['planning','תכנון']]).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><div className="form-row"><label>שווי משוער<input type="number" min="0" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder="₪ 0" /></label></div><div className="modal-actions"><button type="button" onClick={onClose}>ביטול</button><button className="primary-button" type="submit">יצירת פרויקט <ArrowLeft size={16} /></button></div></form></div></div>;
 }
 
 export default App;
