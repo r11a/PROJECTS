@@ -2,7 +2,7 @@
 
 PROJECTS is a full-stack Home Assistant App for managing smart-home installation projects.
 
-Version 0.7.2 fixes full-height sidebar navigation and touch scrolling on small screens. It includes the personal Appearance screen from 0.7.1, with the unchanged light interface, a high-contrast granite dark mode and automatic device-based switching, plus the 0.7.0 field-operations layer.
+Version 0.7.3 completes the granite dark palette with a deeper neutral-black sidebar and clearer light navigation text. It includes the full-height sidebar scrolling fix from 0.7.2 and the personal Appearance screen from 0.7.1.
 
 Version 0.4.0 adds an operational forms module with editable templates, structured form records, workflow states, responsive phone layouts and company-logo storage. Version 0.3.1 added reliable settings-save confirmation and a more readable typography scale. Version 0.3.0 added the operational core: detailed client records, professional contacts and referrers, uploads, inspections, dated tasks, dynamic catalogs and custom fields, automatic insights, a multi-view live calendar and an administrator Audit Log.
 

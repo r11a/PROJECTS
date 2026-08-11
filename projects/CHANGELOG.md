@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.3
+
+- Replaced the blue dark-mode sidebar with a deeper black and graphite surface.
+- Increased sidebar text and icon contrast for clearer navigation.
+- Restyled workspace and user cards with neutral charcoal tones.
+- Limited purple to the brand and active-navigation accent for a cleaner granite hierarchy.
+
 ## 0.7.2
 
 - Made the full sidebar vertically scrollable on desktop, Home Assistant Ingress and mobile devices.
