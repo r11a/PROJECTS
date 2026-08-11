@@ -13,6 +13,10 @@ Premium project management for smart-home professionals, packaged as a Home Assi
 - PostgreSQL shared persistence and automatic migrations
 - Standalone users with role-based permissions
 - Audit logging, health checks and database backup/restore
+- Detailed customer cards, contacts, files, tasks and site inspections
+- Configurable catalogs, labels, flags and custom fields
+- Live day/week/month/detailed-month/year calendar with project filtering
+- Automatic operational insights and aggregated overdue-task snoozing
 - Home Assistant Ingress
 - Standalone authenticated web interface
 

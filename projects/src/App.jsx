@@ -10,17 +10,22 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer,
 import { MapContainer, Marker, Popup, TileLayer, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { activity, clients, milestones, stageMeta } from './data';
+import { AlertCenter, CalendarWorkspace, ClientsWorkspace, InsightsTile, OperationalSettings } from './Operational';
+import './operational.css';
+import projectsMark from './assets/projects-mark.svg';
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
 const compactMoney = (value) => value >= 1000000 ? `₪${(value / 1000000).toFixed(2)}M` : `₪${Math.round(value / 1000)}K`;
+const actionNamesForDashboard = { create: 'יצר רשומה', update: 'עדכן רשומה', delete: 'מחק רשומה', upload: 'העלה קובץ', login: 'נכנס למערכת', snooze: 'דחה התראה', backup: 'יצר גיבוי' };
 const ingressRoot = window.location.pathname.match(/^(\/api\/hassio_ingress\/[^/]+)/)?.[1] || '';
-const apiRoot = `${ingressRoot}/api`;
+export const apiRoot = `${ingressRoot}/api`;
 
-async function api(path, options = {}) {
+export async function api(path, options = {}) {
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(`${apiRoot}${path}`, {
     credentials: 'same-origin',
     ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: isFormData ? { ...options.headers } : { 'Content-Type': 'application/json', ...options.headers },
   });
   const body = response.status === 204 ? null : await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || `Request failed (${response.status})`);
@@ -29,6 +34,7 @@ async function api(path, options = {}) {
 
 const nav = [
   { id: 'dashboard', label: 'תמונת מצב', icon: LayoutDashboard },
+  { id: 'calendar', label: 'לוח שנה', icon: CalendarDays },
   { id: 'projects', label: 'פרויקטים', icon: FolderKanban, badge: 12 },
   { id: 'map', label: 'מפת פרויקטים', icon: Map },
   { id: 'clients', label: 'לקוחות ואנשי קשר', icon: Users },
@@ -74,6 +80,8 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [notice, setNotice] = useState('');
+  const [insights, setInsights] = useState(null);
+  const [alertsOpen, setAlertsOpen] = useState(true);
 
   useEffect(() => {
     api('/auth/me').then(({ user: currentUser }) => Promise.all([currentUser, api('/projects')]))
@@ -85,6 +93,13 @@ function App() {
     const timer = setTimeout(() => setNotice(''), 2600);
     return () => clearTimeout(timer);
   }, [notice]);
+  useEffect(() => {
+    if (!user) return undefined;
+    const loadInsights = () => api('/insights').then((result) => { setInsights(result); if (result.alerts.length) setAlertsOpen(true); }).catch(() => {});
+    loadInsights();
+    const timer = setInterval(loadInsights, 60000);
+    return () => clearInterval(timer);
+  }, [user?.id]);
 
   const openProject = (project) => { setSelectedProject(project); setPage('project'); setSidebarOpen(false); };
   const updateProject = async (id, patch) => {
@@ -119,7 +134,7 @@ function App() {
     setProjects([]);
   };
 
-  if (loading) return <div className="app-loader"><div className="brand-mark"><span>P</span></div><strong><b>PRO</b>JECTS</strong><span>טוען מערכת...</span></div>;
+  if (loading) return <div className="app-loader"><div className="brand-mark"><img src={projectsMark} alt="" /></div><strong><b>PRO</b>JECTS</strong><span>טוען מערכת...</span></div>;
   if (!user) return <LoginPage onLogin={login} />;
 
   const filteredProjects = projects.filter((project) => {
@@ -128,11 +143,12 @@ function App() {
   });
 
   const pageTitle = selectedProject && page === 'project' ? selectedProject.name : page === 'users' ? 'משתמשים והרשאות' : page === 'settings' ? 'גיבוי ומערכת' : nav.find((item) => item.id === page)?.label || 'תמונת מצב';
+  const todayLabel = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
     <div className="app-shell">
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="brand"><div className="brand-mark"><span>P</span></div><div><strong><b>PRO</b>JECTS</strong><span>SMART PROJECT MANAGEMENT</span></div></div>
+        <div className="brand"><div className="brand-mark"><img src={projectsMark} alt="" /></div><div><strong><b>PRO</b>JECTS</strong><span>SMART PROJECT MANAGEMENT</span></div></div>
         <button className="mobile-close" onClick={() => setSidebarOpen(false)} aria-label="סגור תפריט"><X /></button>
         <div className="workspace-switch"><div className="workspace-logo">SH</div><div><strong>Smart Home Israel</strong><span>סביבת עבודה ראשית</span></div><ChevronDown size={16} /></div>
         <nav className="main-nav">
@@ -149,7 +165,7 @@ function App() {
         </nav>
         <div className="sidebar-footer">
           {user.role === 'admin' && <button className={page === 'settings' ? 'active' : ''} onClick={() => setPage('settings')}><Settings size={19} /><span>גיבוי ומערכת</span></button>}
-          <div className="user-card"><div className="avatar">{user.displayName.slice(0, 2)}<span /></div><div><strong>{user.displayName}</strong><span>{roleLabels[user.role]}</span></div><button className="logout-button" onClick={logout} title="יציאה"><LogOut size={17} /></button></div>
+          <div className="user-card"><div className="avatar" style={{ background: user.avatarColor, color: '#fff' }}>{avatarGlyph(user)}<span /></div><div><strong>{user.displayName}</strong><span>{roleLabels[user.role]}</span></div><button className="logout-button" onClick={logout} title="יציאה"><LogOut size={17} /></button></div>
         </div>
       </aside>
       {sidebarOpen && <div className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />}
@@ -159,7 +175,7 @@ function App() {
           <button className="menu-button" onClick={() => setSidebarOpen(true)}><Menu /></button>
           <div className="title-block">
             {page === 'project' && <button className="back-button" onClick={() => setPage('projects')}><ChevronLeft size={19} /></button>}
-            <div><span>{page === 'project' ? `${selectedProject?.id}  /  פרויקטים` : 'יום שלישי, 11 באוגוסט'}</span><h1>{pageTitle}</h1></div>
+            <div><span>{page === 'project' ? `${selectedProject?.id}  /  פרויקטים` : todayLabel}</span><h1>{pageTitle}</h1></div>
           </div>
           <div className="topbar-actions">
             <label className="global-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש בכל המערכת..." /><kbd>⌘ K</kbd></label>
@@ -169,24 +185,28 @@ function App() {
         </header>
 
         <div className="page-content">
-          {page === 'dashboard' && <Dashboard projects={projects} openProject={openProject} setPage={setPage} />}
+          {page === 'dashboard' && <Dashboard projects={projects} openProject={openProject} setPage={setPage} insights={insights} user={user} />}
+          {page === 'calendar' && <CalendarWorkspace api={api} user={user} setNotice={setNotice} />}
           {page === 'projects' && <ProjectsPage projects={filteredProjects} search={search} setSearch={setSearch} stageFilter={stageFilter} setStageFilter={setStageFilter} openProject={openProject} />}
           {page === 'map' && <MapPage projects={filteredProjects} openProject={openProject} stageFilter={stageFilter} setStageFilter={setStageFilter} />}
-          {page === 'clients' && <ClientsPage />}
+          {page === 'clients' && <ClientsWorkspace api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} />}
           {page === 'forms' && <FormsPage setNotice={setNotice} />}
           {page === 'finance' && <FinancePage projects={projects} openProject={openProject} />}
           {page === 'users' && user.role === 'admin' && <UsersPage setNotice={setNotice} />}
-          {page === 'settings' && user.role === 'admin' && <SystemPage setNotice={setNotice} />}
+          {page === 'settings' && user.role === 'admin' && <OperationalSettings api={api} setNotice={setNotice} />}
           {page === 'project' && selectedProject && <ProjectDetail project={projects.find((p) => p.id === selectedProject.id) || selectedProject} updateProject={updateProject} canEdit={['admin', 'manager', 'technician'].includes(user.role)} />}
         </div>
       </main>
       {newProjectOpen && <NewProjectModal onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
+      {alertsOpen && insights?.alerts?.length > 0 && <AlertCenter alerts={insights.alerts} api={api} setNotice={setNotice} onClose={() => setAlertsOpen(false)} onSnoozed={() => { setAlertsOpen(false); setInsights((current) => ({ ...current, alerts: [] })); }} />}
       {notice && <div className="toast"><CheckCircle2 size={19} />{notice}</div>}
     </div>
   );
 }
 
 const roleLabels = { admin: 'מנהל מערכת', manager: 'מנהל פרויקט', technician: 'טכנאי', finance: 'כספים', viewer: 'צופה' };
+const avatarIcons = { user: 'אדם', wrench: 'כלי עבודה', hardhat: 'קסדה', lightning: 'חשמל', shield: 'מגן', star: 'כוכב' };
+function avatarGlyph(user) { return ({ wrench: '🔧', hardhat: '⛑', lightning: 'ϟ', shield: '◆', star: '★' })[user.avatarIcon] || user.displayName.slice(0, 2); }
 
 function LoginPage({ onLogin }) {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -196,19 +216,19 @@ function LoginPage({ onLogin }) {
     event.preventDefault(); setSubmitting(true); setError('');
     try { await onLogin(form); } catch (loginError) { setError(loginError.message); } finally { setSubmitting(false); }
   };
-  return <div className="login-shell" dir="rtl"><div className="login-card"><div className="login-brand"><div className="brand-mark"><span>P</span></div><strong><b>PRO</b>JECTS</strong><small>SMART PROJECT MANAGEMENT</small></div><div className="login-copy"><span>כניסה מאובטחת</span><h1>ברוכים הבאים</h1><p>התחברו למרחב ניהול הפרויקטים שלכם</p></div><form onSubmit={submit}><label>שם משתמש<input autoFocus autoComplete="username" required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" autoComplete="current-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <div className="login-error">{error}</div>}<button className="primary-button" disabled={submitting}>{submitting ? 'מתחבר...' : 'כניסה למערכת'} <ArrowLeft size={17} /></button></form><small className="login-hint">בכניסה דרך Home Assistant הזיהוי מתבצע אוטומטית.</small></div></div>;
+  return <div className="login-shell" dir="rtl"><div className="login-card"><div className="login-brand"><div className="brand-mark"><img src={projectsMark} alt="" /></div><strong><b>PRO</b>JECTS</strong><small>SMART PROJECT MANAGEMENT</small></div><div className="login-copy"><span>כניסה מאובטחת</span><h1>ברוכים הבאים</h1><p>התחברו למרחב ניהול הפרויקטים שלכם</p></div><form onSubmit={submit}><label>שם משתמש<input autoFocus autoComplete="username" required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" autoComplete="current-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <div className="login-error">{error}</div>}<button className="primary-button" disabled={submitting}>{submitting ? 'מתחבר...' : 'כניסה למערכת'} <ArrowLeft size={17} /></button></form><small className="login-hint">בכניסה דרך Home Assistant הזיהוי מתבצע אוטומטית.</small></div></div>;
 }
 
 function UsersPage({ setNotice }) {
   const [users, setUsers] = useState([]);
-  const [form, setForm] = useState({ username: '', displayName: '', password: '', role: 'viewer' });
+  const [form, setForm] = useState({ username: '', displayName: '', password: '', role: 'viewer', avatarColor: '#6957df', avatarIcon: 'user' });
   const loadUsers = () => api('/users').then((result) => setUsers(result.users)).catch((error) => setNotice(error.message));
   useEffect(loadUsers, []);
   const createUser = async (event) => {
     event.preventDefault();
     try {
       await api('/users', { method: 'POST', body: JSON.stringify(form) });
-      setForm({ username: '', displayName: '', password: '', role: 'viewer' });
+      setForm({ username: '', displayName: '', password: '', role: 'viewer', avatarColor: '#6957df', avatarIcon: 'user' });
       setNotice('המשתמש נוצר'); loadUsers();
     } catch (error) { setNotice(error.message); }
   };
@@ -216,7 +236,7 @@ function UsersPage({ setNotice }) {
     try { await api(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }); loadUsers(); setNotice('ההרשאה עודכנה'); }
     catch (error) { setNotice(error.message); }
   };
-  return <div className="section-page users-page"><div className="page-intro"><div><h2>משתמשים והרשאות</h2><p>ניהול גישה לממשק העצמאי לפי תפקידים</p></div><span className="security-pill"><ShieldCheck size={17} />{users.length} משתמשים</span></div><div className="users-layout"><div className="panel users-list"><div className="panel-head"><div><h3>משתמשים פעילים</h3><span>חשבונות Home Assistant מסומנים אוטומטית</span></div></div>{users.map((item) => <div className="user-row" key={item.id}><div className="avatar">{item.displayName.slice(0, 2)}</div><div><strong>{item.displayName}</strong><span>{item.username || 'Home Assistant'} {item.haUserId && '· Ingress'}</span></div><select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><label className="active-toggle"><input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} /><span /></label></div>)}</div><form className="panel create-user" onSubmit={createUser}><div className="panel-head"><div><h3>משתמש חדש</h3><span>לכניסה דרך הפורט העצמאי</span></div></div><label>שם תצוגה<input required value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label><label>שם משתמש<input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" minLength="8" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label><label>תפקיד<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><button className="primary-button"><Plus size={17} />יצירת משתמש</button></form></div></div>;
+  return <div className="section-page users-page"><div className="page-intro"><div><h2>משתמשים והרשאות</h2><p>לכל משתמש זהות חזותית אישית; מותר לבחור צבע זהה למספר משתמשים.</p></div><span className="security-pill"><ShieldCheck size={17} />{users.length} משתמשים</span></div><div className="users-layout"><div className="panel users-list"><div className="panel-head"><div><h3>משתמשים פעילים</h3><span>צבע ואייקון מוצגים בלוח השנה ובפעילות</span></div></div>{users.map((item) => <div className="user-row visual-user-row" key={item.id}><div className="avatar" style={{ background:item.avatarColor,color:'#fff' }}>{avatarGlyph(item)}</div><div><strong>{item.displayName}</strong><span>{item.username || 'Home Assistant'} {item.haUserId && '· Ingress'}</span></div><select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><div className="user-appearance"><input aria-label="צבע משתמש" type="color" value={item.avatarColor} onChange={(e) => updateUser(item.id,{avatarColor:e.target.value})} /><select aria-label="אייקון משתמש" value={item.avatarIcon} onChange={(e) => updateUser(item.id,{avatarIcon:e.target.value})}>{Object.entries(avatarIcons).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div><label className="active-toggle"><input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} /><span /></label></div>)}</div><form className="panel create-user" onSubmit={createUser}><div className="panel-head"><div><h3>משתמש חדש</h3><span>לכניסה דרך הפורט העצמאי</span></div></div><label>שם תצוגה<input required value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label><label>שם משתמש<input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" minLength="8" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label><label>תפקיד<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><div className="new-user-appearance"><label>צבע<input type="color" value={form.avatarColor} onChange={(e) => setForm({ ...form, avatarColor:e.target.value })} /></label><label>אייקון<select value={form.avatarIcon} onChange={(e) => setForm({ ...form, avatarIcon:e.target.value })}>{Object.entries(avatarIcons).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><button className="primary-button"><Plus size={17} />יצירת משתמש</button></form></div></div>;
 }
 
 function SystemPage({ setNotice }) {
@@ -238,26 +258,24 @@ function SystemPage({ setNotice }) {
   return <div className="section-page system-page"><div className="page-intro"><div><h2>גיבוי, שחזור ובריאות מערכת</h2><p>גיבויי PostgreSQL נשמרים בתוך נתוני ה־Add-on ונכללים גם בגיבוי Home Assistant</p></div><button className="primary-button" disabled={busy} onClick={createBackup}><Database size={17} />{busy ? 'מבצע...' : 'יצירת גיבוי'}</button></div><div className="panel backup-list"><div className="panel-head"><div><h3>גיבויים זמינים</h3><span>שחזור מפעיל מחדש את שירות ה־API באופן מבוקר</span></div><span className="health-online"><i />PostgreSQL מחובר</span></div>{backups.length === 0 && <div className="empty-backups">עדיין לא נוצרו גיבויים ידניים.</div>}{backups.map((backup) => <div className="backup-row" key={backup.name}><div className="doc-icon"><Database size={18} /></div><div><strong>{backup.name}</strong><span>{new Date(backup.createdAt).toLocaleString('he-IL')} · {(backup.size / 1024 / 1024).toFixed(1)} MB</span></div><button className="secondary-button" disabled={busy} onClick={() => restore(backup.name)}><RotateCcw size={15} />שחזור</button></div>)}</div></div>;
 }
 
-function Dashboard({ projects, openProject, setPage }) {
+function Dashboard({ projects, openProject, setPage, insights, user }) {
   const active = projects.filter((p) => p.stage !== 'completed');
   const value = active.reduce((sum, p) => sum + p.value, 0);
   const unpaid = active.reduce((sum, p) => sum + (p.value - p.paid), 0);
-  const avg = Math.round(active.reduce((sum, p) => sum + p.progress, 0) / active.length);
+  const avg = active.length ? Math.round(active.reduce((sum, p) => sum + p.progress, 0) / active.length) : 0;
   const stageData = Object.entries(stageMeta).map(([key, value]) => ({ name: value.label, value: projects.filter((p) => p.stage === key).length, color: value.color })).filter((x) => x.value);
-  const cashData = [
-    { month: 'מרץ', paid: 160, expected: 210 }, { month: 'אפר׳', paid: 225, expected: 250 },
-    { month: 'מאי', paid: 190, expected: 260 }, { month: 'יוני', paid: 280, expected: 310 },
-    { month: 'יולי', paid: 245, expected: 330 }, { month: 'אוג׳', paid: 138, expected: 290 },
-  ];
+  const cashData = projects.slice(0, 6).map((project) => ({ month: project.id.replace('PRJ-', ''), paid: Math.round(project.paid / 1000), expected: Math.round(project.value / 1000) }));
+  const upcomingMilestones = projects.filter((project) => project.stage !== 'completed').slice(0, 4);
   return (
     <div className="dashboard-page">
-      <section className="welcome-row"><div><h2>בוקר טוב, רונן <span>👋</span></h2><p>הנה תמונת המצב של הפרויקטים שלך להיום.</p></div><div className="live-pill"><i />הנתונים מעודכנים עכשיו</div></section>
+      <section className="welcome-row"><div><h2>שלום, {user.displayName} <span>👋</span></h2><p>הנה תמונת המצב התפעולית המעודכנת.</p></div><div className="live-pill"><i />הנתונים מעודכנים עכשיו</div></section>
       <section className="kpi-grid">
         <KpiCard icon={FolderKanban} tone="purple" label="פרויקטים פעילים" value={active.length} change="2 נוספו החודש" trend />
         <KpiCard icon={TrendingUp} tone="blue" label="היקף פרויקטים פעילים" value={compactMoney(value)} change="12.4% מהחודש הקודם" trend />
         <KpiCard icon={Gauge} tone="green" label="התקדמות ממוצעת" value={`${avg}%`} change="4.8% שיפור החודש" trend />
         <KpiCard icon={CircleDollarSign} tone="orange" label="יתרה פתוחה לגבייה" value={compactMoney(unpaid)} change="3 תשלומים דורשים טיפול" alert />
       </section>
+      <InsightsTile insights={insights} onNavigate={setPage} />
       <section className="dashboard-grid top">
         <div className="panel portfolio-panel">
           <PanelHead title="פרויקטים שדורשים תשומת לב" subtitle="לפי סיכון, חריגה ותשלומים" action="לכל הפרויקטים" onAction={() => setPage('projects')} />
@@ -285,17 +303,17 @@ function Dashboard({ projects, openProject, setPage }) {
       </section>
       <section className="dashboard-grid bottom">
         <div className="panel cash-panel">
-          <PanelHead title="תזרים גבייה" subtitle="צפי מול תשלומים שהתקבלו · באלפי ₪" action="6 חודשים" />
+          <PanelHead title="גבייה לפי פרויקט" subtitle="חוזה מול תשלומים שהתקבלו · באלפי ₪" action="6 פרויקטים" />
           <div className="cash-legend"><span><i className="paid" />התקבל</span><span><i className="expected" />צפי</span></div>
           <ResponsiveContainer width="100%" height={235}>
             <BarChart data={cashData} barGap={5}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf0f6" /><XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#8b93a7', fontSize: 12 }} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#a1a8b7', fontSize: 11 }} /><Tooltip cursor={{ fill: '#f7f8fb' }} /><Bar dataKey="expected" fill="#e8ebf3" radius={[5, 5, 0, 0]} /><Bar dataKey="paid" fill="#6d5de8" radius={[5, 5, 0, 0]} /></BarChart>
           </ResponsiveContainer>
         </div>
         <div className="panel milestones-panel"><PanelHead title="אבני דרך קרובות" subtitle="7 הימים הקרובים" action="ללוח השנה" />
-          <div className="milestone-list">{milestones.map((item, index) => <div className="milestone-item" key={item.title}><div className={`date-tile ${item.state}`}><b>{item.date.split(' ')[0]}</b><span>{item.date.split(' ')[1]}</span></div><div><strong>{item.title}</strong><span>{item.project}</span></div>{index === 0 && <em>היום</em>}<MoreHorizontal size={18} /></div>)}</div>
+          <div className="milestone-list">{upcomingMilestones.map((item, index) => <div className="milestone-item" key={item.id}><div className={`date-tile ${item.health < 70 ? 'risk' : index === 0 ? 'today' : 'soon'}`}><b>{item.due.split('.')[0] || '—'}</b><span>{item.due.split('.')[1] || ''}</span></div><div><strong>{item.nextMilestone}</strong><span>{item.name}</span></div>{item.health < 70 && <em>בסיכון</em>}<MoreHorizontal size={18} /></div>)}</div>
         </div>
         <div className="panel activity-panel"><PanelHead title="פעילות אחרונה" action="הצג הכל" />
-          <div className="activity-list">{activity.map((item) => <div className="activity-item" key={item.time}><div className="mini-avatar" style={{ background: item.color }}>{item.initials}</div><div><p>{item.text}</p><strong>{item.subject}</strong><span>{item.time}</span></div></div>)}</div>
+          <div className="activity-list">{(insights?.recentActivities || []).map((item) => <div className="activity-item" key={item.id}><div className="mini-avatar">{item.userName.slice(0,2)}</div><div><p>{item.userName} · {actionNamesForDashboard[item.action] || item.action}</p><strong>{item.entityType} {item.entityId || ''}</strong><span>{new Date(item.createdAt).toLocaleString('he-IL')}</span></div></div>)}</div>
         </div>
       </section>
     </div>

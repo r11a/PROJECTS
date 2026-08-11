@@ -2,6 +2,8 @@
 
 PROJECTS is a full-stack Home Assistant App for managing smart-home installation projects.
 
+Version 0.3.0 adds the operational core: detailed client records, professional contacts and referrers, uploads, inspections, dated tasks, dynamic catalogs and custom fields, automatic insights, a multi-view live calendar and an administrator Audit Log.
+
 ## Access
 
 - Use **Open Web UI** for the standalone authenticated interface. Its default host port is `8686`.

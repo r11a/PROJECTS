@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- Added operational client cards with required name, address and phone fields.
+- Added professional contacts, referrers, additional phones/emails, files, site inspections and tasks.
+- Added dynamic catalogs, custom fields, company, map, notification, numbering and backup settings.
+- Added admin-only deletion and a searchable administrator Audit Log.
+- Added automatic insights, overdue-task alert aggregation and per-user Snooze.
+- Added a live calendar with day, week, month, detailed-month and year views, project filtering and retained history.
+- Added per-user colors and icons without color uniqueness restrictions.
+- Reworked the PROJECTS icon and in-app brand mark.
+
 ## 0.2.0
 
 - Combined React, Node API, PostgreSQL and Nginx into one Home Assistant App.
