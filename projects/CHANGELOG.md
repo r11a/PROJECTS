@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2
+
+- Prevented incomplete legacy project data from blocking API startup during relationship normalization.
+- Made optional legacy-data conversion non-fatal while preserving strict required fields for new clients.
+- Added a dedicated startup/data error screen instead of incorrectly falling back to the login form.
+
 ## 0.5.1
 
 - Fixed Home Assistant Ingress incorrectly displaying the standalone login screen when a Supervisor omits user identity headers.
