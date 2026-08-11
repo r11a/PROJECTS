@@ -6,7 +6,7 @@ PROJECTS is a premium project-management application for smart-home and low-volt
 
 ## Current status
 
-Version `0.1.0` is an interactive UI/UX pilot. It includes projects, dashboards, maps, clients, forms and finance views. Project edits are currently persisted per browser using `localStorage`.
+Version `0.1.1` is an interactive UI/UX pilot. It includes projects, dashboards, maps, clients, forms and finance views. Project edits are currently persisted per browser using `localStorage`.
 
 The next product stage will introduce a backend, PostgreSQL, multi-user synchronization and role-based access control.
 
