@@ -10,6 +10,8 @@
   <rect width="1200" height="320" rx="54" fill="#111528"/>
   <rect x="42" y="42" width="236" height="236" rx="68" fill="url(#mark)"/>
   <path d="M105 224V93h64c45 0 72 21 72 57 0 39-29 61-76 61h-19v13h-41Zm41-48h21c21 0 33-9 33-26 0-16-12-25-33-25h-21v51Z" fill="#FFFFFF"/>
+  <path d="M214 184v30m0-15h27" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity=".92"/>
+  <circle cx="214" cy="177" r="6" fill="#B8F5DF"/><circle cx="248" cy="199" r="6" fill="#FFD79C"/><circle cx="214" cy="221" r="6" fill="#FFB5CB"/>
   <path d="M229 78l8 17 17 8-17 8-8 17-8-17-17-8 17-8 8-17Z" fill="#FFFFFF" fill-opacity="0.9"/>
   <text x="342" y="191" font-family="Inter,Arial,sans-serif" font-size="126" letter-spacing="5" fill="#F7F5FF"><tspan fill="url(#pro)" font-weight="800">PRO</tspan><tspan font-weight="300">JECTS</tspan></text>
   <text x="350" y="242" font-family="Inter,Arial,sans-serif" font-size="20" letter-spacing="9" fill="#8E96B3">SMART PROJECT MANAGEMENT</text>

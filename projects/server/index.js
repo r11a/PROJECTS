@@ -9,6 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { seedProjects } from '../src/data.js';
+import { createOperationalRouter } from './operational.js';
 
 const { Pool, Client } = pg;
 const execFileAsync = promisify(execFile);
@@ -153,7 +154,7 @@ function cookieValue(request, name) {
 }
 
 function publicUser(row) {
-  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, haUserId: row.ha_user_id };
+  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, haUserId: row.ha_user_id, avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user' };
 }
 
 async function authenticate(request, response, next) {
@@ -200,7 +201,7 @@ async function audit(request, action, entityType, entityId, details = {}) {
 app.get('/api/health', async (_request, response) => {
   try {
     await pool.query('SELECT 1');
-    response.json({ status: 'ok', database: 'ok', version: '0.2.0' });
+    response.json({ status: 'ok', database: 'ok', version: '0.3.0' });
   } catch (error) {
     response.status(503).json({ status: 'error', database: 'unavailable', message: error.message });
   }
@@ -286,9 +287,9 @@ app.post('/api/users', authenticate, requireRoles('admin'), async (request, resp
   if (!username || password.length < 8) return response.status(400).json({ error: 'Username and password of at least 8 characters are required' });
   const passwordHash = await bcrypt.hash(password, 12);
   const result = await pool.query(
-    `INSERT INTO users(username, display_name, password_hash, role)
-     VALUES($1, $2, $3, $4) RETURNING *`,
-    [username, request.body.displayName || username, passwordHash, role],
+    `INSERT INTO users(username, display_name, password_hash, role, avatar_color, avatar_icon)
+     VALUES($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [username, request.body.displayName || username, passwordHash, role, request.body.avatarColor || '#6957df', request.body.avatarIcon || 'user'],
   );
   await audit(request, 'create', 'user', String(result.rows[0].id), { username, role });
   response.status(201).json({ user: publicUser(result.rows[0]) });
@@ -300,6 +301,8 @@ app.patch('/api/users/:id', authenticate, requireRoles('admin'), async (request,
   if (request.body.displayName) { values.push(request.body.displayName); updates.push(`display_name = $${values.length}`); }
   if (ROLES.includes(request.body.role)) { values.push(request.body.role); updates.push(`role = $${values.length}`); }
   if (typeof request.body.active === 'boolean') { values.push(request.body.active); updates.push(`active = $${values.length}`); }
+  if (request.body.avatarColor) { values.push(request.body.avatarColor); updates.push(`avatar_color = $${values.length}`); }
+  if (request.body.avatarIcon) { values.push(request.body.avatarIcon); updates.push(`avatar_icon = $${values.length}`); }
   if (request.body.password) {
     if (String(request.body.password).length < 8) return response.status(400).json({ error: 'Password must contain at least 8 characters' });
     values.push(await bcrypt.hash(String(request.body.password), 12)); updates.push(`password_hash = $${values.length}`);
@@ -342,6 +345,8 @@ app.post('/api/system/restore', authenticate, requireRoles('admin'), async (requ
     process.exit(0);
   }, 500);
 });
+
+app.use('/api', await createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
 
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Not found' }));
 app.use((error, _request, response, _next) => {

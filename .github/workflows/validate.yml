@@ -39,6 +39,7 @@ jobs:
           tags: local/projects:ci
       - name: Smoke test PostgreSQL, API and Nginx
         run: |
+          trap 'docker logs projects-smoke' ERR
           docker run --detach --name projects-smoke --publish 8686:8686 local/projects:ci
           for attempt in $(seq 1 45); do
             if curl --fail --silent http://127.0.0.1:8686/health | grep --quiet '"database":"ok"'; then
@@ -46,12 +47,21 @@ jobs:
             fi
             sleep 2
           done
+          curl --fail --silent http://127.0.0.1:8686/health | grep --quiet '"database":"ok"'
           curl --fail --silent --cookie-jar /tmp/projects-cookies \
             --header 'Content-Type: application/json' \
             --data '{"username":"admin","password":"change-me-now"}' \
             http://127.0.0.1:8686/api/auth/login | grep --quiet '"role":"admin"'
           curl --fail --silent --cookie /tmp/projects-cookies \
             http://127.0.0.1:8686/api/projects | grep --quiet '"projects"'
+          curl --fail --silent --cookie /tmp/projects-cookies \
+            http://127.0.0.1:8686/api/clients | grep --quiet '"clients"'
+          curl --fail --silent --cookie /tmp/projects-cookies \
+            http://127.0.0.1:8686/api/settings | grep --quiet '"catalogs"'
+          curl --fail --silent --cookie /tmp/projects-cookies \
+            'http://127.0.0.1:8686/api/calendar?from=2026-01-01T00%3A00%3A00.000Z&to=2027-01-01T00%3A00%3A00.000Z' | grep --quiet '"events"'
+          curl --fail --silent --cookie /tmp/projects-cookies \
+            http://127.0.0.1:8686/api/insights | grep --quiet '"stats"'
       - name: Stop smoke-test container
         if: always()
         run: docker rm --force projects-smoke || true
