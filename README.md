@@ -45,7 +45,9 @@ This is the Home Assistant-documented path for testing private/local Apps. A lat
 The App exposes:
 
 - Home Assistant Ingress on its internal port `8099`.
-- A standalone LAN interface on host port `8686`.
+- A standalone LAN interface on host port `8686` by default.
+
+The standalone host port is editable from the PROJECTS App **Network** section. Changing it does not require rebuilding the App, and **Open Web UI** follows the effective mapped port automatically. The internal Ingress port remains Supervisor-managed and should not be exposed.
 
 ### Pilot security
 

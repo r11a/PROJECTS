@@ -4,8 +4,14 @@ PROJECTS is an initial Home Assistant App for managing smart-home installation p
 
 ## Access
 
-- Use **Open Web UI** for the standalone interface on port `8686`.
+- Use **Open Web UI** for the standalone interface. Its default host port is `8686`.
 - Use the **PROJECTS** sidebar entry for authenticated Home Assistant Ingress.
+
+## Changing the standalone port
+
+Open the PROJECTS App page, expand **Network**, change the host port mapped to `8686/tcp`, save and restart the App. For example, you can map the internal port to host port `9080` without rebuilding the App. **Open Web UI** automatically uses the effective host port.
+
+Leave the mapping disabled if you want to use PROJECTS through Ingress only. The internal Ingress port `8099` is managed by Home Assistant and should not be exposed or changed.
 
 ## Pilot security notice
 
