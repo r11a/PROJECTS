@@ -188,12 +188,13 @@ export function OperationalSettings({ api, setNotice }) {
   const [backups, setBackups] = useState([]);
   const [auditQuery, setAuditQuery] = useState('');
   const load = async () => { try { setData(await api('/settings')); } catch (error) { setNotice(error.message); } };
+  const applySavedSetting = (key, value) => setData((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
   useEffect(() => { load(); }, []);
   useEffect(() => { if (tab === 'audit') api(`/audit?q=${encodeURIComponent(auditQuery)}`).then((r) => setAudit(r.entries)).catch((e) => setNotice(e.message)); }, [tab, auditQuery]);
   useEffect(() => { if (tab === 'backup') api('/system/backups').then((r) => setBackups(r.backups)).catch((e) => setNotice(e.message)); }, [tab]);
   const tabs = [['business','עסק ומערכת',Building2],['catalogs','קטלוגים ועיצוב',Palette],['fields','שדות מותאמים',Settings2],['audit','Audit Log',History],['backup','גיבוי ובריאות',Database]];
   return <div className="ops-page settings-workspace"><div className="ops-hero"><div><span className="ops-eyebrow"><Settings2 size={15} />מרכז שליטה</span><h2>המערכת מתאימה את עצמה לדרך שבה אתם עובדים</h2><p>שלטו בתהליך, במונחים, בצבעים, בסמלים ובמידע—בלי לשנות קוד.</p></div><span className="settings-health"><i />כל השירותים פעילים</span></div><nav className="settings-tabs">{tabs.map(([id,label,Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><Icon size={17} />{label}</button>)}</nav>
-    {tab === 'business' && <BusinessSettings settings={data.settings} api={api} reload={load} setNotice={setNotice} />}
+    {tab === 'business' && <BusinessSettings settings={data.settings} api={api} onSaved={applySavedSetting} setNotice={setNotice} />}
     {tab === 'catalogs' && <CatalogSettings catalogs={data.catalogs} api={api} reload={load} setNotice={setNotice} />}
     {tab === 'fields' && <CustomFields fields={data.customFields} api={api} reload={load} setNotice={setNotice} />}
     {tab === 'audit' && <AuditLog entries={audit} query={auditQuery} setQuery={setAuditQuery} />}
@@ -201,7 +202,7 @@ export function OperationalSettings({ api, setNotice }) {
   </div>;
 }
 
-function BusinessSettings({ settings, api, reload, setNotice }) {
+function BusinessSettings({ settings, api, onSaved, setNotice }) {
   const groups = [
     ['company','פרטי החברה','זהות העסק שתופיע במסמכים ובמערכת',[['name','שם החברה','text'],['companyNumber','ח.פ / עוסק','text'],['phone','טלפון','tel'],['email','דוא״ל','email'],['address','כתובת','text']]],
     ['localization','אזוריות וכספים','כללי ברירת מחדל לתאריכים וגבייה',[['currency','מטבע','select',['ILS','USD','EUR']],['vatRate','מע״מ (%)','number'],['timezone','אזור זמן','text'],['dateFormat','פורמט תאריך','select',['DD.MM.YYYY','YYYY-MM-DD']]]],
@@ -210,14 +211,15 @@ function BusinessSettings({ settings, api, reload, setNotice }) {
     ['notifications','התראות','אירועים שייצרו התראה',[['taskDue','משימה מתקרבת','boolean'],['paymentDue','גבייה מתקרבת','boolean'],['milestoneRisk','אבן דרך בסיכון','boolean'],['emailEnabled','שליחת מייל','boolean']]],
     ['backupPolicy','מדיניות גיבוי','תזמון ושמירת גרסאות',[['enabled','גיבוי אוטומטי','boolean'],['frequency','תדירות','select',['daily','weekly']],['retention','מספר גיבויים לשמירה','number'],['hour','שעת ביצוע','time']]],
   ];
-  return <div className="settings-card-grid">{groups.map(([key,title,subtitle,fields]) => <SettingCard key={key} settingKey={key} title={title} subtitle={subtitle} fields={fields} initial={settings[key] || {}} api={api} reload={reload} setNotice={setNotice} />)}</div>;
+  return <div className="settings-card-grid">{groups.map(([key,title,subtitle,fields]) => <SettingCard key={key} settingKey={key} title={title} subtitle={subtitle} fields={fields} initial={settings[key] || {}} api={api} onSaved={onSaved} setNotice={setNotice} />)}</div>;
 }
 
-function SettingCard({ settingKey, title, subtitle, fields, initial, api, reload, setNotice }) {
+function SettingCard({ settingKey, title, subtitle, fields, initial, api, onSaved, setNotice }) {
   const [form, setForm] = useState(initial); const [saving, setSaving] = useState(false);
   useEffect(() => setForm(initial), [JSON.stringify(initial)]);
-  const save = async () => { setSaving(true); try { await api(`/settings/${settingKey}`, { method: 'PATCH', body: JSON.stringify(form) }); setNotice(`${title} נשמרו`); reload(); } catch (error) { setNotice(error.message); } finally { setSaving(false); } };
-  return <section className="setting-card panel"><header><div><h3>{title}</h3><p>{subtitle}</p></div><button className="icon-save" onClick={save} disabled={saving} title="שמירה">{saving ? <RefreshCw className="spin" size={17} /> : <Save size={17} />}</button></header><div>{fields.map(([key,label,type,options]) => type === 'boolean' ? <label className="setting-toggle" key={key}><span>{label}</span><input type="checkbox" checked={Boolean(form[key])} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} /><i /></label> : <label key={key}><span>{label}</span>{type === 'select' ? <select value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })}>{options.map((option) => <option key={option}>{option}</option>)}</select> : <input type={type} step={type === 'number' ? 'any' : undefined} value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: type === 'number' ? Number(e.target.value) : e.target.value })} />}</label>)}</div></section>;
+  const dirty = JSON.stringify(form) !== JSON.stringify(initial);
+  const save = async (event) => { event.preventDefault(); if (!dirty || saving) return; setSaving(true); try { const result = await api(`/settings/${settingKey}`, { method: 'PATCH', body: JSON.stringify(form) }); onSaved(settingKey, result.setting.value); setNotice(`${title} נשמרו בהצלחה`); } catch (error) { setNotice(error.message); } finally { setSaving(false); } };
+  return <form className={`setting-card panel ${dirty ? 'dirty' : ''}`} onSubmit={save}><header><div><h3>{title}</h3><p>{subtitle}</p>{dirty && <small>יש שינויים שלא נשמרו</small>}</div><button type="submit" className="setting-save-button" disabled={saving || !dirty}>{saving ? <RefreshCw className="spin" size={17} /> : <Save size={17} />}<span>{saving ? 'שומר...' : dirty ? 'שמור' : 'נשמר'}</span></button></header><div>{fields.map(([key,label,type,options]) => type === 'boolean' ? <label className="setting-toggle" key={key}><span>{label}</span><input type="checkbox" checked={Boolean(form[key])} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} /><i /></label> : <label key={key}><span>{label}</span>{type === 'select' ? <select value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })}>{options.map((option) => <option key={option}>{option}</option>)}</select> : <input type={type} step={type === 'number' ? 'any' : undefined} value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: type === 'number' ? Number(e.target.value) : e.target.value })} />}</label>)}</div></form>;
 }
 
 function CatalogSettings({ catalogs, api, reload, setNotice }) {
