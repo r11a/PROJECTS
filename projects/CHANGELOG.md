@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- Fixed Home Assistant Ingress incorrectly displaying the standalone login screen when a Supervisor omits user identity headers.
+- Stopped unrelated API or migration errors from being misreported as authentication failures.
+- Forwarded the official Ingress path header for consistent gateway context.
+
 ## 0.5.0
 
 - Separated login accounts from the professional directory so people can work on projects without application access.

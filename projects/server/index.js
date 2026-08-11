@@ -196,8 +196,10 @@ function publicUser(row) {
 async function authenticate(request, response, next) {
   try {
     if (request.get('X-Projects-Ingress') === 'true') {
-      const haUserId = request.get('X-Remote-User-Id');
-      if (!haUserId) return response.status(401).json({ error: 'Missing Home Assistant user identity' });
+      // Port 8099 is restricted by Nginx to the Supervisor ingress gateway. Some
+      // Supervisor versions omit identity headers, but authentication has still
+      // already been completed by Home Assistant.
+      const haUserId = request.get('X-Remote-User-Id') || 'projects-ingress-admin';
       const displayName = request.get('X-Remote-User-Display-Name') || request.get('X-Remote-User-Name') || 'Home Assistant Admin';
       const result = await pool.query(
         `INSERT INTO users(display_name, role, ha_user_id)
@@ -249,7 +251,7 @@ async function resolveProjectManager(managerId) {
 app.get('/api/health', async (_request, response) => {
   try {
     await pool.query('SELECT 1');
-    response.json({ status: 'ok', database: 'ok', version: '0.5.0' });
+    response.json({ status: 'ok', database: 'ok', version: '0.5.1' });
   } catch (error) {
     response.status(503).json({ status: 'error', database: 'unavailable', message: error.message });
   }
