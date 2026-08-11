@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.4
+
+- Restored clear weekday labels in month view, including compact Hebrew labels on phones.
+- Added a direct date picker that navigates within the active calendar view.
+- Added explicit previous-day and next-day navigation in day view.
+- Added horizontal swipe navigation on mobile while preserving vertical scrolling and control interactions.
+- Added an admin-only Audit Log cleanup action with confirmation and a retained cleanup audit record.
+
 ## 0.7.3
 
 - Replaced the blue dark-mode sidebar with a deeper black and graphite surface.

@@ -78,6 +78,23 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     response.json({ entries: result.rows.map((row) => ({ id: row.id, action: row.action, entityType: row.entity_type, entityId: row.entity_id, details: row.details, createdAt: row.created_at, userName: row.user_name, role: row.role })) });
   });
 
+  router.delete('/audit', requireRoles('admin'), async (request, response) => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query('DELETE FROM audit_log');
+      await client.query(
+        'INSERT INTO audit_log(user_id,action,entity_type,entity_id,details) VALUES($1,$2,$3,$4,$5)',
+        [request.user.id, 'delete', 'audit_log', 'all', JSON.stringify({ deletedCount: result.rowCount, clearedBy: request.user.displayName })],
+      );
+      await client.query('COMMIT');
+      response.json({ deletedCount: result.rowCount });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally { client.release(); }
+  });
+
   router.get('/insights', async (request, response) => {
     const [taskStats, collection, risks, alerts, recent] = await Promise.all([
       pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND due_date<CURRENT_DATE)::int overdue,
