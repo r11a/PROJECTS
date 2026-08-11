@@ -198,7 +198,7 @@ function cookieValue(request, name) {
 }
 
 function publicUser(row) {
-  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, haUserId: row.ha_user_id, avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user' };
+  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, haUserId: row.ha_user_id, avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', appearanceTheme: row.appearance_theme || 'light' };
 }
 
 async function authenticate(request, response, next) {
@@ -259,7 +259,7 @@ async function resolveProjectManager(managerId) {
 app.get('/api/health', async (_request, response) => {
   try {
     await pool.query('SELECT 1');
-    response.json({ status: 'ok', database: 'ok', version: '0.7.0' });
+    response.json({ status: 'ok', database: 'ok', version: '0.7.1' });
   } catch (error) {
     response.status(503).json({ status: 'error', database: 'unavailable', message: error.message });
   }

@@ -2,7 +2,7 @@
 
 PROJECTS is a full-stack Home Assistant App for managing smart-home installation projects.
 
-Version 0.7.0 adds the field-operations layer: built-in systems, client quantities, project wizard, Gantt, client reports, direct document upload and verified Synology/HA network storage.
+Version 0.7.1 adds a personal Appearance screen for every user, with the unchanged light interface, a high-contrast granite dark mode and automatic device-based switching. It also includes the 0.7.0 field-operations layer: built-in systems, client quantities, project wizard, Gantt, client reports, direct document upload and verified Synology/HA network storage.
 
 Version 0.4.0 adds an operational forms module with editable templates, structured form records, workflow states, responsive phone layouts and company-logo storage. Version 0.3.1 added reliable settings-save confirmation and a more readable typography scale. Version 0.3.0 added the operational core: detailed client records, professional contacts and referrers, uploads, inspections, dated tasks, dynamic catalogs and custom fields, automatic insights, a multi-view live calendar and an administrator Audit Log.
 

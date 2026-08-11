@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.1
+
+- Added per-user light, granite dark and automatic appearance modes under Settings → Appearance.
+- Preserved the existing light interface without visual overrides.
+- Added high-contrast dark styling across dashboards, forms, tables, calendars, maps, modals and mobile layouts.
+- Made Appearance settings available to every user while retaining all administrative settings for admins only.
+- Persisted each user's appearance preference in PostgreSQL and recorded changes in the Audit Log.
+- Replaced the overlapping mobile close button with accessible click/keyboard closing on the PROJECTS brand area.
+- Added migration `008_user_appearance.sql`.
+
 ## 0.7.0
 
 - Added a built-in smart-home, multimedia, camera, alarm and communications catalog with assignable quantities.

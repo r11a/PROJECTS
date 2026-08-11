@@ -19,6 +19,7 @@ import './operational.css';
 import './forms-workspace.css';
 import './master-data.css';
 import './workspaces.css';
+import './theme-dark.css';
 import projectsMark from './assets/projects-mark.svg';
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
@@ -106,6 +107,7 @@ function App() {
   const [professionals, setProfessionals] = useState([]);
   const [clientOptions, setClientOptions] = useState([]);
   const [equipmentCatalog, setEquipmentCatalog] = useState([]);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false);
 
   const loadReferenceData = async () => {
     const [settingsResult, teamResult, clientsResult, professionalsResult, equipmentResult] = await Promise.all([api('/settings'), api('/team'), api('/clients'), api('/professionals'), api('/equipment-catalog')]);
@@ -140,6 +142,29 @@ function App() {
     const timer = setInterval(loadInsights, 60000);
     return () => clearInterval(timer);
   }, [user?.id]);
+
+  const appearanceMode = user?.appearanceTheme || 'light';
+  const darkMode = appearanceMode === 'dark' || (appearanceMode === 'auto' && systemPrefersDark);
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!media) return undefined;
+    const syncPreference = (event) => setSystemPrefersDark(event.matches);
+    media.addEventListener?.('change', syncPreference);
+    return () => media.removeEventListener?.('change', syncPreference);
+  }, []);
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.dataset.projectsTheme = 'dark';
+      document.documentElement.style.colorScheme = 'dark';
+    } else {
+      delete document.documentElement.dataset.projectsTheme;
+      document.documentElement.style.removeProperty('color-scheme');
+    }
+    return () => {
+      delete document.documentElement.dataset.projectsTheme;
+      document.documentElement.style.removeProperty('color-scheme');
+    };
+  }, [darkMode]);
 
   const openProject = (project) => { setSelectedProject(project); setPage('project'); setSidebarOpen(false); };
   const updateProject = async (id, patch) => {
@@ -194,7 +219,7 @@ function App() {
   const openCollectionCount = projects.filter((project) => Number(project.paid) < Number(project.value)).length;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${darkMode ? ' theme-dark' : ''}`}>
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="brand" role="button" tabIndex="0" aria-label="סגירת תפריט הניווט" onClick={() => setSidebarOpen(false)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSidebarOpen(false); } }}><div className="brand-mark"><img src={projectsMark} alt="" /></div><div><strong><b>PRO</b>JECTS</strong><span>Manage Smarter. Deliver Better.</span></div></div>
         <div className="workspace-switch"><div className={`workspace-logo ${companyLogo ? 'has-company-logo' : ''}`}>{companyLogo ? <img src={companyLogo} alt="" /> : (company.name || 'SH').slice(0, 2)}</div><div><strong>{company.name || 'החברה שלי'}</strong><span>סביבת עבודה ראשית</span></div><ChevronDown size={16} /></div>
@@ -212,7 +237,7 @@ function App() {
           <button className={page === 'reports' ? 'active' : ''} onClick={() => setPage('reports')}><Activity size={19} /><span>דוחות וניתוחים</span></button>
         </nav>
         <div className="sidebar-footer">
-          {user.role === 'admin' && <button className={page === 'settings' ? 'active' : ''} onClick={() => setPage('settings')}><Settings size={19} /><span>הגדרות ומערכת</span></button>}
+          <button className={page === 'settings' ? 'active' : ''} onClick={() => { setPage('settings'); setSidebarOpen(false); }}><Settings size={19} /><span>{user.role === 'admin' ? 'הגדרות ומערכת' : 'מראה והעדפות'}</span></button>
           <div className="user-card"><div className="avatar" style={{ background: user.avatarColor, color: '#fff' }}>{avatarGlyph(user)}<span /></div><div><strong>{user.displayName}</strong><span>{roleLabels[user.role]}</span></div><button className="logout-button" onClick={logout} title="יציאה"><LogOut size={17} /></button></div>
         </div>
       </aside>
@@ -244,7 +269,7 @@ function App() {
           {page === 'tasks' && <TasksWorkspace api={api} user={user} projects={projects} professionals={professionals} setNotice={setNotice} />}
           {page === 'reports' && <ReportsWorkspace api={api} setNotice={setNotice} />}
           {page === 'users' && user.role === 'admin' && <UsersPage setNotice={setNotice} currentUser={user} onChanged={loadReferenceData} />}
-          {page === 'settings' && user.role === 'admin' && <OperationalSettings api={api} apiRoot={apiRoot} setNotice={setNotice} onConfigurationChanged={setConfiguration} />}
+          {page === 'settings' && <OperationalSettings api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} onUserChanged={setUser} onConfigurationChanged={setConfiguration} />}
           {page === 'project' && selectedProject && <ProjectWorkspace project={projects.find((p) => p.id === selectedProject.id) || selectedProject} updateProject={updateProject} api={api} apiRoot={apiRoot} user={user} projects={projects} professionals={professionals} stageOptions={stageOptions} setNotice={setNotice} setPage={setPage} />}
         </div>
       </main>

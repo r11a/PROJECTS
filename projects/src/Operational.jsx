@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Activity, AlertTriangle, Archive, ArrowLeft, BriefcaseBusiness, Building2, CalendarDays, Camera,
   Check, CheckCircle2, ChevronLeft, CirclePlus, ClipboardCheck, Clock3, Database, Download, FileText,
-  Eye, Filter, Flag, FolderOpen, HardHat, History, LayoutGrid, List, Mail, MapPin, Package, Palette, Pencil, Phone, Plus, Printer, RefreshCw,
+  Eye, Filter, Flag, FolderOpen, HardHat, History, LayoutGrid, List, Mail, MapPin, Monitor, Moon, Package, Palette, Pencil, Phone, Plus, Printer, RefreshCw,
   RotateCcw, Save, Search, Settings2, ShieldCheck, Sparkles, Star, Tag, Trash2, Upload, UserRound,
-  Users, X, Zap,
+  Sun, Users, X, Zap,
 } from 'lucide-react';
 
 const roleNames = { architect: 'אדריכל', electrician: 'חשמלאי', supervisor: 'מפקח', contractor: 'קבלן', designer: 'מעצב פנים', other: 'אחר' };
@@ -199,9 +199,9 @@ function FileUpload({ clientId, api, onDone, setNotice }) {
   return <form className="file-drop" onSubmit={submit}><label><Upload size={25} /><strong>{file ? file.name : 'בחירת קובץ להעלאה'}</strong><span>PDF, תמונות, תוכניות, גיליונות או הזמנות · עד 50MB</span><input type="file" required onChange={(e) => setFile(e.target.files[0])} /></label><select value={category} onChange={(e) => setCategory(e.target.value)}><option>תוכנית</option><option>הזמנה</option><option>הצעת מחיר</option><option>צילום אתר</option><option>פרוטוקול</option><option>אחר</option></select><button className="ops-primary small" disabled={uploading}>{uploading ? <RefreshCw className="spin" size={15} /> : <Upload size={15} />}{uploading ? 'מעלה...' : 'העלאה'}</button></form>;
 }
 
-export function OperationalSettings({ api, apiRoot, setNotice, onConfigurationChanged }) {
+export function OperationalSettings({ api, apiRoot, user, setNotice, onUserChanged, onConfigurationChanged }) {
   const [data, setData] = useState({ settings: {}, catalogs: [], customFields: [] });
-  const [tab, setTab] = useState('business');
+  const [tab, setTab] = useState(user.role === 'admin' ? 'business' : 'appearance');
   const [audit, setAudit] = useState([]);
   const [backups, setBackups] = useState([]);
   const [auditQuery, setAuditQuery] = useState('');
@@ -210,15 +210,40 @@ export function OperationalSettings({ api, apiRoot, setNotice, onConfigurationCh
   useEffect(() => { load(); }, []);
   useEffect(() => { if (tab === 'audit') api(`/audit?q=${encodeURIComponent(auditQuery)}`).then((r) => setAudit(r.entries)).catch((e) => setNotice(e.message)); }, [tab, auditQuery]);
   useEffect(() => { if (tab === 'backup') api('/system/backups').then((r) => setBackups(r.backups)).catch((e) => setNotice(e.message)); }, [tab]);
-  const tabs = [['business','עסק ומערכת',Building2],['storage','מסמכים ו-Synology',FolderOpen],['catalogs','קטלוגים ועיצוב',Palette],['fields','שדות מותאמים',Settings2],['audit','Audit Log',History],['backup','גיבוי ובריאות',Database]];
+  const adminTabs = [['business','עסק ומערכת',Building2],['storage','מסמכים ו-Synology',FolderOpen],['catalogs','קטלוגים ועיצוב',Palette],['fields','שדות מותאמים',Settings2],['audit','Audit Log',History],['backup','גיבוי ובריאות',Database]];
+  const tabs = [['appearance','מראה',Palette],...(user.role === 'admin' ? adminTabs : [])];
   return <div className="ops-page settings-workspace"><div className="ops-hero"><div><span className="ops-eyebrow"><Settings2 size={15} />מרכז שליטה</span><h2>המערכת מתאימה את עצמה לדרך שבה אתם עובדים</h2><p>שלטו בתהליך, במונחים, בצבעים, בסמלים ובמידע—בלי לשנות קוד.</p></div><span className="settings-health"><i />כל השירותים פעילים</span></div><nav className="settings-tabs">{tabs.map(([id,label,Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><Icon size={17} />{label}</button>)}</nav>
     {tab === 'business' && <BusinessSettings settings={data.settings} api={api} apiRoot={apiRoot} onSaved={applySavedSetting} setNotice={setNotice} />}
+    {tab === 'appearance' && <AppearanceSettings initialTheme={user.appearanceTheme || 'light'} api={api} onUserChanged={onUserChanged} user={user} setNotice={setNotice} />}
     {tab === 'storage' && <DocumentStorageSettings api={api} setNotice={setNotice} />}
     {tab === 'catalogs' && <CatalogSettings catalogs={data.catalogs} api={api} reload={load} setNotice={setNotice} />}
     {tab === 'fields' && <CustomFields fields={data.customFields} api={api} reload={load} setNotice={setNotice} />}
     {tab === 'audit' && <AuditLog entries={audit} query={auditQuery} setQuery={setAuditQuery} />}
     {tab === 'backup' && <BackupSettings api={api} backups={backups} reload={() => api('/system/backups').then((r) => setBackups(r.backups))} setNotice={setNotice} />}
   </div>;
+}
+
+function AppearanceSettings({ initialTheme, api, onUserChanged, user, setNotice }) {
+  const [theme, setTheme] = useState(initialTheme);
+  const [saving, setSaving] = useState('');
+  useEffect(() => setTheme(initialTheme), [initialTheme]);
+  const choices = [
+    ['light','בהיר','המראה הנוכחי של PROJECTS',Sun],
+    ['dark','כהה','שחור, אפור וגרניט עם טקסט בהיר',Moon],
+    ['auto','אוטומטי','מותאם להגדרת המכשיר',Monitor],
+  ];
+  const choose = async (nextTheme) => {
+    if (saving || nextTheme === theme) return;
+    setSaving(nextTheme);
+    try {
+      const result = await api('/preferences/appearance', { method:'PATCH', body:JSON.stringify({ theme:nextTheme }) });
+      setTheme(result.appearanceTheme);
+      onUserChanged({ ...user, appearanceTheme:result.appearanceTheme });
+      setNotice('הגדרת המראה נשמרה והוחלה');
+    } catch (error) { setNotice(error.message); }
+    finally { setSaving(''); }
+  };
+  return <section className="panel appearance-settings"><header><span><Palette size={22}/></span><div><h3>ערכת הצבעים האישית שלי</h3><p>הבחירה נשמרת למשתמש שלך בלבד. מצב בהיר נשאר בדיוק כפי שהוא כיום.</p></div></header><div className="theme-choice-grid">{choices.map(([id,title,description,Icon])=><button key={id} className={theme===id?'active':''} onClick={()=>choose(id)} disabled={Boolean(saving)} aria-pressed={theme===id}><div className={`theme-preview ${id}`}><span className="preview-sidebar"/><span className="preview-topbar"/><span className="preview-card one"/><span className="preview-card two"/></div><span className="theme-choice-copy"><i><Icon size={18}/></i><span><strong>{title}</strong><small>{description}</small></span>{theme===id&&<Check size={18}/>}</span>{saving===id&&<em><RefreshCw className="spin" size={15}/>שומר...</em>}</button>)}</div><footer><Moon size={17}/><span>במצב כהה נשמרת ניגודיות גבוהה בטפסים, טבלאות, חלונות ולוחות עבודה.</span></footer></section>;
 }
 
 function DocumentStorageSettings({ api, setNotice }) {

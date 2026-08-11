@@ -54,6 +54,15 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
 
   router.use(authenticate);
 
+  router.patch('/preferences/appearance', async (request, response) => {
+    const theme = ['light', 'dark', 'auto'].includes(request.body?.theme) ? request.body.theme : null;
+    if (!theme) return response.status(400).json({ error: 'ערכת הצבעים אינה תקינה' });
+    const result = await pool.query('UPDATE users SET appearance_theme=$1,updated_at=NOW() WHERE id=$2 RETURNING appearance_theme', [theme, request.user.id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'המשתמש אינו זמין' });
+    await audit(request, 'update', 'user_preference', String(request.user.id), { appearanceTheme: theme });
+    response.json({ appearanceTheme: result.rows[0].appearance_theme });
+  });
+
   router.get('/audit', requireRoles('admin'), async (request, response) => {
     const query = String(request.query.q || '').trim();
     const entityType = String(request.query.entityType || '').trim();
