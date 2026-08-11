@@ -5,6 +5,7 @@ WORKDIR /build
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY index.html ./
+COPY vite.config.js ./
 COPY src ./src
 RUN npm run build
 
@@ -19,7 +20,7 @@ RUN chmod +x /etc/services.d/projects/run \
     && rm -f /etc/nginx/http.d/default.conf
 
 LABEL \
-  io.hass.version="0.1.0" \
+  io.hass.version="0.1.1" \
   io.hass.type="app" \
   io.hass.arch="amd64"
 
