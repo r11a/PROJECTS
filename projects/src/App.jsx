@@ -21,8 +21,8 @@ import projectsMark from './assets/projects-mark.svg';
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
 const compactMoney = (value) => value >= 1000000 ? `₪${(value / 1000000).toFixed(2)}M` : `₪${Math.round(value / 1000)}K`;
 const actionNamesForDashboard = { create: 'יצר רשומה', update: 'עדכן רשומה', delete: 'מחק רשומה', upload: 'העלה קובץ', login: 'נכנס למערכת', snooze: 'דחה התראה', backup: 'יצר גיבוי' };
-const ingressRoot = window.location.pathname.match(/^(\/api\/hassio_ingress\/[^/]+)/)?.[1] || '';
-export const apiRoot = `${ingressRoot}/api`;
+const applicationBase = new URL('.', document.baseURI).pathname.replace(/\/$/, '');
+export const apiRoot = `${applicationBase}/api`;
 
 export async function api(path, options = {}) {
   const isFormData = options.body instanceof FormData;
@@ -84,6 +84,7 @@ function App() {
   const [projects, setProjects] = useState([]);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [startupError, setStartupError] = useState('');
   const [selectedProject, setSelectedProject] = useState(null);
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
@@ -112,7 +113,7 @@ function App() {
       return Promise.all([api('/projects'), loadReferenceData()]).then(([result]) => setProjects(result.projects));
     }).catch((error) => {
       if (error.status === 401) setUser(null);
-      else setNotice(`הכניסה הצליחה, אך טעינת הנתונים נכשלה: ${error.message}`);
+      else setStartupError(error.message || 'שרת הנתונים אינו זמין');
     }).finally(() => setLoading(false));
   }, []);
   useEffect(() => {
@@ -162,6 +163,7 @@ function App() {
   };
 
   if (loading) return <div className="app-loader"><div className="brand-mark"><img src={projectsMark} alt="" /></div><strong><b>PRO</b>JECTS</strong><span>טוען מערכת...</span></div>;
+  if (!user && startupError) return <StartupError message={startupError} />;
   if (!user) return <LoginPage onLogin={login} />;
 
   const filteredProjects = projects.filter((project) => {
@@ -269,6 +271,10 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
   };
   const deleteUser = async (item) => { if (!window.confirm(`למחוק את המשתמש „${item.displayName}”?`)) return; try { await api(`/users/${item.id}`, { method: 'DELETE' }); loadUsers(); onChanged?.(); setNotice('המשתמש נמחק'); } catch (error) { setNotice(error.message); } };
   return <div className="section-page users-page"><div className="page-intro"><div><h2>משתמשים והרשאות כניסה</h2><p>כאן מנהלים גישה לתוכנה בלבד. תפקיד מקצועי ושיוך לפרויקט מנוהלים במאגר אנשי המקצוע.</p></div><span className="security-pill"><ShieldCheck size={17} />{users.length} משתמשים</span></div><div className="users-layout"><div className="panel users-list"><div className="panel-head"><div><h3>חשבונות מערכת</h3><span>אפשר לערוך, להשבית או למחוק; לא ניתן למחוק את המשתמש המחובר.</span></div></div>{users.map((item) => <div className="user-row visual-user-row" key={item.id}><div className="avatar" style={{ background:item.avatarColor,color:'#fff' }}>{avatarGlyph(item)}</div><div><strong>{item.displayName}</strong><span>{item.username || 'Home Assistant'} {item.haUserId && '· Ingress'}</span></div><select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><div className="user-appearance"><input aria-label="צבע משתמש" type="color" value={item.avatarColor} onChange={(e) => updateUser(item.id,{avatarColor:e.target.value})} /><select aria-label="אייקון משתמש" value={item.avatarIcon} onChange={(e) => updateUser(item.id,{avatarIcon:e.target.value})}>{Object.entries(avatarIcons).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></div><label className="active-toggle"><input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} /><span /></label><button className="user-delete" disabled={String(item.id) === String(currentUser.id)} onClick={() => deleteUser(item)} title="מחיקת משתמש"><Trash2 size={16} /></button></div>)}</div><form className="panel create-user" onSubmit={createUser}><div className="panel-head"><div><h3>חשבון כניסה חדש</h3><span>לאחר היצירה אפשר לקשר אותו לאדם במאגר אנשי המקצוע</span></div></div><label>שם תצוגה<input required value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label><label>שם משתמש<input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" minLength="8" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label><label>הרשאת מערכת<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><div className="new-user-appearance"><label>צבע<input type="color" value={form.avatarColor} onChange={(e) => setForm({ ...form, avatarColor:e.target.value })} /></label><label>אייקון<select value={form.avatarIcon} onChange={(e) => setForm({ ...form, avatarIcon:e.target.value })}>{Object.entries(avatarIcons).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><button className="primary-button"><Plus size={17} />יצירת חשבון</button></form></div></div>;
+}
+
+function StartupError({ message }) {
+  return <div className="startup-error" dir="rtl"><div className="brand-mark"><img src={projectsMark} alt="" /></div><span><AlertTriangle size={25} /></span><h1>לא ניתן לטעון את שרת הנתונים</h1><p>אין צורך בשם משתמש או בסיסמה כאשר נכנסים דרך Home Assistant.</p><code>{message}</code><button className="primary-button" onClick={() => window.location.reload()}><RotateCcw size={17} />ניסיון חוזר</button><small>אם התקלה חוזרת, העתיקו את יומן ה־App ממסך PROJECTS ב־Home Assistant.</small></div>;
 }
 
 function SystemPage({ setNotice }) {

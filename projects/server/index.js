@@ -138,6 +138,7 @@ async function ensureSeedRelationships() {
     FROM projects p
     WHERE btrim(COALESCE(p.client,''))<>'' AND NOT EXISTS (SELECT 1 FROM clients c WHERE lower(c.name)=lower(p.client))
     GROUP BY p.client
+    HAVING btrim(COALESCE(MAX(p.phone),''))<>'' AND btrim(COALESCE(MAX(p.address),''))<>''
     ON CONFLICT(code) DO NOTHING;
 
     UPDATE projects p SET client_id=c.id FROM clients c
@@ -164,7 +165,13 @@ async function ensureSeedRelationships() {
 
 await runMigrations();
 await seedDatabase();
-await ensureSeedRelationships();
+try {
+  await ensureSeedRelationships();
+} catch (error) {
+  // Legacy normalization is helpful but must never prevent the API from
+  // starting. Incomplete historical records remain editable in the app.
+  console.warn('Skipped legacy relationship normalization:', error.message);
+}
 
 const secretFile = path.join(DATA_DIR, 'jwt.secret');
 let jwtSecret;
@@ -251,7 +258,7 @@ async function resolveProjectManager(managerId) {
 app.get('/api/health', async (_request, response) => {
   try {
     await pool.query('SELECT 1');
-    response.json({ status: 'ok', database: 'ok', version: '0.5.1' });
+    response.json({ status: 'ok', database: 'ok', version: '0.5.2' });
   } catch (error) {
     response.status(503).json({ status: 'error', database: 'unavailable', message: error.message });
   }
