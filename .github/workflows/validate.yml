@@ -39,6 +39,7 @@ jobs:
           tags: local/projects:ci
       - name: Smoke test PostgreSQL, API and Nginx
         run: |
+          trap 'docker logs projects-smoke' ERR
           docker run --detach --name projects-smoke --publish 8686:8686 local/projects:ci
           for attempt in $(seq 1 45); do
             if curl --fail --silent http://127.0.0.1:8686/health | grep --quiet '"database":"ok"'; then
@@ -46,6 +47,7 @@ jobs:
             fi
             sleep 2
           done
+          curl --fail --silent http://127.0.0.1:8686/health | grep --quiet '"database":"ok"'
           curl --fail --silent --cookie-jar /tmp/projects-cookies \
             --header 'Content-Type: application/json' \
             --data '{"username":"admin","password":"change-me-now"}' \
