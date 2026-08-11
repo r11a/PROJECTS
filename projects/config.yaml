@@ -1,5 +1,5 @@
 name: "PROJECTS"
-version: "0.1.1"
+version: "0.2.0"
 slug: "projects"
 description: "Premium smart-home project management dashboard"
 url: "https://github.com/r11a/PROJECTS"
@@ -17,8 +17,14 @@ panel_admin: true
 ports:
   8686/tcp: 8686
 ports_description:
-  8686/tcp: "PROJECTS standalone web interface (LAN only in this pilot)"
+  8686/tcp: "PROJECTS standalone web interface (editable host port)"
+options:
+  admin_username: "admin"
+  admin_password: "change-me-now"
+schema:
+  admin_username: str
+  admin_password: password
 webui: "http://[HOST]:[PORT:8686]"
 watchdog: "http://[HOST]:[PORT:8686]/health"
-backup: hot
+backup: cold
 stage: experimental

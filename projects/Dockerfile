@@ -9,18 +9,28 @@ COPY vite.config.js ./
 COPY src ./src
 RUN npm run build
 
+FROM node:22-alpine AS server-dependencies
+WORKDIR /build
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
 FROM ${BUILD_FROM}
 
-RUN apk add --no-cache nginx
+RUN apk add --no-cache nginx nodejs postgresql17 postgresql17-client su-exec
 
 COPY --from=web-builder /build/dist /var/www/projects
+COPY --from=server-dependencies /build/node_modules /opt/projects/node_modules
+COPY server /opt/projects/server
+COPY migrations /opt/projects/migrations
+COPY src/data.js /opt/projects/src/data.js
+COPY package.json /opt/projects/package.json
 COPY rootfs /
 
-RUN chmod +x /etc/services.d/projects/run \
+RUN chmod +x /etc/services.d/nginx/run /etc/services.d/postgresql/run /etc/services.d/api/run \
     && rm -f /etc/nginx/http.d/default.conf
 
 LABEL \
-  io.hass.version="0.1.1" \
+  io.hass.version="0.2.0" \
   io.hass.type="app" \
   io.hass.arch="amd64"
 

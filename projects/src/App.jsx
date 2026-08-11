@@ -3,16 +3,29 @@ import {
   Activity, AlertTriangle, ArrowLeft, Bell, Building2, CalendarDays, Check, CheckCircle2,
   ChevronDown, ChevronLeft, CircleDollarSign, ClipboardCheck, Clock3, Command, CreditCard,
   FileText, Filter, Flag, FolderKanban, FormInput, Gauge, Home, LayoutDashboard, ListFilter,
-  Mail, Map, MapPin, Menu, MessageSquare, MoreHorizontal, Phone, Plus, Search, Settings,
-  SlidersHorizontal, Sparkles, Tag, TrendingUp, Upload, UserRound, Users, WalletCards, X,
+  Database, LogOut, Mail, Map, MapPin, Menu, MessageSquare, MoreHorizontal, Phone, Plus, RotateCcw, Search, Settings,
+  ShieldCheck, SlidersHorizontal, Sparkles, Tag, TrendingUp, Upload, UserRound, Users, WalletCards, X,
 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { MapContainer, Marker, Popup, TileLayer, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
-import { activity, clients, milestones, seedProjects, stageMeta } from './data';
+import { activity, clients, milestones, stageMeta } from './data';
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
 const compactMoney = (value) => value >= 1000000 ? `₪${(value / 1000000).toFixed(2)}M` : `₪${Math.round(value / 1000)}K`;
+const ingressRoot = window.location.pathname.match(/^(\/api\/hassio_ingress\/[^/]+)/)?.[1] || '';
+const apiRoot = `${ingressRoot}/api`;
+
+async function api(path, options = {}) {
+  const response = await fetch(`${apiRoot}${path}`, {
+    credentials: 'same-origin',
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+  });
+  const body = response.status === 204 ? null : await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || `Request failed (${response.status})`);
+  return body;
+}
 
 const nav = [
   { id: 'dashboard', label: 'תמונת מצב', icon: LayoutDashboard },
@@ -52,9 +65,9 @@ function ProjectMarker({ project, onOpen }) {
 
 function App() {
   const [page, setPage] = useState('dashboard');
-  const [projects, setProjects] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('projects-data') || localStorage.getItem('nexa-projects')) || seedProjects; } catch { return seedProjects; }
-  });
+  const [projects, setProjects] = useState([]);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState(null);
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
@@ -62,7 +75,11 @@ function App() {
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [notice, setNotice] = useState('');
 
-  useEffect(() => { localStorage.setItem('projects-data', JSON.stringify(projects)); }, [projects]);
+  useEffect(() => {
+    api('/auth/me').then(({ user: currentUser }) => Promise.all([currentUser, api('/projects')]))
+      .then(([currentUser, result]) => { setUser(currentUser); setProjects(result.projects); })
+      .catch(() => setUser(null)).finally(() => setLoading(false));
+  }, []);
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(''), 2600);
@@ -70,18 +87,47 @@ function App() {
   }, [notice]);
 
   const openProject = (project) => { setSelectedProject(project); setPage('project'); setSidebarOpen(false); };
-  const updateProject = (id, patch) => {
-    setProjects((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
-    setSelectedProject((current) => current?.id === id ? { ...current, ...patch } : current);
-    setNotice('השינוי נשמר בהצלחה');
+  const updateProject = async (id, patch) => {
+    try {
+      const { project } = await api(`/projects/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      setProjects((current) => current.map((item) => item.id === id ? project : item));
+      setSelectedProject((current) => current?.id === id ? project : current);
+      setNotice('השינוי נשמר בהצלחה');
+    } catch (error) { setNotice(error.message); }
   };
+
+  const createProject = async (project) => {
+    try {
+      const result = await api('/projects', { method: 'POST', body: JSON.stringify(project) });
+      setProjects((current) => [result.project, ...current]);
+      setNewProjectOpen(false);
+      setNotice('הפרויקט החדש נוצר');
+      openProject(result.project);
+    } catch (error) { setNotice(error.message); }
+  };
+
+  const login = async (credentials) => {
+    const result = await api('/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
+    const projectResult = await api('/projects');
+    setUser(result.user);
+    setProjects(projectResult.projects);
+  };
+
+  const logout = async () => {
+    await api('/auth/logout', { method: 'POST' });
+    setUser(null);
+    setProjects([]);
+  };
+
+  if (loading) return <div className="app-loader"><div className="brand-mark"><span>P</span></div><strong><b>PRO</b>JECTS</strong><span>טוען מערכת...</span></div>;
+  if (!user) return <LoginPage onLogin={login} />;
 
   const filteredProjects = projects.filter((project) => {
     const haystack = `${project.name} ${project.client} ${project.location} ${project.id}`.toLowerCase();
     return haystack.includes(search.toLowerCase()) && (stageFilter === 'all' || project.stage === stageFilter);
   });
 
-  const pageTitle = selectedProject && page === 'project' ? selectedProject.name : nav.find((item) => item.id === page)?.label || 'תמונת מצב';
+  const pageTitle = selectedProject && page === 'project' ? selectedProject.name : page === 'users' ? 'משתמשים והרשאות' : page === 'settings' ? 'גיבוי ומערכת' : nav.find((item) => item.id === page)?.label || 'תמונת מצב';
 
   return (
     <div className="app-shell">
@@ -91,7 +137,7 @@ function App() {
         <div className="workspace-switch"><div className="workspace-logo">SH</div><div><strong>Smart Home Israel</strong><span>סביבת עבודה ראשית</span></div><ChevronDown size={16} /></div>
         <nav className="main-nav">
           <span className="nav-label">סביבת עבודה</span>
-          {nav.map(({ id, label, icon: Icon, badge }) => (
+          {[...nav, ...(user.role === 'admin' ? [{ id: 'users', label: 'משתמשים והרשאות', icon: ShieldCheck }] : [])].map(({ id, label, icon: Icon, badge }) => (
             <button key={id} className={page === id || (page === 'project' && id === 'projects') ? 'active' : ''} onClick={() => { setPage(id); setSelectedProject(null); setSidebarOpen(false); }}>
               <Icon size={19} /><span>{label}</span>{badge && <em>{badge}</em>}
             </button>
@@ -102,8 +148,8 @@ function App() {
           <button><Activity size={19} /><span>דוחות וניתוחים</span></button>
         </nav>
         <div className="sidebar-footer">
-          <button><Settings size={19} /><span>הגדרות מערכת</span></button>
-          <div className="user-card"><div className="avatar">רל<span /></div><div><strong>רונן לוי</strong><span>מנהל מערכת</span></div><MoreHorizontal size={18} /></div>
+          {user.role === 'admin' && <button className={page === 'settings' ? 'active' : ''} onClick={() => setPage('settings')}><Settings size={19} /><span>גיבוי ומערכת</span></button>}
+          <div className="user-card"><div className="avatar">{user.displayName.slice(0, 2)}<span /></div><div><strong>{user.displayName}</strong><span>{roleLabels[user.role]}</span></div><button className="logout-button" onClick={logout} title="יציאה"><LogOut size={17} /></button></div>
         </div>
       </aside>
       {sidebarOpen && <div className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />}
@@ -118,7 +164,7 @@ function App() {
           <div className="topbar-actions">
             <label className="global-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש בכל המערכת..." /><kbd>⌘ K</kbd></label>
             <button className="icon-button"><Bell size={20} /><i /></button>
-            <button className="primary-button" onClick={() => setNewProjectOpen(true)}><Plus size={18} />פרויקט חדש</button>
+            {['admin', 'manager'].includes(user.role) && <button className="primary-button" onClick={() => setNewProjectOpen(true)}><Plus size={18} />פרויקט חדש</button>}
           </div>
         </header>
 
@@ -129,13 +175,67 @@ function App() {
           {page === 'clients' && <ClientsPage />}
           {page === 'forms' && <FormsPage setNotice={setNotice} />}
           {page === 'finance' && <FinancePage projects={projects} openProject={openProject} />}
-          {page === 'project' && selectedProject && <ProjectDetail project={projects.find((p) => p.id === selectedProject.id) || selectedProject} updateProject={updateProject} />}
+          {page === 'users' && user.role === 'admin' && <UsersPage setNotice={setNotice} />}
+          {page === 'settings' && user.role === 'admin' && <SystemPage setNotice={setNotice} />}
+          {page === 'project' && selectedProject && <ProjectDetail project={projects.find((p) => p.id === selectedProject.id) || selectedProject} updateProject={updateProject} canEdit={['admin', 'manager', 'technician'].includes(user.role)} />}
         </div>
       </main>
-      {newProjectOpen && <NewProjectModal onClose={() => setNewProjectOpen(false)} onCreate={(project) => { setProjects((p) => [project, ...p]); setNewProjectOpen(false); setNotice('הפרויקט החדש נוצר'); openProject(project); }} />}
+      {newProjectOpen && <NewProjectModal onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
       {notice && <div className="toast"><CheckCircle2 size={19} />{notice}</div>}
     </div>
   );
+}
+
+const roleLabels = { admin: 'מנהל מערכת', manager: 'מנהל פרויקט', technician: 'טכנאי', finance: 'כספים', viewer: 'צופה' };
+
+function LoginPage({ onLogin }) {
+  const [form, setForm] = useState({ username: '', password: '' });
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const submit = async (event) => {
+    event.preventDefault(); setSubmitting(true); setError('');
+    try { await onLogin(form); } catch (loginError) { setError(loginError.message); } finally { setSubmitting(false); }
+  };
+  return <div className="login-shell" dir="rtl"><div className="login-card"><div className="login-brand"><div className="brand-mark"><span>P</span></div><strong><b>PRO</b>JECTS</strong><small>SMART PROJECT MANAGEMENT</small></div><div className="login-copy"><span>כניסה מאובטחת</span><h1>ברוכים הבאים</h1><p>התחברו למרחב ניהול הפרויקטים שלכם</p></div><form onSubmit={submit}><label>שם משתמש<input autoFocus autoComplete="username" required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" autoComplete="current-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <div className="login-error">{error}</div>}<button className="primary-button" disabled={submitting}>{submitting ? 'מתחבר...' : 'כניסה למערכת'} <ArrowLeft size={17} /></button></form><small className="login-hint">בכניסה דרך Home Assistant הזיהוי מתבצע אוטומטית.</small></div></div>;
+}
+
+function UsersPage({ setNotice }) {
+  const [users, setUsers] = useState([]);
+  const [form, setForm] = useState({ username: '', displayName: '', password: '', role: 'viewer' });
+  const loadUsers = () => api('/users').then((result) => setUsers(result.users)).catch((error) => setNotice(error.message));
+  useEffect(loadUsers, []);
+  const createUser = async (event) => {
+    event.preventDefault();
+    try {
+      await api('/users', { method: 'POST', body: JSON.stringify(form) });
+      setForm({ username: '', displayName: '', password: '', role: 'viewer' });
+      setNotice('המשתמש נוצר'); loadUsers();
+    } catch (error) { setNotice(error.message); }
+  };
+  const updateUser = async (id, patch) => {
+    try { await api(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }); loadUsers(); setNotice('ההרשאה עודכנה'); }
+    catch (error) { setNotice(error.message); }
+  };
+  return <div className="section-page users-page"><div className="page-intro"><div><h2>משתמשים והרשאות</h2><p>ניהול גישה לממשק העצמאי לפי תפקידים</p></div><span className="security-pill"><ShieldCheck size={17} />{users.length} משתמשים</span></div><div className="users-layout"><div className="panel users-list"><div className="panel-head"><div><h3>משתמשים פעילים</h3><span>חשבונות Home Assistant מסומנים אוטומטית</span></div></div>{users.map((item) => <div className="user-row" key={item.id}><div className="avatar">{item.displayName.slice(0, 2)}</div><div><strong>{item.displayName}</strong><span>{item.username || 'Home Assistant'} {item.haUserId && '· Ingress'}</span></div><select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><label className="active-toggle"><input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} /><span /></label></div>)}</div><form className="panel create-user" onSubmit={createUser}><div className="panel-head"><div><h3>משתמש חדש</h3><span>לכניסה דרך הפורט העצמאי</span></div></div><label>שם תצוגה<input required value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label><label>שם משתמש<input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" minLength="8" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label><label>תפקיד<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><button className="primary-button"><Plus size={17} />יצירת משתמש</button></form></div></div>;
+}
+
+function SystemPage({ setNotice }) {
+  const [backups, setBackups] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const loadBackups = () => api('/system/backups').then((result) => setBackups(result.backups)).catch((error) => setNotice(error.message));
+  useEffect(loadBackups, []);
+  const createBackup = async () => {
+    setBusy(true);
+    try { await api('/system/backups', { method: 'POST' }); setNotice('הגיבוי הושלם'); loadBackups(); }
+    catch (error) { setNotice(error.message); } finally { setBusy(false); }
+  };
+  const restore = async (name) => {
+    if (!window.confirm(`לשחזר את ${name}? המערכת תופעל מחדש וכל הנתונים הנוכחיים יוחלפו.`)) return;
+    setBusy(true);
+    try { await api('/system/restore', { method: 'POST', body: JSON.stringify({ name }) }); setNotice('השחזור החל; המערכת תעלה מחדש בעוד רגע'); }
+    catch (error) { setNotice(error.message); setBusy(false); }
+  };
+  return <div className="section-page system-page"><div className="page-intro"><div><h2>גיבוי, שחזור ובריאות מערכת</h2><p>גיבויי PostgreSQL נשמרים בתוך נתוני ה־Add-on ונכללים גם בגיבוי Home Assistant</p></div><button className="primary-button" disabled={busy} onClick={createBackup}><Database size={17} />{busy ? 'מבצע...' : 'יצירת גיבוי'}</button></div><div className="panel backup-list"><div className="panel-head"><div><h3>גיבויים זמינים</h3><span>שחזור מפעיל מחדש את שירות ה־API באופן מבוקר</span></div><span className="health-online"><i />PostgreSQL מחובר</span></div>{backups.length === 0 && <div className="empty-backups">עדיין לא נוצרו גיבויים ידניים.</div>}{backups.map((backup) => <div className="backup-row" key={backup.name}><div className="doc-icon"><Database size={18} /></div><div><strong>{backup.name}</strong><span>{new Date(backup.createdAt).toLocaleString('he-IL')} · {(backup.size / 1024 / 1024).toFixed(1)} MB</span></div><button className="secondary-button" disabled={busy} onClick={() => restore(backup.name)}><RotateCcw size={15} />שחזור</button></div>)}</div></div>;
 }
 
 function Dashboard({ projects, openProject, setPage }) {
@@ -251,7 +351,7 @@ function FinancePage({ projects, openProject }) {
   return <div className="section-page"><div className="page-intro"><div><h2>תשלומים וגבייה</h2><p>בקרת תזרים, אבני דרך לתשלום ויתרות פתוחות</p></div><button className="secondary-button"><FileText size={17} />הפקת דוח</button></div><div className="finance-hero"><div><span>היקף חוזים כולל</span><strong>{money.format(total)}</strong><small><TrendingUp size={14} />8.2% מהרבעון הקודם</small></div><div className="collection-ring" style={{ '--percent': `${Math.round(paid / total * 100) * 3.6}deg` }}><span><strong>{Math.round(paid / total * 100)}%</strong>נגבה</span></div><div className="finance-split"><div><i className="green" /><span>התקבל<strong>{money.format(paid)}</strong></span></div><div><i className="orange" /><span>יתרה פתוחה<strong>{money.format(total - paid)}</strong></span></div></div></div><div className="panel finance-table-wrap"><PanelHead title="מצב גבייה לפי פרויקט" subtitle="לחיצה על שורה תפתח את תיק הפרויקט" /><table className="projects-table finance-table"><thead><tr><th>פרויקט ולקוח</th><th>שווי חוזה</th><th>שולם</th><th>יתרה</th><th>אחוז גבייה</th><th>סטטוס</th></tr></thead><tbody>{projects.map((p) => { const percent = Math.round(p.paid / p.value * 100); const overdue = p.flag.includes('תשלום'); return <tr key={p.id} onClick={() => openProject(p)}><td><div className="project-cell"><div className="project-thumb"><Home size={17} /></div><div><strong>{p.name}</strong><span>{p.client}</span></div></div></td><td>{money.format(p.value)}</td><td className="paid-money">{money.format(p.paid)}</td><td><strong>{money.format(p.value - p.paid)}</strong></td><td><div className="collection-cell"><div><i style={{ width: `${percent}%` }} /></div><b>{percent}%</b></div></td><td><span className={`payment-state ${overdue ? 'overdue' : percent === 100 ? 'paid' : ''}`}>{overdue ? 'באיחור' : percent === 100 ? 'שולם' : 'תקין'}</span></td></tr>; })}</tbody></table></div></div>;
 }
 
-function ProjectDetail({ project, updateProject }) {
+function ProjectDetail({ project, updateProject, canEdit }) {
   const [tab, setTab] = useState('overview');
   const dueAmount = project.value - project.paid;
   const projectMilestones = [
@@ -262,7 +362,7 @@ function ProjectDetail({ project, updateProject }) {
     { title: 'מסירה והדרכת לקוח', status: 'future', date: '22.09.2026' },
   ];
   return <div className="project-detail">
-    <div className="project-hero panel"><div className="project-identity"><div className="project-home-icon"><Home size={27} /></div><div><div className="project-title-line"><h2>{project.name}</h2>{project.flag && <span className="hero-flag"><Flag size={14} />{project.flag}</span>}</div><p><UserRound size={15} />{project.client}<span>·</span><MapPin size={15} />{project.address}</p></div></div><div className="project-hero-actions"><button className="secondary-button"><MessageSquare size={16} />הוספת עדכון</button><button className="icon-button"><MoreHorizontal /></button></div><div className="hero-metrics"><div><span>שלב נוכחי</span><select value={project.stage} onChange={(e) => updateProject(project.id, { stage: e.target.value })}>{Object.entries(stageMeta).map(([key, meta]) => <option value={key} key={key}>{meta.label}</option>)}</select></div><div><span>התקדמות</span><strong>{project.progress}%</strong><input type="range" min="0" max="100" value={project.progress} onChange={(e) => updateProject(project.id, { progress: Number(e.target.value) })} style={{ '--range': `${project.progress}%` }} /></div><div><span>בריאות הפרויקט</span><strong className={project.health < 70 ? 'health-risk' : 'health-good'}>{project.health}/100</strong><small>{project.health < 70 ? 'דורש תשומת לב' : 'מתנהל כשורה'}</small></div><div><span>מנהל פרויקט</span><div className="manager-cell"><i>{project.ownerInitials}</i><strong>{project.manager}</strong></div></div><div><span>יעד לאבן דרך</span><strong>{project.due}</strong><small>{project.nextMilestone}</small></div></div></div>
+    <div className="project-hero panel"><div className="project-identity"><div className="project-home-icon"><Home size={27} /></div><div><div className="project-title-line"><h2>{project.name}</h2>{project.flag && <span className="hero-flag"><Flag size={14} />{project.flag}</span>}</div><p><UserRound size={15} />{project.client}<span>·</span><MapPin size={15} />{project.address}</p></div></div><div className="project-hero-actions"><button className="secondary-button" disabled={!canEdit}><MessageSquare size={16} />הוספת עדכון</button><button className="icon-button" disabled={!canEdit}><MoreHorizontal /></button></div><div className="hero-metrics"><div><span>שלב נוכחי</span><select disabled={!canEdit} value={project.stage} onChange={(e) => updateProject(project.id, { stage: e.target.value })}>{Object.entries(stageMeta).map(([key, meta]) => <option value={key} key={key}>{meta.label}</option>)}</select></div><div><span>התקדמות</span><strong>{project.progress}%</strong><input disabled={!canEdit} type="range" min="0" max="100" value={project.progress} onChange={(e) => updateProject(project.id, { progress: Number(e.target.value) })} style={{ '--range': `${project.progress}%` }} /></div><div><span>בריאות הפרויקט</span><strong className={project.health < 70 ? 'health-risk' : 'health-good'}>{project.health}/100</strong><small>{project.health < 70 ? 'דורש תשומת לב' : 'מתנהל כשורה'}</small></div><div><span>מנהל פרויקט</span><div className="manager-cell"><i>{project.ownerInitials}</i><strong>{project.manager}</strong></div></div><div><span>יעד לאבן דרך</span><strong>{project.due}</strong><small>{project.nextMilestone}</small></div></div></div>
     <div className="detail-tabs">{[['overview','סקירה'],['tasks','משימות ואבני דרך'],['systems','מערכות'],['forms','טפסים וקבצים'],['finance','כספים'],['activity','פעילות']].map(([id, label]) => <button className={tab === id ? 'active' : ''} key={id} onClick={() => setTab(id)}>{label}{id === 'tasks' && <em>7</em>}</button>)}</div>
     {tab === 'overview' && <div className="detail-grid"><div className="detail-main"><div className="panel overview-card"><PanelHead title="התקדמות הפרויקט" subtitle={`${project.tasksDone} מתוך ${project.tasksTotal} משימות הושלמו`} /><div className="large-progress"><div><i style={{ width: `${project.progress}%`, background: stageMeta[project.stage].color }} /></div><strong>{project.progress}%</strong></div><div className="milestone-timeline">{projectMilestones.map((m, index) => <div className={m.status} key={`${m.title}-${index}`}><span>{m.status === 'done' ? <Check size={14} /> : ''}</span><div><strong>{m.title}</strong><small>{m.date}</small></div></div>)}</div></div><div className="panel systems-card"><PanelHead title="מערכות בפרויקט" action="ניהול מערכות" /><div className="system-tiles">{project.systems.map((system, index) => <div key={system}><span className={`system-icon s${index % 4}`}><Command size={18} /></span><strong>{system}</strong><small>{index < 2 ? 'התקנה בתהליך' : 'טרם התחיל'}</small><CheckCircle2 size={17} /></div>)}</div></div></div><div className="detail-side"><div className="panel contact-card"><PanelHead title="פרטי לקוח" /><div className="contact-person"><div className="client-avatar">{project.client.slice(0,2)}</div><div><strong>{project.client}</strong><span>לקוח ראשי</span></div></div><a href={`tel:${project.phone}`}><Phone size={16} />{project.phone}</a><a href={`mailto:${project.email}`}><Mail size={16} />{project.email}</a><p><MapPin size={16} />{project.address}</p><button>פתיחת כרטיס לקוח</button></div><div className="panel money-summary"><PanelHead title="סיכום כספי" /><div><span>שווי הפרויקט</span><strong>{money.format(project.value)}</strong></div><div><span>שולם עד כה</span><strong className="green-text">{money.format(project.paid)}</strong></div><div className="due-row"><span>יתרה לגבייה</span><strong>{money.format(dueAmount)}</strong></div><div className="money-progress"><i style={{ width: `${project.paid / project.value * 100}%` }} /></div><small>{Math.round(project.paid / project.value * 100)}% נגבה</small><button onClick={() => setTab('finance')}>לפירוט תשלומים <ChevronLeft size={15} /></button></div><div className="panel quick-notes"><PanelHead title="הערה מהירה" /><textarea placeholder="כתבו עדכון לצוות..." /><button>פרסום עדכון</button></div></div></div>}
     {tab !== 'overview' && <ProjectTabPlaceholder tab={tab} project={project} />}

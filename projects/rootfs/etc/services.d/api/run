@@ -1,0 +1,38 @@
+#!/usr/bin/with-contenv sh
+set -eu
+
+export PGHOST=/run/postgresql
+export PGUSER=postgres
+export PGDATABASE=projects
+
+until pg_isready -q -h "$PGHOST" -U "$PGUSER"; do
+  sleep 1
+done
+
+cd /opt/projects
+while true; do
+  if [ -s /data/restore.request ]; then
+    restore_file="$(cat /data/restore.request)"
+    case "$restore_file" in
+      /data/backups/*.dump) ;;
+      *) echo "Invalid restore request"; rm -f /data/restore.request; exit 1 ;;
+    esac
+    if [ ! -f "$restore_file" ]; then
+      echo "Restore file does not exist: $restore_file"
+      rm -f /data/restore.request
+      exit 1
+    fi
+    dropdb --if-exists --force -h "$PGHOST" -U "$PGUSER" projects
+    createdb -h "$PGHOST" -U "$PGUSER" projects
+    pg_restore --no-owner --no-privileges -h "$PGHOST" -U "$PGUSER" -d projects "$restore_file"
+    rm -f /data/restore.request
+    echo "Database restore completed"
+  fi
+
+  exit_code=
+  node server/index.js || exit_code=$?
+  if [ -s /data/restore.request ]; then
+    continue
+  fi
+  exit "${exit_code:-1}"
+done
