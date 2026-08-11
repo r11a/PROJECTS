@@ -33,7 +33,11 @@ export async function api(path, options = {}) {
     headers: isFormData ? { ...options.headers } : { 'Content-Type': 'application/json', ...options.headers },
   });
   const body = response.status === 204 ? null : await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body?.error || `Request failed (${response.status})`);
+  if (!response.ok) {
+    const error = new Error(body?.error || `Request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return body;
 }
 
@@ -103,9 +107,13 @@ function App() {
   };
 
   useEffect(() => {
-    api('/auth/me').then(({ user: currentUser }) => Promise.all([currentUser, api('/projects'), loadReferenceData()]))
-      .then(([currentUser, result]) => { setUser(currentUser); setProjects(result.projects); })
-      .catch(() => setUser(null)).finally(() => setLoading(false));
+    api('/auth/me').then(({ user: currentUser }) => {
+      setUser(currentUser);
+      return Promise.all([api('/projects'), loadReferenceData()]).then(([result]) => setProjects(result.projects));
+    }).catch((error) => {
+      if (error.status === 401) setUser(null);
+      else setNotice(`הכניסה הצליחה, אך טעינת הנתונים נכשלה: ${error.message}`);
+    }).finally(() => setLoading(false));
   }, []);
   useEffect(() => {
     if (!notice) return;
@@ -142,8 +150,8 @@ function App() {
 
   const login = async (credentials) => {
     const result = await api('/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
-    const [projectResult] = await Promise.all([api('/projects'), loadReferenceData()]);
     setUser(result.user);
+    const [projectResult] = await Promise.all([api('/projects'), loadReferenceData()]);
     setProjects(projectResult.projects);
   };
 
