@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
-import { mkdir, unlink } from 'node:fs/promises';
+import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 
 const CLIENT_FIELDS = {
@@ -41,7 +41,8 @@ function contactFromRow(row) {
 export async function createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir }) {
   const router = express.Router();
   const uploadDir = path.join(dataDir, 'uploads', 'clients');
-  await mkdir(uploadDir, { recursive: true });
+  const brandingDir = path.join(dataDir, 'branding');
+  await Promise.all([mkdir(uploadDir, { recursive: true }), mkdir(brandingDir, { recursive: true })]);
   const upload = multer({
     storage: multer.diskStorage({
       destination: uploadDir,
@@ -49,6 +50,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     }),
     limits: { fileSize: 50 * 1024 * 1024, files: 1 },
   });
+  const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 
   router.use(authenticate);
 
@@ -114,6 +116,30 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
       catalogs: catalogs.rows.map((row) => ({ id: row.id, category: row.category, name: row.name, color: row.color, icon: row.icon, symbol: row.symbol, description: row.description, active: row.active, sortOrder: row.sort_order, metadata: row.metadata })),
       customFields: fields.rows.map((row) => ({ id: row.id, entityType: row.entity_type, fieldKey: row.field_key, label: row.label, fieldType: row.field_type, required: row.required, active: row.active, sortOrder: row.sort_order, options: row.options })),
     });
+  });
+
+  router.get('/settings/company-logo', async (_request, response) => {
+    const setting = await pool.query("SELECT value FROM app_settings WHERE key='company'");
+    const storedName = setting.rows[0]?.value?.logo?.storedName;
+    if (!storedName || path.basename(storedName) !== storedName) return response.status(404).json({ error: 'Company logo not found' });
+    response.set('Cache-Control', 'private, no-cache');
+    response.sendFile(path.join(brandingDir, storedName));
+  });
+
+  router.post('/settings/company-logo', requireRoles('admin'), logoUpload.single('logo'), async (request, response) => {
+    if (!request.file) return response.status(400).json({ error: 'יש לבחור קובץ לוגו' });
+    const extensions = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+    const extension = extensions[request.file.mimetype];
+    if (!extension) return response.status(400).json({ error: 'הלוגו חייב להיות PNG, JPG או WebP' });
+    const storedName = `company-logo.${extension}`;
+    await writeFile(path.join(brandingDir, storedName), request.file.buffer, { mode: 0o600 });
+    const existing = await readdir(brandingDir);
+    await Promise.all(existing.filter((name) => name.startsWith('company-logo.') && name !== storedName).map((name) => unlink(path.join(brandingDir, name)).catch(() => {})));
+    const current = await pool.query("SELECT value FROM app_settings WHERE key='company'");
+    const value = { ...(current.rows[0]?.value || {}), logo: { storedName, originalName: request.file.originalname, mimeType: request.file.mimetype, updatedAt: new Date().toISOString(), url: '/settings/company-logo' } };
+    const result = await pool.query(`INSERT INTO app_settings(key,value,updated_by) VALUES('company',$1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING key,value,updated_at`, [JSON.stringify(value), request.user.id]);
+    await audit(request, 'upload', 'company_logo', 'company', { originalName: request.file.originalname, mimeType: request.file.mimetype });
+    response.status(201).json({ setting: result.rows[0] });
   });
 
   router.patch('/settings/:key', requireRoles('admin'), async (request, response) => {

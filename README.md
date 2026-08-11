@@ -6,7 +6,7 @@ PROJECTS is a premium project-management application for smart-home and low-volt
 
 ## Current status
 
-Version `0.3.1` is a single full-stack Home Assistant App containing the React frontend, Node API, PostgreSQL, database migrations, role-based users, audit logging, health checks and backup/restore tooling. It includes operational customer cards, contacts, files, tasks, site inspections, configurable catalogs and custom fields, automatic insights, a live calendar with project filtering, reliable settings persistence feedback and an accessible working-area typography scale. Project changes are shared between users and persisted under the App's `/data` volume.
+Version `0.4.0` is a single full-stack Home Assistant App containing the React frontend, Node API, PostgreSQL, database migrations, role-based users, audit logging, health checks and backup/restore tooling. It includes operational customer cards, contacts, files, tasks, site inspections, configurable catalogs and custom fields, automatic insights, a live calendar with project filtering, editable form templates and records, persistent company branding and responsive desktop/phone layouts. Project changes are shared between users and persisted under the App's `/data` volume.
 
 ## Local development
 

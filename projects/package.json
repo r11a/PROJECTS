@@ -1,12 +1,12 @@
 {
   "name": "projects-home-assistant-app",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "server": "node server/index.js",
-    "check": "node --check server/index.js && node --check server/operational.js",
+    "check": "node --check server/index.js && node --check server/operational.js && node --check server/forms.js",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
