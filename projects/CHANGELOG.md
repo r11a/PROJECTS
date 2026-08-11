@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.4
+
+- Replaced the static project-count badge with the live PostgreSQL-backed project count.
+- Replaced the static finance badge with the current number of projects that have an open balance.
+
 ## 0.5.3
 
 - Fixed API base-path calculation when a Home Assistant Ingress URL is opened without a trailing slash.

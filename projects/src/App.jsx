@@ -47,12 +47,12 @@ export async function api(path, options = {}) {
 const nav = [
   { id: 'dashboard', label: 'תמונת מצב', icon: LayoutDashboard },
   { id: 'calendar', label: 'לוח שנה', icon: CalendarDays },
-  { id: 'projects', label: 'פרויקטים', icon: FolderKanban, badge: 12 },
+  { id: 'projects', label: 'פרויקטים', icon: FolderKanban },
   { id: 'map', label: 'מפת פרויקטים', icon: Map },
   { id: 'clients', label: 'לקוחות ואנשי קשר', icon: Users },
   { id: 'master', label: 'אנשי מקצוע ומאגרים', icon: Database },
   { id: 'forms', label: 'טפסים ומסמכים', icon: FormInput },
-  { id: 'finance', label: 'תשלומים וגבייה', icon: WalletCards, badge: 3 },
+  { id: 'finance', label: 'תשלומים וגבייה', icon: WalletCards },
 ];
 
 function StatusBadge({ stage, compact = false }) {
@@ -179,6 +179,7 @@ function App() {
   const company = configuration.settings.company || {};
   const companyLogo = company.logo?.storedName ? `${apiRoot}/settings/company-logo?v=${encodeURIComponent(company.logo.updatedAt || '')}` : '';
   const stageOptions = configuration.catalogs.filter((item) => item.category === 'stage' && item.active);
+  const openCollectionCount = projects.filter((project) => Number(project.paid) < Number(project.value)).length;
 
   return (
     <div className="app-shell">
@@ -188,11 +189,12 @@ function App() {
         <div className="workspace-switch"><div className={`workspace-logo ${companyLogo ? 'has-company-logo' : ''}`}>{companyLogo ? <img src={companyLogo} alt="" /> : (company.name || 'SH').slice(0, 2)}</div><div><strong>{company.name || 'החברה שלי'}</strong><span>סביבת עבודה ראשית</span></div><ChevronDown size={16} /></div>
         <nav className="main-nav">
           <span className="nav-label">סביבת עבודה</span>
-          {[...nav, ...(user.role === 'admin' ? [{ id: 'users', label: 'משתמשים והרשאות', icon: ShieldCheck }] : [])].map(({ id, label, icon: Icon, badge }) => (
-            <button key={id} className={page === id || (page === 'project' && id === 'projects') ? 'active' : ''} onClick={() => { setPage(id); setSelectedProject(null); setSidebarOpen(false); }}>
-              <Icon size={19} /><span>{label}</span>{badge && <em>{badge}</em>}
-            </button>
-          ))}
+          {[...nav, ...(user.role === 'admin' ? [{ id: 'users', label: 'משתמשים והרשאות', icon: ShieldCheck }] : [])].map(({ id, label, icon: Icon }) => {
+            const badge = id === 'projects' ? projects.length : id === 'finance' ? openCollectionCount : null;
+            return <button key={id} className={page === id || (page === 'project' && id === 'projects') ? 'active' : ''} onClick={() => { setPage(id); setSelectedProject(null); setSidebarOpen(false); }}>
+              <Icon size={19} /><span>{label}</span>{badge !== null && <em>{badge}</em>}
+            </button>;
+          })}
           <span className="nav-label nav-second">ניהול</span>
           <button onClick={() => setPage('calendar')}><ClipboardCheck size={19} /><span>משימות ואבני דרך</span></button>
           <button className={page === 'master' ? 'active' : ''} onClick={() => setPage('master')}><Tag size={19} /><span>מערכות וקטלוגים</span></button>
