@@ -1,37 +1,68 @@
-# NEXA Projects — גרסת בדיקה
+# PROJECTS
 
-גרסת Frontend ראשונית למערכת ניהול פרויקטים בתחום הבית החכם.
+![PROJECTS logo](brand/projects-logo.svg)
 
-## הפעלה מקומית
+PROJECTS is a premium project-management application for smart-home and low-voltage installation teams. This private repository contains the web application and its Home Assistant App packaging.
+
+## Current status
+
+Version `0.1.0` is an interactive UI/UX pilot. It includes projects, dashboards, maps, clients, forms and finance views. Project edits are currently persisted per browser using `localStorage`.
+
+The next product stage will introduce a backend, PostgreSQL, multi-user synchronization and role-based access control.
+
+## Local development
 
 ```powershell
+cd projects
 npm.cmd install
 npm.cmd run dev
 ```
 
-לאחר מכן פותחים את הכתובת שמופיעה במסוף, בדרך כלל `http://localhost:5173`.
+The default local address is `http://localhost:5173`.
 
-לבניית גרסת production:
+## Production build
 
 ```powershell
+cd projects
+npm.cmd ci
 npm.cmd run build
 ```
 
-הקבצים המוכנים נוצרים בתיקיית `dist`.
+## Home Assistant installation from this private repository
 
-## מה כלול
+Home Assistant does not provide a safe built-in GitHub login flow for cloning private App repositories. Do not embed a personal access token in a repository URL.
 
-- Dashboard עם מדדים, גרפים, אבני דרך ופעילות.
-- טבלת פרויקטים ותצוגת Kanban.
-- מפת פרויקטים אינטראקטיבית המבוססת כרגע על OpenStreetMap.
-- תיק פרויקט עם שינוי שלב ואחוז התקדמות.
-- לקוחות ואנשי קשר.
-- טפסים ומסמכים.
-- תשלומים וגבייה.
-- יצירת פרויקט חדש.
-- שמירת שינויים מקומית בדפדפן (`localStorage`).
-- התאמה למחשב ולמובייל וממשק RTL.
+For the private pilot, install PROJECTS as a Local App:
 
-## גבולות גרסת הבדיקה
+1. Install the official Samba or SSH App in Home Assistant.
+2. Clone/download this private repository on an authenticated computer.
+3. Copy the complete `projects/` folder into `/addons/projects` on the HAOS host.
+4. In **Settings → Apps → App store**, reload the store.
+5. Find **PROJECTS** under **Local Apps**, install it and enable **Show in sidebar**.
 
-הגרסה נועדה לאימות ה־UI וה־UX. היא עדיין אינה כוללת שרת, בסיס נתונים, כניסת משתמשים, הרשאות, העלאת קבצים אמיתית או סנכרון בין משתמשים. אלה יתווספו לאחר אישור כיוון המוצר.
+This is the Home Assistant-documented path for testing private/local Apps. A later release can publish a pre-built image and a separate distribution repository.
+
+The App exposes:
+
+- Home Assistant Ingress on its internal port `8099`.
+- A standalone LAN interface on host port `8686`.
+
+### Pilot security
+
+Ingress is protected by Home Assistant authentication. Port `8686` does not yet have an independent login screen and must remain limited to a trusted LAN. Do not expose it through port forwarding, Cloudflare Tunnel or a public reverse proxy in this release.
+
+## Repository structure
+
+```text
+brand/                 Vector brand assets
+projects/              Home Assistant App and React application
+  config.yaml          Home Assistant App manifest
+  Dockerfile           Multi-stage App image
+  rootfs/              Nginx and service configuration
+  src/                 React source
+repository.yaml        Home Assistant repository metadata
+```
+
+## Brand
+
+The brand emphasizes **PRO** in **PROJECTS** while retaining a restrained dark-violet visual identity. Editable SVG sources are in [`brand/`](brand/), and Home Assistant PNG assets are generated in the App folder.

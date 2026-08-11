@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320">
+  <defs>
+    <linearGradient id="mark" x1="40" y1="24" x2="278" y2="294" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9B89FF"/><stop offset="0.55" stop-color="#6954E2"/><stop offset="1" stop-color="#33227C"/>
+    </linearGradient>
+    <linearGradient id="pro" x1="364" y1="96" x2="640" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9B89FF"/><stop offset="1" stop-color="#6954E2"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="320" rx="54" fill="#111528"/>
+  <rect x="42" y="42" width="236" height="236" rx="68" fill="url(#mark)"/>
+  <path d="M105 224V93h64c45 0 72 21 72 57 0 39-29 61-76 61h-19v13h-41Zm41-48h21c21 0 33-9 33-26 0-16-12-25-33-25h-21v51Z" fill="#FFFFFF"/>
+  <path d="M229 78l8 17 17 8-17 8-8 17-8-17-17-8 17-8 8-17Z" fill="#FFFFFF" fill-opacity="0.9"/>
+  <text x="342" y="191" font-family="Inter,Arial,sans-serif" font-size="126" letter-spacing="5" fill="#F7F5FF"><tspan fill="url(#pro)" font-weight="800">PRO</tspan><tspan font-weight="300">JECTS</tspan></text>
+  <text x="350" y="242" font-family="Inter,Arial,sans-serif" font-size="20" letter-spacing="9" fill="#8E96B3">SMART PROJECT MANAGEMENT</text>
+</svg>

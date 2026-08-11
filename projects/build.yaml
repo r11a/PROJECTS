@@ -1,0 +1,6 @@
+build_from:
+  amd64: ghcr.io/home-assistant/amd64-base:3.22
+labels:
+  org.opencontainers.image.title: "PROJECTS"
+  org.opencontainers.image.description: "Smart-home project management for Home Assistant"
+  org.opencontainers.image.source: "https://github.com/r11a/PROJECTS"
