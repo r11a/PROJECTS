@@ -1,0 +1,49 @@
+CREATE TABLE IF NOT EXISTS users (
+  id BIGSERIAL PRIMARY KEY,
+  username TEXT UNIQUE,
+  display_name TEXT NOT NULL,
+  password_hash TEXT,
+  role TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'manager', 'technician', 'finance', 'viewer')),
+  ha_user_id TEXT UNIQUE,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  client TEXT NOT NULL DEFAULT '',
+  location TEXT NOT NULL DEFAULT '',
+  address TEXT NOT NULL DEFAULT '',
+  lat DOUBLE PRECISION NOT NULL DEFAULT 32.0853,
+  lng DOUBLE PRECISION NOT NULL DEFAULT 34.7818,
+  stage TEXT NOT NULL DEFAULT 'planning',
+  progress INTEGER NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
+  manager TEXT NOT NULL DEFAULT '',
+  owner_initials TEXT NOT NULL DEFAULT '',
+  value NUMERIC(14,2) NOT NULL DEFAULT 0,
+  paid NUMERIC(14,2) NOT NULL DEFAULT 0,
+  due TEXT NOT NULL DEFAULT '',
+  priority TEXT NOT NULL DEFAULT 'normal',
+  flag TEXT NOT NULL DEFAULT '',
+  systems JSONB NOT NULL DEFAULT '[]'::jsonb,
+  next_milestone TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
+  health INTEGER NOT NULL DEFAULT 100 CHECK (health BETWEEN 0 AND 100),
+  tasks_done INTEGER NOT NULL DEFAULT 0,
+  tasks_total INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT,
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
