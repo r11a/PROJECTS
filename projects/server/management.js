@@ -1,7 +1,8 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
-import { mkdir, unlink } from 'node:fs/promises';
+import { access, mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 
 const PROFESSIONAL_FIELDS = {
@@ -30,7 +31,7 @@ function equipmentFromRow(row) {
   return {
     id: row.id, itemType: row.item_type, parentId: row.parent_id, code: row.code, name: row.name,
     manufacturer: row.manufacturer, model: row.model, unit: row.unit, description: row.description,
-    color: row.color, icon: row.icon, active: row.active, metadata: row.metadata || {},
+    color: row.color, icon: row.icon, iconImageStoredName: row.icon_image_stored_name || '', active: row.active, metadata: row.metadata || {},
   };
 }
 
@@ -56,13 +57,35 @@ async function validateEquipmentHierarchy(client, itemType, parentId, ownId = nu
 export async function createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir }) {
   const router = express.Router();
   const documentsDir = path.join(dataDir, 'uploads', 'documents');
+  const equipmentIconsDir = path.join(dataDir, 'uploads', 'equipment-icons');
   await mkdir(documentsDir, { recursive: true });
+  await mkdir(equipmentIconsDir, { recursive: true });
+  const storageRoots = { share: '/share', media: '/media' };
+  const safeStoragePath = (mode, relativePath = 'PROJECTS') => {
+    if (mode === 'internal' || mode === 'documents') return documentsDir;
+    const root = storageRoots[mode];
+    if (!root) throw Object.assign(new Error('סוג האחסון אינו נתמך'), { statusCode: 400 });
+    const clean = String(relativePath || 'PROJECTS').replace(/^[\\/]+/, '');
+    const resolved = path.resolve(root, clean);
+    if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw Object.assign(new Error('נתיב האחסון אינו מורשה'), { statusCode: 400 });
+    return resolved;
+  };
+  const currentStorage = async () => {
+    const result = await pool.query("SELECT value FROM app_settings WHERE key='documentStorage'");
+    const value = result.rows[0]?.value || { mode: 'internal', relativePath: 'PROJECTS' };
+    return { mode: value.mode || 'internal', relativePath: value.relativePath || 'PROJECTS', directory: safeStoragePath(value.mode || 'internal', value.relativePath) };
+  };
   const upload = multer({
     storage: multer.diskStorage({
-      destination: documentsDir,
+      destination: (_request, _file, callback) => currentStorage().then(async (storage) => { await mkdir(storage.directory, { recursive: true }); callback(null, storage.directory); }).catch(callback),
       filename: (_request, file, callback) => callback(null, `${randomUUID()}${path.extname(file.originalname).slice(0, 12).toLowerCase()}`),
     }),
     limits: { fileSize: 100 * 1024 * 1024, files: 1 },
+  });
+  const iconUpload = multer({
+    storage: multer.diskStorage({ destination: equipmentIconsDir, filename: (_request, file, callback) => callback(null, `${randomUUID()}${path.extname(file.originalname).toLowerCase()}`) }),
+    fileFilter: (_request, file, callback) => callback(null, ['image/png','image/jpeg','image/webp'].includes(file.mimetype)),
+    limits: { fileSize: 5 * 1024 * 1024, files: 1 },
   });
 
   router.use(authenticate);
@@ -190,6 +213,54 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
     response.status(204).end();
   });
 
+  router.post('/equipment-catalog/:id/icon', requireRoles('admin', 'manager'), iconUpload.single('icon'), async (request, response) => {
+    if (!request.file) return response.status(400).json({ error: 'יש לבחור תמונת PNG, JPG או WebP עד 5MB' });
+    const current = await pool.query('SELECT icon_image_stored_name FROM equipment_catalog WHERE id=$1', [request.params.id]);
+    if (!current.rowCount) { await unlink(request.file.path).catch(() => {}); return response.status(404).json({ error: 'הפריט לא נמצא' }); }
+    const result = await pool.query('UPDATE equipment_catalog SET icon_image_stored_name=$1,updated_at=NOW() WHERE id=$2 RETURNING *', [request.file.filename, request.params.id]);
+    if (current.rows[0].icon_image_stored_name) await unlink(path.join(equipmentIconsDir, current.rows[0].icon_image_stored_name)).catch(() => {});
+    await audit(request, 'upload', 'equipment_icon', request.params.id, { fileName: request.file.originalname });
+    response.json({ item: equipmentFromRow(result.rows[0]) });
+  });
+
+  router.get('/equipment-catalog/:id/icon', async (request, response) => {
+    const result = await pool.query('SELECT icon_image_stored_name FROM equipment_catalog WHERE id=$1', [request.params.id]);
+    if (!result.rowCount || !result.rows[0].icon_image_stored_name) return response.status(404).end();
+    response.sendFile(path.join(equipmentIconsDir, result.rows[0].icon_image_stored_name));
+  });
+
+  router.get('/document-storage', async (_request, response) => {
+    const storage = await currentStorage();
+    let writable = false; let error = '';
+    try { await mkdir(storage.directory, { recursive: true }); await access(storage.directory, fsConstants.R_OK | fsConstants.W_OK); writable = true; } catch (cause) { error = cause.message; }
+    response.json({ storage: { mode: storage.mode, relativePath: storage.relativePath, resolvedPath: storage.directory, writable, error } });
+  });
+
+  router.get('/document-storage/browse', requireRoles('admin'), async (request, response) => {
+    const mode = String(request.query.mode || 'share');
+    const relativePath = String(request.query.path || '');
+    const directory = safeStoragePath(mode, relativePath || '.');
+    try {
+      const entries = await readdir(directory, { withFileTypes: true });
+      response.json({ mode, relativePath, directories: entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort((a,b) => a.localeCompare(b, 'he')) });
+    } catch (error) { response.status(400).json({ error: `לא ניתן לקרוא את התיקייה: ${error.message}` }); }
+  });
+
+  router.patch('/document-storage', requireRoles('admin'), async (request, response) => {
+    const mode = String(request.body.mode || 'internal');
+    const relativePath = String(request.body.relativePath || 'PROJECTS').trim();
+    const directory = safeStoragePath(mode, relativePath);
+    try {
+      await mkdir(directory, { recursive: true });
+      const probe = path.join(directory, `.projects-write-test-${randomUUID()}`);
+      await writeFile(probe, 'PROJECTS'); await unlink(probe);
+    } catch (error) { return response.status(400).json({ error: `התיקייה אינה זמינה לכתיבה: ${error.message}` }); }
+    const value = { mode, relativePath, verified: true, verifiedAt: new Date().toISOString() };
+    await pool.query(`INSERT INTO app_settings(key,value,updated_by) VALUES('documentStorage',$1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_by=EXCLUDED.updated_by,updated_at=NOW()`, [JSON.stringify(value), request.user.id]);
+    await audit(request, 'update', 'document_storage', 'primary', { mode, relativePath });
+    response.json({ storage: { ...value, resolvedPath: directory, writable: true } });
+  });
+
   router.get('/documents', async (request, response) => {
     const result = await pool.query(
       `SELECT f.*,c.name client_name,p.name project_name,COALESCE(u.display_name,u.username,'מערכת') uploaded_by_name
@@ -209,10 +280,11 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
     if (!clientId && !projectId && !formRecordId) { await unlink(request.file.path).catch(() => {}); return response.status(400).json({ error: 'יש לשייך את הקובץ ללקוח, פרויקט או טופס' }); }
     let tags = [];
     try { tags = JSON.parse(request.body.tags || '[]'); } catch { tags = String(request.body.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean); }
+    const storage = await currentStorage();
     const result = await pool.query(
-      `INSERT INTO client_files(client_id,project_id,form_record_id,title,original_name,stored_name,mime_type,size_bytes,category,description,tags,version,storage_area,uploaded_by)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'documents',$13) RETURNING *`,
-      [clientId, projectId, formRecordId, request.body.title || request.file.originalname, request.file.originalname, request.file.filename, request.file.mimetype, request.file.size, request.body.category || 'אחר', request.body.description || '', JSON.stringify(tags), Number(request.body.version) || 1, request.user.id],
+      `INSERT INTO client_files(client_id,project_id,form_record_id,title,original_name,stored_name,mime_type,size_bytes,category,description,tags,version,storage_area,storage_path,uploaded_by)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+      [clientId, projectId, formRecordId, request.body.title || request.file.originalname, request.file.originalname, request.file.filename, request.file.mimetype, request.file.size, request.body.category || 'אחר', request.body.description || '', JSON.stringify(tags), Number(request.body.version) || 1, storage.mode, storage.relativePath, request.user.id],
     );
     await audit(request, 'upload', 'document', String(result.rows[0].id), { originalName: request.file.originalname, clientId, projectId });
     response.status(201).json({ document: result.rows[0] });
@@ -222,15 +294,25 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
     const result = await pool.query('SELECT * FROM client_files WHERE id=$1', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'המסמך לא נמצא' });
     const row = result.rows[0];
-    const directory = row.storage_area === 'documents' ? documentsDir : path.join(dataDir, 'uploads', 'clients');
+    const directory = row.storage_area === 'clients' ? path.join(dataDir, 'uploads', 'clients') : safeStoragePath(row.storage_area, row.storage_path);
     response.download(path.join(directory, row.stored_name), row.original_name);
+  });
+
+  router.get('/documents/:id/preview', async (request, response) => {
+    const result = await pool.query('SELECT * FROM client_files WHERE id=$1', [request.params.id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'המסמך לא נמצא' });
+    const row = result.rows[0];
+    const directory = row.storage_area === 'clients' ? path.join(dataDir, 'uploads', 'clients') : safeStoragePath(row.storage_area, row.storage_path);
+    response.type(row.mime_type || 'application/octet-stream');
+    response.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(row.original_name)}`);
+    response.sendFile(path.join(directory, row.stored_name));
   });
 
   router.delete('/documents/:id', requireRoles('admin'), async (request, response) => {
     const result = await pool.query('DELETE FROM client_files WHERE id=$1 RETURNING *', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'המסמך לא נמצא' });
     const row = result.rows[0];
-    const directory = row.storage_area === 'documents' ? documentsDir : path.join(dataDir, 'uploads', 'clients');
+    const directory = row.storage_area === 'clients' ? path.join(dataDir, 'uploads', 'clients') : safeStoragePath(row.storage_area, row.storage_path);
     await unlink(path.join(directory, row.stored_name)).catch(() => {});
     await audit(request, 'delete', 'document', request.params.id, { originalName: row.original_name });
     response.status(204).end();

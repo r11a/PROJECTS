@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.0
+
+- Added a built-in smart-home, multimedia, camera, alarm and communications catalog with assignable quantities.
+- Added client-level system assignments and custom image icons for catalog items.
+- Added a three-step project creation wizard with client, manager, schedule, value and initial systems.
+- Added a live project Gantt generated from tasks, milestones, start dates and due dates.
+- Added direct project document upload, inline PDF/image preview and Office-file open/download actions.
+- Added verified internal, Home Assistant Share and Media storage modes with a safe folder browser for Synology storage.
+- Added printable client summary reports suitable for Save as PDF.
+- Added compact contact-list and card views.
+- Added a prominent live task counter with an accessible overdue animation.
+- Changed calendar view controls to compact numeric buttons for mobile navigation.
+- Fixed map stacking and cropped sidebar user avatars.
+- Added migration `007_field_operations.sql` and Home Assistant read/write mappings for `/share` and `/media`.
+
 ## 0.6.0
 
 - Added operational task center with project, owner, due date, priority, type, effort, status, editing, admin-only deletion and calendar history.

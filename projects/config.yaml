@@ -1,5 +1,5 @@
 name: "PROJECTS"
-version: "0.6.0"
+version: "0.7.0"
 slug: "projects"
 description: "Premium smart-home project management dashboard"
 url: "https://github.com/r11a/PROJECTS"
@@ -18,6 +18,11 @@ ports:
   8686/tcp: 8686
 ports_description:
   8686/tcp: "PROJECTS standalone web interface (editable host port)"
+map:
+  - type: share
+    read_only: false
+  - type: media
+    read_only: false
 options:
   admin_username: "admin"
   admin_password: "change-me-now"

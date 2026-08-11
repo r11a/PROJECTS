@@ -73,6 +73,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     const [taskStats, collection, risks, alerts, recent] = await Promise.all([
       pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND due_date<CURRENT_DATE)::int overdue,
                          COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND due_date BETWEEN CURRENT_DATE AND CURRENT_DATE+7)::int due_soon,
+                         COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled'))::int open,
                          COUNT(*) FILTER (WHERE status='done' AND completed_at>=NOW()-INTERVAL '7 days')::int completed_week FROM tasks`),
       pool.query(`SELECT COALESCE(SUM(value-paid),0)::numeric outstanding,COUNT(*) FILTER (WHERE paid<value)::int open_projects FROM projects`),
       pool.query(`SELECT COUNT(*) FILTER (WHERE health<70)::int health_risks,COUNT(*) FILTER (WHERE flag<>'')::int flagged FROM projects`),
@@ -252,16 +253,42 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
 
   router.get('/clients/:id', async (request, response) => {
-    const [client, contacts, tasks, inspections, files, projects] = await Promise.all([
+    const [client, contacts, tasks, inspections, files, projects, equipment] = await Promise.all([
       pool.query(`SELECT c.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',ci.id,'name',ci.name,'category',ci.category,'color',ci.color,'icon',ci.icon,'symbol',ci.symbol)) FROM client_labels cl JOIN catalog_items ci ON ci.id=cl.catalog_item_id WHERE cl.client_id=c.id),'[]'::jsonb) labels FROM clients c WHERE c.id=$1`, [request.params.id]),
       pool.query('SELECT * FROM client_contacts WHERE client_id=$1 ORDER BY is_referrer DESC, name', [request.params.id]),
       pool.query('SELECT t.*,u.display_name assignee_name FROM tasks t LEFT JOIN users u ON u.id=t.assignee_id WHERE t.client_id=$1 ORDER BY (t.status=\'done\'), t.due_date NULLS LAST, t.created_at DESC', [request.params.id]),
       pool.query('SELECT * FROM site_inspections WHERE client_id=$1 ORDER BY inspection_date DESC, created_at DESC', [request.params.id]),
       pool.query('SELECT * FROM client_files WHERE client_id=$1 ORDER BY created_at DESC', [request.params.id]),
       pool.query('SELECT * FROM projects WHERE client_id=$1 ORDER BY created_at DESC', [request.params.id]),
+      pool.query(`SELECT ce.*,e.name,e.code,e.unit,e.color,e.icon,e.icon_image_stored_name,e.item_type,parent.name category_name
+        FROM client_equipment ce JOIN equipment_catalog e ON e.id=ce.catalog_item_id LEFT JOIN equipment_catalog parent ON parent.id=e.parent_id
+        WHERE ce.client_id=$1 ORDER BY parent.name,e.name`, [request.params.id]),
     ]);
     if (!client.rowCount) return response.status(404).json({ error: 'Client not found' });
-    response.json({ client: clientFromRow(client.rows[0]), contacts: contacts.rows.map(contactFromRow), tasks: tasks.rows, inspections: inspections.rows, files: files.rows, projects: projects.rows });
+    response.json({ client: clientFromRow(client.rows[0]), contacts: contacts.rows.map(contactFromRow), tasks: tasks.rows, inspections: inspections.rows, files: files.rows, projects: projects.rows, equipment: equipment.rows });
+  });
+
+  router.post('/clients/:id/equipment', requireRoles('admin', 'manager', 'technician'), async (request, response) => {
+    const quantity = Number(request.body.quantity || 1);
+    if (!request.body.catalogItemId || !(quantity > 0)) return response.status(400).json({ error: 'יש לבחור מערכת וכמות גדולה מאפס' });
+    const result = await pool.query(`INSERT INTO client_equipment(client_id,catalog_item_id,quantity,location,notes) VALUES($1,$2,$3,$4,$5) RETURNING *`, [request.params.id, request.body.catalogItemId, quantity, request.body.location || '', request.body.notes || '']);
+    await audit(request, 'create', 'client_equipment', String(result.rows[0].id), { clientId: request.params.id, quantity });
+    response.status(201).json({ equipment: result.rows[0] });
+  });
+
+  router.patch('/clients/:id/equipment/:itemId', requireRoles('admin', 'manager', 'technician'), async (request, response) => {
+    const current = await pool.query('SELECT * FROM client_equipment WHERE id=$1 AND client_id=$2', [request.params.itemId, request.params.id]);
+    if (!current.rowCount) return response.status(404).json({ error: 'המערכת לא נמצאה בכרטיס הלקוח' });
+    const row = current.rows[0]; const quantity = Number(request.body.quantity ?? row.quantity);
+    if (!(quantity > 0)) return response.status(400).json({ error: 'הכמות חייבת להיות גדולה מאפס' });
+    const result = await pool.query('UPDATE client_equipment SET quantity=$1,location=$2,notes=$3,updated_at=NOW() WHERE id=$4 RETURNING *', [quantity, request.body.location ?? row.location, request.body.notes ?? row.notes, request.params.itemId]);
+    await audit(request, 'update', 'client_equipment', request.params.itemId, request.body); response.json({ equipment: result.rows[0] });
+  });
+
+  router.delete('/clients/:id/equipment/:itemId', requireRoles('admin'), async (request, response) => {
+    const result = await pool.query('DELETE FROM client_equipment WHERE id=$1 AND client_id=$2 RETURNING id', [request.params.itemId, request.params.id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'המערכת לא נמצאה בכרטיס הלקוח' });
+    await audit(request, 'delete', 'client_equipment', request.params.itemId, { clientId: request.params.id }); response.status(204).end();
   });
 
   router.patch('/clients/:id', requireRoles('admin', 'manager'), async (request, response) => {

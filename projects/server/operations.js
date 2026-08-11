@@ -34,8 +34,9 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
   router.post('/operations/tasks', requireRoles('admin', 'manager', 'technician'), async (request, response) => {
     const title = String(request.body.title || '').trim();
     if (!title || !request.body.dueDate || (!request.body.projectId && !request.body.clientId)) return response.status(400).json({ error: 'כותרת, תאריך יעד ופרויקט או לקוח הם שדות חובה' });
-    const result = await pool.query(`INSERT INTO tasks(client_id,project_id,title,description,status,priority,assignee_professional_id,due_date,estimated_hours,task_type,created_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null, request.body.dueDate, Number(request.body.estimatedHours) || 0, request.body.taskType || 'task', request.user.id]);
+    if (request.body.startDate && request.body.startDate > request.body.dueDate) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
+    const result = await pool.query(`INSERT INTO tasks(client_id,project_id,title,description,status,priority,assignee_professional_id,start_date,due_date,estimated_hours,task_type,dependency_task_id,created_by)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null, request.body.startDate || request.body.dueDate, request.body.dueDate, Number(request.body.estimatedHours) || 0, request.body.taskType || 'task', request.body.dependencyTaskId || null, request.user.id]);
     await syncProjectMetrics(pool, request.body.projectId);
     await audit(request, 'create', 'task', String(result.rows[0].id), { title, projectId: request.body.projectId });
     response.status(201).json({ task: result.rows[0] });
@@ -46,8 +47,10 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     if (!current.rowCount) return response.status(404).json({ error: 'המשימה לא נמצאה' });
     const row = current.rows[0];
     const status = TASK_STATUSES.includes(request.body.status) ? request.body.status : row.status;
-    const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,due_date=$6,estimated_hours=$7,task_type=$8,
-      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$9 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id, request.body.dueDate ?? row.due_date, request.body.estimatedHours ?? row.estimated_hours, request.body.taskType ?? row.task_type, request.params.id]);
+    const nextStart = request.body.startDate ?? row.start_date; const nextDue = request.body.dueDate ?? row.due_date;
+    if (nextStart && nextDue && String(nextStart).slice(0,10) > String(nextDue).slice(0,10)) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
+    const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,start_date=$6,due_date=$7,estimated_hours=$8,task_type=$9,dependency_task_id=$10,
+      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$11 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, request.body.estimatedHours ?? row.estimated_hours, request.body.taskType ?? row.task_type, request.body.dependencyTaskId ?? row.dependency_task_id, request.params.id]);
     await syncProjectMetrics(pool, row.project_id);
     await audit(request, 'update', 'task', request.params.id, request.body);
     response.json({ task: result.rows[0] });

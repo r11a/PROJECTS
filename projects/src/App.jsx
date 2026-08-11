@@ -105,14 +105,16 @@ function App() {
   const [team, setTeam] = useState([]);
   const [professionals, setProfessionals] = useState([]);
   const [clientOptions, setClientOptions] = useState([]);
+  const [equipmentCatalog, setEquipmentCatalog] = useState([]);
 
   const loadReferenceData = async () => {
-    const [settingsResult, teamResult, clientsResult, professionalsResult] = await Promise.all([api('/settings'), api('/team'), api('/clients'), api('/professionals')]);
+    const [settingsResult, teamResult, clientsResult, professionalsResult, equipmentResult] = await Promise.all([api('/settings'), api('/team'), api('/clients'), api('/professionals'), api('/equipment-catalog')]);
     setConfiguration(settingsResult);
     setTeam(teamResult.users);
     setClientOptions(clientsResult.clients);
     setProfessionals(professionalsResult.professionals);
-    return { settingsResult, teamResult, clientsResult, professionalsResult };
+    setEquipmentCatalog(equipmentResult.items);
+    return { settingsResult, teamResult, clientsResult, professionalsResult, equipmentResult };
   };
   const loadProjects = () => api('/projects').then((result) => { setProjects(result.projects); setSelectedProject((current) => current ? result.projects.find((item) => item.id === current.id) || current : current); return result.projects; });
 
@@ -151,7 +153,9 @@ function App() {
 
   const createProject = async (project) => {
     try {
-      const result = await api('/projects', { method: 'POST', body: JSON.stringify(project) });
+      const { equipmentItems = [], ...projectInput } = project;
+      const result = await api('/projects', { method: 'POST', body: JSON.stringify(projectInput) });
+      await Promise.all(equipmentItems.map((item) => api(`/projects/${result.project.id}/equipment`, { method: 'POST', body: JSON.stringify({ catalogItemId:item.id, quantity:item.quantity, status:'planned' }) })));
       setProjects((current) => [result.project, ...current]);
       setNewProjectOpen(false);
       setNotice('הפרויקט החדש נוצר');
@@ -192,8 +196,7 @@ function App() {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="brand"><div className="brand-mark"><img src={projectsMark} alt="" /></div><div><strong><b>PRO</b>JECTS</strong><span>Manage Smarter. Deliver Better.</span></div></div>
-        <button className="mobile-close" onClick={() => setSidebarOpen(false)} aria-label="סגור תפריט"><X /></button>
+        <div className="brand" role="button" tabIndex="0" aria-label="סגירת תפריט הניווט" onClick={() => setSidebarOpen(false)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSidebarOpen(false); } }}><div className="brand-mark"><img src={projectsMark} alt="" /></div><div><strong><b>PRO</b>JECTS</strong><span>Manage Smarter. Deliver Better.</span></div></div>
         <div className="workspace-switch"><div className={`workspace-logo ${companyLogo ? 'has-company-logo' : ''}`}>{companyLogo ? <img src={companyLogo} alt="" /> : (company.name || 'SH').slice(0, 2)}</div><div><strong>{company.name || 'החברה שלי'}</strong><span>סביבת עבודה ראשית</span></div><ChevronDown size={16} /></div>
         <nav className="main-nav">
           <span className="nav-label">סביבת עבודה</span>
@@ -245,7 +248,7 @@ function App() {
           {page === 'project' && selectedProject && <ProjectWorkspace project={projects.find((p) => p.id === selectedProject.id) || selectedProject} updateProject={updateProject} api={api} apiRoot={apiRoot} user={user} projects={projects} professionals={professionals} stageOptions={stageOptions} setNotice={setNotice} setPage={setPage} />}
         </div>
       </main>
-      {newProjectOpen && <NewProjectModal onClose={() => setNewProjectOpen(false)} onCreate={createProject} professionals={professionals} clients={clientOptions} stageOptions={stageOptions} />}
+      {newProjectOpen && <NewProjectModal onClose={() => setNewProjectOpen(false)} onCreate={createProject} professionals={professionals} clients={clientOptions} stageOptions={stageOptions} equipment={equipmentCatalog} />}
       {alertsOpen && insights?.alerts?.length > 0 && <AlertCenter alerts={insights.alerts} api={api} setNotice={setNotice} onClose={() => setAlertsOpen(false)} onSnoozed={() => { setAlertsOpen(false); setInsights((current) => ({ ...current, alerts: [] })); }} />}
       {notice && <div className="toast"><CheckCircle2 size={19} />{notice}</div>}
     </div>
@@ -321,7 +324,7 @@ function Dashboard({ projects, openProject, setPage, insights, user }) {
   const upcomingMilestones = projects.filter((project) => project.stage !== 'completed').slice(0, 4);
   return (
     <div className="dashboard-page">
-      <section className="welcome-row"><div><h2>שלום, {user.displayName} <span>👋</span></h2><p>הנה תמונת המצב התפעולית המעודכנת.</p></div><div className="live-pill"><i />הנתונים מעודכנים עכשיו</div></section>
+      <section className="welcome-row"><div><h2>שלום, {user.displayName} <span>👋</span></h2><p>הנה תמונת המצב התפעולית המעודכנת.</p></div><div className="welcome-actions"><button className={`dashboard-task-button ${insights?.stats?.overdue>0?'urgent':''}`} onClick={()=>setPage('tasks')}><ClipboardCheck size={18}/><span>משימות</span><b>{insights?.stats?.open||0}</b></button><div className="live-pill"><i />הנתונים מעודכנים עכשיו</div></div></section>
       <section className="kpi-grid">
         <KpiCard icon={FolderKanban} tone="purple" label="פרויקטים פעילים" value={active.length} change={`${projects.length-active.length} פרויקטים הושלמו`} />
         <KpiCard icon={TrendingUp} tone="blue" label="היקף פרויקטים פעילים" value={compactMoney(value)} change="לפי שווי החוזים המעודכן" />
@@ -459,15 +462,19 @@ function ProjectTabPlaceholder({ tab, project }) {
   return <div className="panel tab-placeholder"><div><Icon size={30} /></div><h3>{content[0]}</h3><p>{content[1]}</p><button className="secondary-button"><Plus size={17} />הוספת פריט</button></div>;
 }
 
-function NewProjectModal({ onClose, onCreate, professionals, clients, stageOptions }) {
+function NewProjectModal({ onClose, onCreate, professionals, clients, stageOptions, equipment }) {
   const managers = professionals.filter((item) => item.active && item.affiliation === 'company' && item.roles.some((role) => role.key === 'project_manager'));
-  const [form, setForm] = useState({ name: '', clientId: '', location: '', managerId: managers[0]?.id || '', stage: stageOptions[0]?.metadata?.key || 'planning', value: '' });
+  const [step,setStep]=useState(1);
+  const [form, setForm] = useState({ name: '', clientId: '', location: '', managerId: managers[0]?.id || '', stage: stageOptions[0]?.metadata?.key || 'planning', value: '', startDate:new Date().toISOString().slice(0,10), targetDate:'', selectedEquipment:{} });
   const submit = (event) => {
     event.preventDefault();
     const client = clients.find((item) => String(item.id) === String(form.clientId)); const manager = managers.find((item) => String(item.id) === String(form.managerId));
-    onCreate({ name: form.name, clientId: client?.id || null, client: client?.name || '', location: form.location || client?.city || '', address: client?.address || form.location, lat: 32.08, lng: 34.82, stage: form.stage, progress: 0, managerId: manager?.id || null, manager: manager?.displayName || '', ownerInitials: manager?.displayName?.slice(0,2) || '', value: Number(form.value) || 0, paid: 0, due: '', priority: 'normal', flag: '', systems: [], nextMilestone: 'פגישת אפיון ראשונית', phone: client?.phone || '', email: client?.email || '', health: 100, tasksDone: 0, tasksTotal: 0 });
+    if(step<3)return setStep(step+1);
+    const equipmentItems=Object.entries(form.selectedEquipment).filter(([,quantity])=>Number(quantity)>0).map(([id,quantity])=>({id:Number(id),quantity:Number(quantity)}));
+    onCreate({ name: form.name, clientId: client?.id || null, client: client?.name || '', location: form.location || client?.city || '', address: client?.address || form.location, lat: 32.08, lng: 34.82, stage: form.stage, progress: 0, managerId: manager?.id || null, manager: manager?.displayName || '', ownerInitials: manager?.displayName?.slice(0,2) || '', value: Number(form.value) || 0, paid: 0, due: form.targetDate ? new Date(form.targetDate).toLocaleDateString('he-IL') : '', priority: 'normal', flag: '', systems: [], equipmentItems, nextMilestone: 'פגישת אפיון ראשונית', phone: client?.phone || '', email: client?.email || '', health: 100, tasksDone: 0, tasksTotal: 0 });
   };
-  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={(e) => e.stopPropagation()}><div className="modal-head"><div><span>פרויקט חדש</span><h2>פרטי הפרויקט הבסיסיים</h2></div><button onClick={onClose}><X /></button></div><form onSubmit={submit}><label>שם הפרויקט<input autoFocus required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="לדוגמה: וילה משפחת ישראלי" /></label><div className="form-row"><label>לקוח<select required value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}><option value="">בחירת לקוח מהמאגר</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label><label>עיר / מיקום<input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="נלקח מכתובת הלקוח אם ריק" /></label></div><div className="form-row"><label>מנהל פרויקט<select value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })}><option value="">ללא מנהל</option>{managers.map((manager) => <option key={manager.id} value={manager.id}>{manager.displayName}</option>)}</select></label><label>שלב התחלתי<select value={form.stage} onChange={(e) => setForm({ ...form, stage:e.target.value })}>{(stageOptions.length ? stageOptions.map((item) => [item.metadata?.key || item.name,item.name]) : [['planning','תכנון']]).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><div className="form-row"><label>שווי משוער<input type="number" min="0" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder="₪ 0" /></label></div><div className="modal-actions"><button type="button" onClick={onClose}>ביטול</button><button className="primary-button" type="submit">יצירת פרויקט <ArrowLeft size={16} /></button></div></form></div></div>;
+  const categories=equipment.filter(item=>item.itemType==='system_type'&&item.active);
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal project-wizard" onMouseDown={(e) => e.stopPropagation()}><div className="modal-head"><div><span>אשף פרויקט חדש · שלב {step} מתוך 3</span><h2>{step===1?'לקוח וזהות הפרויקט':step===2?'ניהול ולוחות זמנים':'מערכות וסקירה'}</h2></div><button onClick={onClose}><X /></button></div><div className="wizard-progress"><i style={{width:`${step/3*100}%`}}/></div><form onSubmit={submit}>{step===1&&<><label>שם הפרויקט<input autoFocus required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="לדוגמה: וילה משפחת ישראלי" /></label><div className="form-row"><label>לקוח<select required value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}><option value="">בחירת לקוח מהמאגר</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name} · {client.address}</option>)}</select></label><label>עיר / מיקום<input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="נלקח מכתובת הלקוח אם ריק" /></label></div></>}{step===2&&<><div className="form-row"><label>מנהל פרויקט<select value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })}><option value="">ללא מנהל</option>{managers.map((manager) => <option key={manager.id} value={manager.id}>{manager.displayName}</option>)}</select></label><label>שלב התחלתי<select value={form.stage} onChange={(e) => setForm({ ...form, stage:e.target.value })}>{(stageOptions.length ? stageOptions.map((item) => [item.metadata?.key || item.name,item.name]) : [['planning','תכנון']]).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><div className="form-row"><label>תאריך התחלה<input type="date" required value={form.startDate} onChange={e=>setForm({...form,startDate:e.target.value})}/></label><label>יעד מסירה<input type="date" min={form.startDate} value={form.targetDate} onChange={e=>setForm({...form,targetDate:e.target.value})}/></label></div><label>שווי משוער<input type="number" min="0" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder="₪ 0" /></label></>}{step===3&&<><p className="wizard-help">בחרו מערכות ראשוניות וכמות. אפשר להוסיף, לשנות או להסיר בהמשך מתוך הפרויקט.</p><div className="wizard-systems">{categories.map(category=><section key={category.id}><h3>{category.name}</h3>{equipment.filter(item=>String(item.parentId)===String(category.id)&&item.active).map(item=><label key={item.id}><span>{item.name}</span><input type="number" min="0" placeholder="0" value={form.selectedEquipment[item.id]||''} onChange={e=>setForm({...form,selectedEquipment:{...form.selectedEquipment,[item.id]:e.target.value}})}/></label>)}</section>)}</div></>}<div className="modal-actions"><button type="button" onClick={()=>step===1?onClose():setStep(step-1)}>{step===1?'ביטול':'חזרה'}</button><button className="primary-button" type="submit">{step===3?'יצירת פרויקט':'המשך'} <ArrowLeft size={16} /></button></div></form></div></div>;
 }
 
 export default App;

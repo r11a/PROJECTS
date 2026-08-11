@@ -2,6 +2,8 @@
 
 PROJECTS is a full-stack Home Assistant App for managing smart-home installation projects.
 
+Version 0.7.0 adds the field-operations layer: built-in systems, client quantities, project wizard, Gantt, client reports, direct document upload and verified Synology/HA network storage.
+
 Version 0.4.0 adds an operational forms module with editable templates, structured form records, workflow states, responsive phone layouts and company-logo storage. Version 0.3.1 added reliable settings-save confirmation and a more readable typography scale. Version 0.3.0 added the operational core: detailed client records, professional contacts and referrers, uploads, inspections, dated tasks, dynamic catalogs and custom fields, automatic insights, a multi-view live calendar and an administrator Audit Log.
 
 ## Access
@@ -26,6 +28,17 @@ Roles are `admin`, `manager`, `technician`, `finance` and `viewer`. Only adminis
 PostgreSQL data, JWT secrets and manual backups live under the persistent `/data` volume. Schema migrations run automatically before the API starts. Use **גיבוי ומערכת** inside PROJECTS for a manual database backup or restore. A restore restarts the API while replacing the database.
 
 Home Assistant backup mode is `cold`, ensuring the embedded PostgreSQL process is stopped during a Supervisor backup.
+
+## Synology document storage
+
+1. In Home Assistant open **Settings → System → Storage → Add network storage**.
+2. Select CIFS, enter the Synology address, user, password and shared-folder name, and choose usage **Share**.
+3. Restart PROJECTS after upgrading to 0.7.0 so the new `/share` mapping is active.
+4. In PROJECTS open **Settings → Documents & Synology**, choose **Share / Synology**, browse to the mounted folder, and select **Test and save**.
+
+PROJECTS accepts only paths below `/share` or `/media`, validates that the destination is writable, and records the storage location with every uploaded document. Internal storage remains available and is included with the App backup.
+
+PDF and image files open in the browser. Word and Excel files use the device's registered application or download flow because browsers do not include a native Office renderer. Full in-browser Office editing requires a separate OnlyOffice or Collabora service.
 
 ## Health checks
 
