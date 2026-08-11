@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.5
+
+- Refined the sidebar brand into a single balanced icon-and-name row.
+- Replaced the wrapping product description with the compact “Do It Smarter!” tagline.
+- Applied the new tagline consistently to the standalone login brand.
+
 ## 0.5.4
 
 - Replaced the static project-count badge with the live PostgreSQL-backed project count.
