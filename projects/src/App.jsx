@@ -21,7 +21,10 @@ import projectsMark from './assets/projects-mark.svg';
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
 const compactMoney = (value) => value >= 1000000 ? `₪${(value / 1000000).toFixed(2)}M` : `₪${Math.round(value / 1000)}K`;
 const actionNamesForDashboard = { create: 'יצר רשומה', update: 'עדכן רשומה', delete: 'מחק רשומה', upload: 'העלה קובץ', login: 'נכנס למערכת', snooze: 'דחה התראה', backup: 'יצר גיבוי' };
-const applicationBase = new URL('.', document.baseURI).pathname.replace(/\/$/, '');
+// Vite loads this bundle from <application base>/assets/. Deriving the base
+// from the bundle URL works whether the Ingress page URL ends with a slash or
+// not, and also keeps the standalone interface rooted at /.
+const applicationBase = new URL('.', import.meta.url).pathname.replace(/\/assets\/$/, '').replace(/\/$/, '');
 export const apiRoot = `${applicationBase}/api`;
 
 export async function api(path, options = {}) {
@@ -274,7 +277,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
 }
 
 function StartupError({ message }) {
-  return <div className="startup-error" dir="rtl"><div className="brand-mark"><img src={projectsMark} alt="" /></div><span><AlertTriangle size={25} /></span><h1>לא ניתן לטעון את שרת הנתונים</h1><p>אין צורך בשם משתמש או בסיסמה כאשר נכנסים דרך Home Assistant.</p><code>{message}</code><button className="primary-button" onClick={() => window.location.reload()}><RotateCcw size={17} />ניסיון חוזר</button><small>אם התקלה חוזרת, העתיקו את יומן ה־App ממסך PROJECTS ב־Home Assistant.</small></div>;
+  return <div className="startup-error" dir="rtl"><div className="brand-mark"><img src={projectsMark} alt="" /></div><span><AlertTriangle size={25} /></span><h1>לא ניתן לטעון את שרת הנתונים</h1><p>אין צורך בשם משתמש או בסיסמה כאשר נכנסים דרך Home Assistant.</p><code>{message} · API: {apiRoot}</code><button className="primary-button" onClick={() => window.location.reload()}><RotateCcw size={17} />ניסיון חוזר</button><small>אם התקלה חוזרת, העתיקו את יומן ה־App ממסך PROJECTS ב־Home Assistant.</small></div>;
 }
 
 function SystemPage({ setNotice }) {

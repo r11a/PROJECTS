@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.3
+
+- Fixed API base-path calculation when a Home Assistant Ingress URL is opened without a trailing slash.
+- Derived the application base from the loaded JavaScript bundle URL for consistent Ingress and standalone routing.
+- Added the resolved API path to the startup diagnostic screen.
+
 ## 0.5.2
 
 - Prevented incomplete legacy project data from blocking API startup during relationship normalization.
