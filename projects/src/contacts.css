@@ -1,0 +1,19 @@
+.contacts-table.compact{padding:0 0 8px;overflow-x:auto}
+.contacts-list-head,.contacts-table.compact .contact-row{min-width:680px;display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(120px,.9fr) minmax(105px,.8fr) minmax(190px,1.3fr)!important;align-items:center;gap:12px;padding:0 16px}
+.contacts-list-head{height:34px;color:#858d9f;background:#f8f9fb;border-bottom:1px solid #e8eaf0;font-size:12px;font-weight:700}
+.contacts-table.compact .contact-row{min-height:44px}
+.contacts-table.compact .contact-role-icon{display:none}
+.contacts-table.compact .contact-name{min-width:0}
+.contacts-table.compact .contact-name strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.contacts-table.compact .contact-name small{display:none}
+.contacts-table.compact .contact-row>a{grid-column:auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.contacts-table.compact .contact-role{min-width:0;color:#596174;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.contacts-table.cards .contact-row{grid-template-columns:36px 1fr 1fr!important}
+.contacts-table.cards .contact-role-icon{grid-row:1/3}
+.contacts-table.cards .contact-name{grid-column:2/4}
+.contacts-table.cards .contact-phone{grid-column:2}
+.contacts-table.cards .contact-role{grid-column:3;color:#7b8293;font-size:12px}
+.contacts-table.cards .contact-email{grid-column:2/4!important}
+.theme-dark .contacts-list-head{color:#aeb3ba;background:#202224;border-color:#3b3e42}
+.theme-dark .contacts-table.compact .contact-role{color:#c4c8ce}
+@media(max-width:700px){.contacts-table.compact{margin-inline:-1px}.contacts-list-head,.contacts-table.compact .contact-row{min-width:640px;padding-inline:12px}.contacts-table.cards .contact-row{min-width:0}}

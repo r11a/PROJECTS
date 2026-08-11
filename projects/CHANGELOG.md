@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.5
+
+- Rebuilt the client contact list as compact rows with Name, Phone, Role and Email columns.
+- Kept a one-click toggle between compact rows and visual contact cards.
+- Added a fixed compact header, ellipsis handling and horizontal mobile scrolling for long contact details.
+
 ## 0.7.4
 
 - Restored clear weekday labels in month view, including compact Hebrew labels on phones.

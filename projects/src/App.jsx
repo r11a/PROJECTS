@@ -20,6 +20,7 @@ import './forms-workspace.css';
 import './master-data.css';
 import './workspaces.css';
 import './theme-dark.css';
+import './contacts.css';
 import projectsMark from './assets/projects-mark.svg';
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
