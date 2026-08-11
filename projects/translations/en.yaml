@@ -1,0 +1,2 @@
+network:
+  8686/tcp: "Standalone PROJECTS web interface (editable host port; trusted LAN only)"
