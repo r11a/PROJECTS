@@ -3,7 +3,7 @@
 ## 0.5.5
 
 - Refined the sidebar brand into a single balanced icon-and-name row.
-- Replaced the wrapping product description with the compact “Do It Smarter!” tagline.
+- Replaced the wrapping product description with the focused “Manage Smarter. Deliver Better.” tagline.
 - Applied the new tagline consistently to the standalone login brand.
 
 ## 0.5.4
