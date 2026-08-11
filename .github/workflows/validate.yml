@@ -34,5 +34,20 @@ jobs:
         with:
           context: projects
           platforms: linux/amd64
+          load: true
           push: false
           tags: local/projects:ci
+      - name: Smoke test PostgreSQL, API and Nginx
+        run: |
+          docker run --detach --name projects-smoke --publish 8686:8686 local/projects:ci
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:8686/health | grep --quiet '"database":"ok"'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs projects-smoke
+          exit 1
+      - name: Stop smoke-test container
+        if: always()
+        run: docker rm --force projects-smoke || true
