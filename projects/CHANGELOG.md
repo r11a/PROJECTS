@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.2
+
+- Made the full sidebar vertically scrollable on desktop, Home Assistant Ingress and mobile devices.
+- Added dynamic viewport-height and safe-area handling for phone screens.
+- Prevented navigation buttons, workspace details and the user footer from shrinking when space is limited.
+- Added a subtle sidebar scrollbar and native momentum scrolling for touch devices.
+
 ## 0.7.1
 
 - Added per-user light, granite dark and automatic appearance modes under Settings → Appearance.
