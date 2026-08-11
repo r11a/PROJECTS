@@ -11,6 +11,7 @@ import path from 'node:path';
 import { seedProjects } from '../src/data.js';
 import { createOperationalRouter } from './operational.js';
 import { createFormsRouter } from './forms.js';
+import { createManagementRouter } from './management.js';
 
 const { Pool, Client } = pg;
 const execFileAsync = promisify(execFile);
@@ -83,7 +84,7 @@ async function runMigrations() {
 const projectColumns = [
   'id', 'name', 'client', 'location', 'address', 'lat', 'lng', 'stage', 'progress', 'manager',
   'owner_initials', 'value', 'paid', 'due', 'priority', 'flag', 'systems', 'next_milestone',
-  'phone', 'email', 'health', 'tasks_done', 'tasks_total',
+  'phone', 'email', 'health', 'tasks_done', 'tasks_total', 'manager_professional_id', 'client_id',
 ];
 const inputToColumn = {
   id: 'id', name: 'name', client: 'client', location: 'location', address: 'address', lat: 'lat', lng: 'lng',
@@ -91,6 +92,8 @@ const inputToColumn = {
   paid: 'paid', due: 'due', priority: 'priority', flag: 'flag', systems: 'systems',
   nextMilestone: 'next_milestone', phone: 'phone', email: 'email', health: 'health',
   tasksDone: 'tasks_done', tasksTotal: 'tasks_total',
+  managerId: 'manager_professional_id',
+  clientId: 'client_id',
 };
 
 function projectFromRow(row) {
@@ -100,7 +103,7 @@ function projectFromRow(row) {
     manager: row.manager, ownerInitials: row.owner_initials, value: Number(row.value), paid: Number(row.paid),
     due: row.due, priority: row.priority, flag: row.flag, systems: row.systems || [],
     nextMilestone: row.next_milestone, phone: row.phone, email: row.email, health: Number(row.health),
-    tasksDone: Number(row.tasks_done), tasksTotal: Number(row.tasks_total),
+    tasksDone: Number(row.tasks_done), tasksTotal: Number(row.tasks_total), managerId: row.manager_professional_id, clientId: row.client_id,
   };
 }
 
@@ -128,8 +131,40 @@ async function seedDatabase() {
   }
 }
 
+async function ensureSeedRelationships() {
+  await pool.query(`
+    INSERT INTO clients(code,name,primary_contact_name,phone,email,address,city)
+    SELECT 'CUS-' || upper(substr(md5(p.client),1,8)),p.client,p.client,MAX(p.phone),MAX(p.email),MAX(p.address),MAX(p.location)
+    FROM projects p
+    WHERE btrim(COALESCE(p.client,''))<>'' AND NOT EXISTS (SELECT 1 FROM clients c WHERE lower(c.name)=lower(p.client))
+    GROUP BY p.client
+    ON CONFLICT(code) DO NOTHING;
+
+    UPDATE projects p SET client_id=c.id FROM clients c
+    WHERE p.client_id IS NULL AND lower(c.name)=lower(p.client);
+
+    INSERT INTO professionals(display_name,affiliation,job_title,color,icon)
+    SELECT DISTINCT btrim(p.manager),'company','מנהל פרויקט','#6957df','folder-kanban'
+    FROM projects p
+    WHERE btrim(COALESCE(p.manager,''))<>'' AND NOT EXISTS (SELECT 1 FROM professionals person WHERE lower(person.display_name)=lower(btrim(p.manager)) AND person.affiliation='company');
+
+    INSERT INTO professional_role_assignments(professional_id,role_type_id)
+    SELECT person.id,role.id FROM professionals person CROSS JOIN professional_role_types role
+    WHERE role.role_key='project_manager' AND person.affiliation='company' AND person.job_title='מנהל פרויקט'
+    ON CONFLICT DO NOTHING;
+
+    UPDATE projects p SET manager_professional_id=person.id FROM professionals person
+    WHERE p.manager_professional_id IS NULL AND lower(person.display_name)=lower(btrim(p.manager)) AND person.affiliation='company';
+
+    INSERT INTO project_payments(project_id,title,amount,status,paid_at,notes)
+    SELECT p.id,'יתרת פתיחה',p.paid,'paid',CURRENT_DATE,'נוצר אוטומטית מהנתונים הקיימים'
+    FROM projects p WHERE p.paid>0 AND NOT EXISTS (SELECT 1 FROM project_payments payment WHERE payment.project_id=p.id);
+  `);
+}
+
 await runMigrations();
 await seedDatabase();
+await ensureSeedRelationships();
 
 const secretFile = path.join(DATA_DIR, 'jwt.secret');
 let jwtSecret;
@@ -199,10 +234,22 @@ async function audit(request, action, entityType, entityId, details = {}) {
   );
 }
 
+async function resolveProjectManager(managerId) {
+  if (!managerId) return null;
+  const result = await pool.query(
+    `SELECT p.id,p.display_name FROM professionals p
+     WHERE p.id=$1 AND p.active=TRUE AND p.affiliation='company'
+       AND EXISTS (SELECT 1 FROM professional_role_assignments a JOIN professional_role_types r ON r.id=a.role_type_id WHERE a.professional_id=p.id AND r.role_key='project_manager' AND r.active=TRUE)`,
+    [managerId],
+  );
+  if (!result.rowCount) { const error = new Error('יש לבחור מנהל פרויקט פעיל מתוך עובדי החברה'); error.statusCode = 400; throw error; }
+  return result.rows[0];
+}
+
 app.get('/api/health', async (_request, response) => {
   try {
     await pool.query('SELECT 1');
-    response.json({ status: 'ok', database: 'ok', version: '0.4.0' });
+    response.json({ status: 'ok', database: 'ok', version: '0.5.0' });
   } catch (error) {
     response.status(503).json({ status: 'error', database: 'unavailable', message: error.message });
   }
@@ -230,21 +277,25 @@ app.post('/api/auth/logout', (_request, response) => {
 app.get('/api/auth/me', authenticate, (request, response) => response.json({ user: request.user }));
 
 app.get('/api/projects', authenticate, async (_request, response) => {
-  const result = await pool.query('SELECT * FROM projects ORDER BY created_at DESC, id DESC');
+  const result = await pool.query(`SELECT p.*,COALESCE(pr.display_name,p.manager) manager
+    FROM projects p LEFT JOIN professionals pr ON pr.id=p.manager_professional_id
+    ORDER BY p.created_at DESC,p.id DESC`);
   response.json({ projects: result.rows.map(projectFromRow) });
 });
 
 app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async (request, response) => {
   const nextNumber = await pool.query("SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 1000) + 1 AS value FROM projects");
+  const selectedManager = await resolveProjectManager(request.body.managerId);
   const project = {
     id: request.body.id || `PRJ-${nextNumber.rows[0].value}`,
     name: request.body.name || 'פרויקט חדש', client: request.body.client || '', location: request.body.location || '',
     address: request.body.address || request.body.location || '', lat: request.body.lat ?? 32.0853, lng: request.body.lng ?? 34.7818,
-    stage: request.body.stage || 'planning', progress: request.body.progress ?? 0, manager: request.body.manager || request.user.displayName,
-    ownerInitials: request.body.ownerInitials || request.user.displayName.slice(0, 2), value: request.body.value ?? 0,
+    stage: request.body.stage || 'planning', progress: request.body.progress ?? 0, manager: selectedManager?.display_name || '',
+    ownerInitials: selectedManager?.display_name?.slice(0, 2) || '', value: request.body.value ?? 0,
     paid: request.body.paid ?? 0, due: request.body.due || '', priority: request.body.priority || 'normal', flag: request.body.flag || '',
     systems: request.body.systems || [], nextMilestone: request.body.nextMilestone || 'אפיון ראשוני', phone: request.body.phone || '',
     email: request.body.email || '', health: request.body.health ?? 100, tasksDone: request.body.tasksDone ?? 0, tasksTotal: request.body.tasksTotal ?? 0,
+    managerId: request.body.managerId || null, clientId: request.body.clientId || null,
   };
   const values = Object.keys(inputToColumn).map((key) => key === 'systems' ? JSON.stringify(project[key]) : project[key]);
   const columns = Object.values(inputToColumn);
@@ -263,6 +314,11 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
     technician: ['stage', 'progress', 'flag', 'systems', 'nextMilestone', 'health', 'tasksDone', 'tasksTotal'],
     finance: ['paid', 'value', 'flag'],
   };
+  if (Object.prototype.hasOwnProperty.call(request.body || {}, 'managerId')) {
+    const selectedManager = await resolveProjectManager(request.body.managerId);
+    request.body.manager = selectedManager?.display_name || '';
+    request.body.ownerInitials = selectedManager?.display_name?.slice(0, 2) || '';
+  }
   const entries = Object.entries(request.body || {}).filter(([key]) => allowedByRole[request.user.role].includes(key));
   if (!entries.length) return response.status(400).json({ error: 'No editable fields supplied' });
   const sets = entries.map(([key], index) => `${inputToColumn[key]} = $${index + 1}`);
@@ -316,6 +372,14 @@ app.patch('/api/users/:id', authenticate, requireRoles('admin'), async (request,
   response.json({ user: publicUser(result.rows[0]) });
 });
 
+app.delete('/api/users/:id', authenticate, requireRoles('admin'), async (request, response) => {
+  if (String(request.user.id) === String(request.params.id)) return response.status(409).json({ error: 'לא ניתן למחוק את המשתמש המחובר' });
+  const result = await pool.query('DELETE FROM users WHERE id=$1 RETURNING id,display_name', [request.params.id]);
+  if (!result.rowCount) return response.status(404).json({ error: 'User not found' });
+  await audit(request, 'delete', 'user', request.params.id, { displayName: result.rows[0].display_name });
+  response.status(204).end();
+});
+
 app.get('/api/system/backups', authenticate, requireRoles('admin'), async (_request, response) => {
   const files = await readdir(BACKUP_DIR);
   const backups = await Promise.all(files.filter((name) => /^projects-.*\.dump$/.test(name)).map(async (name) => {
@@ -349,11 +413,14 @@ app.post('/api/system/restore', authenticate, requireRoles('admin'), async (requ
 
 app.use('/api', await createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
 app.use('/api', createFormsRouter({ pool, authenticate, requireRoles, audit }));
+app.use('/api', await createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
 
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Not found' }));
 app.use((error, _request, response, _next) => {
   console.error(error);
+  if (error.statusCode) return response.status(error.statusCode).json({ error: error.message });
   if (error.code === '23505') return response.status(409).json({ error: 'A record with these details already exists' });
+  if (error.code === '23503') return response.status(409).json({ error: 'לא ניתן למחוק רשומה שנמצאת בשימוש; אפשר להשבית אותה' });
   if (error.code === '23514' || error.code === '22P02') return response.status(400).json({ error: 'Invalid field value' });
   response.status(500).json({ error: 'Internal server error' });
 });

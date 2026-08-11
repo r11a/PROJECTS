@@ -181,14 +181,14 @@ function FileUpload({ clientId, api, onDone, setNotice }) {
   return <form className="file-drop" onSubmit={submit}><label><Upload size={25} /><strong>{file ? file.name : 'בחירת קובץ להעלאה'}</strong><span>PDF, תמונות, תוכניות, גיליונות או הזמנות · עד 50MB</span><input type="file" required onChange={(e) => setFile(e.target.files[0])} /></label><select value={category} onChange={(e) => setCategory(e.target.value)}><option>תוכנית</option><option>הזמנה</option><option>הצעת מחיר</option><option>צילום אתר</option><option>פרוטוקול</option><option>אחר</option></select><button className="ops-primary small" disabled={uploading}>{uploading ? <RefreshCw className="spin" size={15} /> : <Upload size={15} />}{uploading ? 'מעלה...' : 'העלאה'}</button></form>;
 }
 
-export function OperationalSettings({ api, apiRoot, setNotice }) {
+export function OperationalSettings({ api, apiRoot, setNotice, onConfigurationChanged }) {
   const [data, setData] = useState({ settings: {}, catalogs: [], customFields: [] });
   const [tab, setTab] = useState('business');
   const [audit, setAudit] = useState([]);
   const [backups, setBackups] = useState([]);
   const [auditQuery, setAuditQuery] = useState('');
-  const load = async () => { try { setData(await api('/settings')); } catch (error) { setNotice(error.message); } };
-  const applySavedSetting = (key, value) => setData((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
+  const load = async () => { try { const result = await api('/settings'); setData(result); onConfigurationChanged?.(result); } catch (error) { setNotice(error.message); } };
+  const applySavedSetting = (key, value) => { const next = { ...data, settings: { ...data.settings, [key]: value } }; setData(next); onConfigurationChanged?.(next); };
   useEffect(() => { load(); }, []);
   useEffect(() => { if (tab === 'audit') api(`/audit?q=${encodeURIComponent(auditQuery)}`).then((r) => setAudit(r.entries)).catch((e) => setNotice(e.message)); }, [tab, auditQuery]);
   useEffect(() => { if (tab === 'backup') api('/system/backups').then((r) => setBackups(r.backups)).catch((e) => setNotice(e.message)); }, [tab]);

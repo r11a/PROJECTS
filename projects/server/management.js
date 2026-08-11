@@ -1,0 +1,240 @@
+import express from 'express';
+import multer from 'multer';
+import path from 'node:path';
+import { mkdir, unlink } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+
+const PROFESSIONAL_FIELDS = {
+  displayName: 'display_name', companyName: 'company_name', jobTitle: 'job_title', affiliation: 'affiliation', employeeNumber: 'employee_number', phone: 'phone',
+  additionalPhones: 'additional_phones', email: 'email', additionalEmails: 'additional_emails', address: 'address',
+  notes: 'notes', color: 'color', icon: 'icon', active: 'active', linkedUserId: 'linked_user_id', customValues: 'custom_values',
+};
+const EQUIPMENT_FIELDS = {
+  itemType: 'item_type', parentId: 'parent_id', code: 'code', name: 'name', manufacturer: 'manufacturer',
+  model: 'model', unit: 'unit', description: 'description', color: 'color', icon: 'icon', active: 'active', metadata: 'metadata',
+};
+const JSON_INPUTS = new Set(['additionalPhones', 'additionalEmails', 'customValues', 'metadata', 'tags']);
+
+function professionalFromRow(row) {
+  return {
+    id: row.id, displayName: row.display_name, companyName: row.company_name, jobTitle: row.job_title,
+    affiliation: row.affiliation, employeeNumber: row.employee_number,
+    phone: row.phone, additionalPhones: row.additional_phones || [], email: row.email,
+    additionalEmails: row.additional_emails || [], address: row.address, notes: row.notes, color: row.color,
+    icon: row.icon, active: row.active, linkedUserId: row.linked_user_id, customValues: row.custom_values || {},
+    roles: row.roles || [], projectCount: Number(row.project_count || 0), clientCount: Number(row.client_count || 0),
+  };
+}
+
+function equipmentFromRow(row) {
+  return {
+    id: row.id, itemType: row.item_type, parentId: row.parent_id, code: row.code, name: row.name,
+    manufacturer: row.manufacturer, model: row.model, unit: row.unit, description: row.description,
+    color: row.color, icon: row.icon, active: row.active, metadata: row.metadata || {},
+  };
+}
+
+async function replaceProfessionalRoles(client, professionalId, roleIds) {
+  if (!Array.isArray(roleIds)) return;
+  await client.query('DELETE FROM professional_role_assignments WHERE professional_id=$1', [professionalId]);
+  for (const roleId of [...new Set(roleIds.map(Number).filter(Boolean))]) {
+    await client.query('INSERT INTO professional_role_assignments(professional_id,role_type_id) VALUES($1,$2)', [professionalId, roleId]);
+  }
+}
+
+async function validateEquipmentHierarchy(client, itemType, parentId, ownId = null) {
+  if (itemType === 'system_type') {
+    if (parentId) { const error = new Error('סוג מערכת אינו יכול להיות משויך לפריט אב'); error.statusCode = 400; throw error; }
+    return;
+  }
+  if (!parentId || String(parentId) === String(ownId)) { const error = new Error('יש לבחור פריט אב תקין'); error.statusCode = 400; throw error; }
+  const expectedType = itemType === 'system' ? 'system_type' : 'system';
+  const result = await client.query('SELECT item_type FROM equipment_catalog WHERE id=$1 AND active=TRUE', [parentId]);
+  if (!result.rowCount || result.rows[0].item_type !== expectedType) { const error = new Error(itemType === 'system' ? 'מערכת חייבת להשתייך לסוג מערכת' : 'רכיב חייב להשתייך למערכת'); error.statusCode = 400; throw error; }
+}
+
+export async function createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir }) {
+  const router = express.Router();
+  const documentsDir = path.join(dataDir, 'uploads', 'documents');
+  await mkdir(documentsDir, { recursive: true });
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: documentsDir,
+      filename: (_request, file, callback) => callback(null, `${randomUUID()}${path.extname(file.originalname).slice(0, 12).toLowerCase()}`),
+    }),
+    limits: { fileSize: 100 * 1024 * 1024, files: 1 },
+  });
+
+  router.use(authenticate);
+
+  router.get('/professional-roles', async (_request, response) => {
+    const result = await pool.query('SELECT * FROM professional_role_types ORDER BY sort_order,name');
+    response.json({ roles: result.rows.map((row) => ({ id: row.id, key: row.role_key, name: row.name, color: row.color, icon: row.icon, active: row.active, sortOrder: row.sort_order })) });
+  });
+
+  router.post('/professional-roles', requireRoles('admin'), async (request, response) => {
+    const name = String(request.body.name || '').trim();
+    if (!name) return response.status(400).json({ error: 'שם התפקיד הוא שדה חובה' });
+    const key = String(request.body.key || name).trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_') || `role_${Date.now()}`;
+    const result = await pool.query(
+      `INSERT INTO professional_role_types(role_key,name,color,icon,sort_order) VALUES($1,$2,$3,$4,$5) RETURNING *`,
+      [key, name, request.body.color || '#6957df', request.body.icon || 'user-round', Number(request.body.sortOrder) || 0],
+    );
+    await audit(request, 'create', 'professional_role', String(result.rows[0].id), { name });
+    response.status(201).json({ role: result.rows[0] });
+  });
+
+  router.get('/professionals', async (request, response) => {
+    const query = String(request.query.q || '').trim();
+    const roleKey = String(request.query.role || '').trim();
+    const result = await pool.query(
+      `SELECT p.*,
+        COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id',rt.id,'key',rt.role_key,'name',rt.name,'color',rt.color,'icon',rt.icon)) FILTER (WHERE rt.id IS NOT NULL),'[]') roles,
+        (SELECT COUNT(DISTINCT pp.project_id) FROM project_professionals pp WHERE pp.professional_id=p.id) project_count,
+        (SELECT COUNT(DISTINCT cp.client_id) FROM client_professionals cp WHERE cp.professional_id=p.id) client_count
+       FROM professionals p
+       LEFT JOIN professional_role_assignments pra ON pra.professional_id=p.id
+       LEFT JOIN professional_role_types rt ON rt.id=pra.role_type_id
+       WHERE ($1='' OR concat_ws(' ',p.display_name,p.company_name,p.job_title,p.phone,p.email,p.address,p.notes) ILIKE $2)
+         AND ($3='' OR EXISTS (SELECT 1 FROM professional_role_assignments x JOIN professional_role_types r ON r.id=x.role_type_id WHERE x.professional_id=p.id AND r.role_key=$3))
+       GROUP BY p.id ORDER BY p.active DESC,p.display_name`, [query, `%${query}%`, roleKey],
+    );
+    response.json({ professionals: result.rows.map(professionalFromRow) });
+  });
+
+  router.post('/professionals', requireRoles('admin', 'manager'), async (request, response) => {
+    const displayName = String(request.body.displayName || '').trim();
+    if (!displayName) return response.status(400).json({ error: 'שם איש המקצוע הוא שדה חובה' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const keys = Object.keys(PROFESSIONAL_FIELDS).filter((key) => key !== 'displayName' && request.body[key] !== undefined);
+      const columns = ['display_name', ...keys.map((key) => PROFESSIONAL_FIELDS[key])];
+      const values = [displayName, ...keys.map((key) => JSON_INPUTS.has(key) ? JSON.stringify(request.body[key]) : request.body[key])];
+      const result = await client.query(`INSERT INTO professionals(${columns.join(',')}) VALUES(${values.map((_, index) => `$${index + 1}`).join(',')}) RETURNING *`, values);
+      await replaceProfessionalRoles(client, result.rows[0].id, request.body.roleIds || []);
+      await client.query('COMMIT');
+      await audit(request, 'create', 'professional', String(result.rows[0].id), { displayName });
+      response.status(201).json({ professional: professionalFromRow({ ...result.rows[0], roles: [] }) });
+    } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+  });
+
+  router.patch('/professionals/:id', requireRoles('admin', 'manager'), async (request, response) => {
+    const entries = Object.entries(request.body || {}).filter(([key]) => PROFESSIONAL_FIELDS[key] && request.body[key] !== undefined);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      let row;
+      if (entries.length) {
+        const values = entries.map(([key, value]) => JSON_INPUTS.has(key) ? JSON.stringify(value) : value);
+        values.push(request.params.id);
+        const result = await client.query(`UPDATE professionals SET ${entries.map(([key], index) => `${PROFESSIONAL_FIELDS[key]}=$${index + 1}`).join(',')},updated_at=NOW() WHERE id=$${values.length} RETURNING *`, values);
+        row = result.rows[0];
+      } else {
+        row = (await client.query('SELECT * FROM professionals WHERE id=$1', [request.params.id])).rows[0];
+      }
+      if (!row) { await client.query('ROLLBACK'); return response.status(404).json({ error: 'איש המקצוע לא נמצא' }); }
+      await replaceProfessionalRoles(client, request.params.id, request.body.roleIds);
+      await client.query('COMMIT');
+      await audit(request, 'update', 'professional', request.params.id, Object.fromEntries(entries));
+      response.json({ professional: professionalFromRow({ ...row, roles: [] }) });
+    } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+  });
+
+  router.delete('/professionals/:id', requireRoles('admin'), async (request, response) => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("UPDATE projects SET manager='',owner_initials='',updated_at=NOW() WHERE manager_professional_id=$1", [request.params.id]);
+      const result = await client.query('DELETE FROM professionals WHERE id=$1 RETURNING id,display_name', [request.params.id]);
+      if (!result.rowCount) { await client.query('ROLLBACK'); return response.status(404).json({ error: 'איש המקצוע לא נמצא' }); }
+      await client.query('COMMIT');
+      await audit(request, 'delete', 'professional', request.params.id, { displayName: result.rows[0].display_name });
+      response.status(204).end();
+    } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+  });
+
+  router.get('/equipment-catalog', async (_request, response) => {
+    const result = await pool.query('SELECT * FROM equipment_catalog ORDER BY item_type,parent_id NULLS FIRST,name');
+    response.json({ items: result.rows.map(equipmentFromRow) });
+  });
+
+  router.post('/equipment-catalog', requireRoles('admin', 'manager'), async (request, response) => {
+    if (!['system_type', 'system', 'component'].includes(request.body.itemType) || !String(request.body.name || '').trim()) return response.status(400).json({ error: 'סוג ושם הם שדות חובה' });
+    await validateEquipmentHierarchy(pool, request.body.itemType, request.body.parentId || null);
+    const keys = Object.keys(EQUIPMENT_FIELDS).filter((key) => request.body[key] !== undefined);
+    const values = keys.map((key) => JSON_INPUTS.has(key) ? JSON.stringify(request.body[key]) : request.body[key]);
+    const result = await pool.query(`INSERT INTO equipment_catalog(${keys.map((key) => EQUIPMENT_FIELDS[key]).join(',')}) VALUES(${values.map((_, index) => `$${index + 1}`).join(',')}) RETURNING *`, values);
+    await audit(request, 'create', 'equipment', String(result.rows[0].id), { name: result.rows[0].name, itemType: result.rows[0].item_type });
+    response.status(201).json({ item: equipmentFromRow(result.rows[0]) });
+  });
+
+  router.patch('/equipment-catalog/:id', requireRoles('admin', 'manager'), async (request, response) => {
+    const entries = Object.entries(request.body || {}).filter(([key]) => EQUIPMENT_FIELDS[key] && request.body[key] !== undefined);
+    if (!entries.length) return response.status(400).json({ error: 'לא נשלחו שדות לעדכון' });
+    const existing = await pool.query('SELECT * FROM equipment_catalog WHERE id=$1', [request.params.id]);
+    if (!existing.rowCount) return response.status(404).json({ error: 'הפריט לא נמצא' });
+    await validateEquipmentHierarchy(pool, request.body.itemType || existing.rows[0].item_type, request.body.parentId === undefined ? existing.rows[0].parent_id : request.body.parentId, request.params.id);
+    const values = entries.map(([key, value]) => JSON_INPUTS.has(key) ? JSON.stringify(value) : value);
+    values.push(request.params.id);
+    const result = await pool.query(`UPDATE equipment_catalog SET ${entries.map(([key], index) => `${EQUIPMENT_FIELDS[key]}=$${index + 1}`).join(',')},updated_at=NOW() WHERE id=$${values.length} RETURNING *`, values);
+    if (!result.rowCount) return response.status(404).json({ error: 'הפריט לא נמצא' });
+    await audit(request, 'update', 'equipment', request.params.id, Object.fromEntries(entries));
+    response.json({ item: equipmentFromRow(result.rows[0]) });
+  });
+
+  router.delete('/equipment-catalog/:id', requireRoles('admin'), async (request, response) => {
+    const result = await pool.query('DELETE FROM equipment_catalog WHERE id=$1 RETURNING id,name', [request.params.id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'הפריט לא נמצא או נמצא בשימוש' });
+    await audit(request, 'delete', 'equipment', request.params.id, { name: result.rows[0].name });
+    response.status(204).end();
+  });
+
+  router.get('/documents', async (request, response) => {
+    const result = await pool.query(
+      `SELECT f.*,c.name client_name,p.name project_name,COALESCE(u.display_name,u.username,'מערכת') uploaded_by_name
+       FROM client_files f LEFT JOIN clients c ON c.id=f.client_id LEFT JOIN projects p ON p.id=f.project_id LEFT JOIN users u ON u.id=f.uploaded_by
+       WHERE ($1='' OR concat_ws(' ',f.title,f.original_name,f.category,f.description,c.name,p.name,f.tags::text) ILIKE $2)
+         AND ($3='' OR f.client_id::text=$3) AND ($4='' OR f.project_id=$4)
+       ORDER BY f.created_at DESC`, [String(request.query.q || ''), `%${String(request.query.q || '')}%`, String(request.query.clientId || ''), String(request.query.projectId || '')],
+    );
+    response.json({ documents: result.rows.map((row) => ({ id: row.id, clientId: row.client_id, projectId: row.project_id, formRecordId: row.form_record_id, title: row.title || row.original_name, originalName: row.original_name, mimeType: row.mime_type, sizeBytes: Number(row.size_bytes), category: row.category, description: row.description, tags: row.tags || [], version: row.version, clientName: row.client_name, projectName: row.project_name, uploadedByName: row.uploaded_by_name, createdAt: row.created_at })) });
+  });
+
+  router.post('/documents', requireRoles('admin', 'manager', 'technician'), upload.single('file'), async (request, response) => {
+    if (!request.file) return response.status(400).json({ error: 'לא נבחר קובץ' });
+    const clientId = request.body.clientId || null;
+    const projectId = request.body.projectId || null;
+    const formRecordId = request.body.formRecordId || null;
+    if (!clientId && !projectId && !formRecordId) { await unlink(request.file.path).catch(() => {}); return response.status(400).json({ error: 'יש לשייך את הקובץ ללקוח, פרויקט או טופס' }); }
+    let tags = [];
+    try { tags = JSON.parse(request.body.tags || '[]'); } catch { tags = String(request.body.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean); }
+    const result = await pool.query(
+      `INSERT INTO client_files(client_id,project_id,form_record_id,title,original_name,stored_name,mime_type,size_bytes,category,description,tags,version,storage_area,uploaded_by)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'documents',$13) RETURNING *`,
+      [clientId, projectId, formRecordId, request.body.title || request.file.originalname, request.file.originalname, request.file.filename, request.file.mimetype, request.file.size, request.body.category || 'אחר', request.body.description || '', JSON.stringify(tags), Number(request.body.version) || 1, request.user.id],
+    );
+    await audit(request, 'upload', 'document', String(result.rows[0].id), { originalName: request.file.originalname, clientId, projectId });
+    response.status(201).json({ document: result.rows[0] });
+  });
+
+  router.get('/documents/:id/download', async (request, response) => {
+    const result = await pool.query('SELECT * FROM client_files WHERE id=$1', [request.params.id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'המסמך לא נמצא' });
+    const row = result.rows[0];
+    const directory = row.storage_area === 'documents' ? documentsDir : path.join(dataDir, 'uploads', 'clients');
+    response.download(path.join(directory, row.stored_name), row.original_name);
+  });
+
+  router.delete('/documents/:id', requireRoles('admin'), async (request, response) => {
+    const result = await pool.query('DELETE FROM client_files WHERE id=$1 RETURNING *', [request.params.id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'המסמך לא נמצא' });
+    const row = result.rows[0];
+    const directory = row.storage_area === 'documents' ? documentsDir : path.join(dataDir, 'uploads', 'clients');
+    await unlink(path.join(directory, row.stored_name)).catch(() => {});
+    await audit(request, 'delete', 'document', request.params.id, { originalName: row.original_name });
+    response.status(204).end();
+  });
+
+  return router;
+}
