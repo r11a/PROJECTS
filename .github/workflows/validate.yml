@@ -61,7 +61,7 @@ jobs:
           curl --fail --silent --cookie /tmp/projects-cookies \
             'http://127.0.0.1:8686/api/calendar?from=2026-01-01T00%3A00%3A00.000Z&to=2027-01-01T00%3A00%3A00.000Z' | grep --quiet '"events"'
           curl --fail --silent --cookie /tmp/projects-cookies \
-            http://127.0.0.1:8686/api/insights | grep --quiet '"summary"'
+            http://127.0.0.1:8686/api/insights | grep --quiet '"stats"'
       - name: Stop smoke-test container
         if: always()
         run: docker rm --force projects-smoke || true
