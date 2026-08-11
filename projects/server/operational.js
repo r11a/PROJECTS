@@ -71,15 +71,15 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
 
   router.get('/insights', async (request, response) => {
     const [taskStats, collection, risks, alerts, recent] = await Promise.all([
-      pool.query(`SELECT COUNT(*) FILTER (WHERE status<>'done' AND due_date<CURRENT_DATE)::int overdue,
-                         COUNT(*) FILTER (WHERE status<>'done' AND due_date BETWEEN CURRENT_DATE AND CURRENT_DATE+7)::int due_soon,
+      pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND due_date<CURRENT_DATE)::int overdue,
+                         COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND due_date BETWEEN CURRENT_DATE AND CURRENT_DATE+7)::int due_soon,
                          COUNT(*) FILTER (WHERE status='done' AND completed_at>=NOW()-INTERVAL '7 days')::int completed_week FROM tasks`),
       pool.query(`SELECT COALESCE(SUM(value-paid),0)::numeric outstanding,COUNT(*) FILTER (WHERE paid<value)::int open_projects FROM projects`),
       pool.query(`SELECT COUNT(*) FILTER (WHERE health<70)::int health_risks,COUNT(*) FILTER (WHERE flag<>'')::int flagged FROM projects`),
       pool.query(`SELECT t.id,t.title,t.due_date,t.priority,c.name client_name,c.id client_id
                   FROM tasks t LEFT JOIN clients c ON c.id=t.client_id
                   LEFT JOIN user_alert_snoozes s ON s.user_id=$1 AND s.alert_key='task:'||t.id
-                  WHERE t.status<>'done' AND t.due_date<CURRENT_DATE AND (s.snoozed_until IS NULL OR s.snoozed_until<=NOW())
+                  WHERE t.status NOT IN ('done','cancelled') AND t.due_date<CURRENT_DATE AND (s.snoozed_until IS NULL OR s.snoozed_until<=NOW())
                   ORDER BY t.due_date,t.priority DESC LIMIT 25`, [request.user.id]),
       pool.query(`SELECT a.id,a.action,a.entity_type,a.entity_id,a.created_at,COALESCE(u.display_name,u.username,'מערכת') user_name
                   FROM audit_log a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.created_at DESC LIMIT 8`),
@@ -200,13 +200,30 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     response.status(201).json({ field: result.rows[0] });
   });
 
+  router.patch('/custom-fields/:id', requireRoles('admin'), async (request, response) => {
+    const current = await pool.query('SELECT * FROM custom_field_definitions WHERE id=$1', [request.params.id]);
+    if (!current.rowCount) return response.status(404).json({ error: 'השדה המותאם לא נמצא' });
+    const row = current.rows[0];
+    const required = row.entity_type === 'client' ? false : (request.body.required ?? row.required);
+    const result = await pool.query(`UPDATE custom_field_definitions SET label=$1,field_type=$2,required=$3,active=$4,sort_order=$5,options=$6 WHERE id=$7 RETURNING *`, [request.body.label ?? row.label, request.body.fieldType ?? row.field_type, required, request.body.active ?? row.active, request.body.sortOrder ?? row.sort_order, JSON.stringify(request.body.options ?? row.options), request.params.id]);
+    await audit(request, 'update', 'custom_field', request.params.id, request.body);
+    response.json({ field: result.rows[0] });
+  });
+
+  router.delete('/custom-fields/:id', requireRoles('admin'), async (request, response) => {
+    const result = await pool.query('DELETE FROM custom_field_definitions WHERE id=$1 RETURNING label', [request.params.id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'השדה המותאם לא נמצא' });
+    await audit(request, 'delete', 'custom_field', request.params.id, { label: result.rows[0].label });
+    response.status(204).end();
+  });
+
   router.get('/clients', async (request, response) => {
     const query = String(request.query.q || '').trim();
     const like = `%${query}%`;
     const result = await pool.query(
       `SELECT c.*,
         (SELECT COUNT(*) FROM projects p WHERE p.client_id=c.id) AS project_count,
-        (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.status <> 'done') AS open_task_count,
+        (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.status NOT IN ('done','cancelled')) AS open_task_count,
         COALESCE((SELECT jsonb_agg(jsonb_build_object('id',ci.id,'name',ci.name,'category',ci.category,'color',ci.color,'icon',ci.icon,'symbol',ci.symbol) ORDER BY ci.sort_order)
           FROM client_labels cl JOIN catalog_items ci ON ci.id=cl.catalog_item_id WHERE cl.client_id=c.id), '[]'::jsonb) AS labels
        FROM clients c

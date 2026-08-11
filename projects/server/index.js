@@ -12,6 +12,7 @@ import { seedProjects } from '../src/data.js';
 import { createOperationalRouter } from './operational.js';
 import { createFormsRouter } from './forms.js';
 import { createManagementRouter } from './management.js';
+import { createOperationsRouter } from './operations.js';
 
 const { Pool, Client } = pg;
 const execFileAsync = promisify(execFile);
@@ -258,7 +259,7 @@ async function resolveProjectManager(managerId) {
 app.get('/api/health', async (_request, response) => {
   try {
     await pool.query('SELECT 1');
-    response.json({ status: 'ok', database: 'ok', version: '0.5.5' });
+    response.json({ status: 'ok', database: 'ok', version: '0.6.0' });
   } catch (error) {
     response.status(503).json({ status: 'error', database: 'unavailable', message: error.message });
   }
@@ -423,6 +424,7 @@ app.post('/api/system/restore', authenticate, requireRoles('admin'), async (requ
 app.use('/api', await createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
 app.use('/api', createFormsRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
+app.use('/api', createOperationsRouter({ pool, authenticate, requireRoles, audit }));
 
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Not found' }));
 app.use((error, _request, response, _next) => {
