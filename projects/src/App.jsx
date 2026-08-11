@@ -184,7 +184,7 @@ function App() {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="brand"><div className="brand-mark"><img src={projectsMark} alt="" /></div><div><strong><b>PRO</b>JECTS</strong><span>SMART PROJECT MANAGEMENT</span></div></div>
+        <div className="brand"><div className="brand-mark"><img src={projectsMark} alt="" /></div><div><strong><b>PRO</b>JECTS</strong><span>Manage Smarter. Deliver Better.</span></div></div>
         <button className="mobile-close" onClick={() => setSidebarOpen(false)} aria-label="סגור תפריט"><X /></button>
         <div className="workspace-switch"><div className={`workspace-logo ${companyLogo ? 'has-company-logo' : ''}`}>{companyLogo ? <img src={companyLogo} alt="" /> : (company.name || 'SH').slice(0, 2)}</div><div><strong>{company.name || 'החברה שלי'}</strong><span>סביבת עבודה ראשית</span></div><ChevronDown size={16} /></div>
         <nav className="main-nav">
@@ -254,7 +254,7 @@ function LoginPage({ onLogin }) {
     event.preventDefault(); setSubmitting(true); setError('');
     try { await onLogin(form); } catch (loginError) { setError(loginError.message); } finally { setSubmitting(false); }
   };
-  return <div className="login-shell" dir="rtl"><div className="login-card"><div className="login-brand"><div className="brand-mark"><img src={projectsMark} alt="" /></div><strong><b>PRO</b>JECTS</strong><small>SMART PROJECT MANAGEMENT</small></div><div className="login-copy"><span>כניסה מאובטחת</span><h1>ברוכים הבאים</h1><p>התחברו למרחב ניהול הפרויקטים שלכם</p></div><form onSubmit={submit}><label>שם משתמש<input autoFocus autoComplete="username" required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" autoComplete="current-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <div className="login-error">{error}</div>}<button className="primary-button" disabled={submitting}>{submitting ? 'מתחבר...' : 'כניסה למערכת'} <ArrowLeft size={17} /></button></form><small className="login-hint">בכניסה דרך Home Assistant הזיהוי מתבצע אוטומטית.</small></div></div>;
+  return <div className="login-shell" dir="rtl"><div className="login-card"><div className="login-brand"><div className="brand-mark"><img src={projectsMark} alt="" /></div><strong><b>PRO</b>JECTS</strong><small>Manage Smarter. Deliver Better.</small></div><div className="login-copy"><span>כניסה מאובטחת</span><h1>ברוכים הבאים</h1><p>התחברו למרחב ניהול הפרויקטים שלכם</p></div><form onSubmit={submit}><label>שם משתמש<input autoFocus autoComplete="username" required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label>סיסמה<input type="password" autoComplete="current-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <div className="login-error">{error}</div>}<button className="primary-button" disabled={submitting}>{submitting ? 'מתחבר...' : 'כניסה למערכת'} <ArrowLeft size={17} /></button></form><small className="login-hint">בכניסה דרך Home Assistant הזיהוי מתבצע אוטומטית.</small></div></div>;
 }
 
 function UsersPage({ setNotice, currentUser, onChanged }) {
