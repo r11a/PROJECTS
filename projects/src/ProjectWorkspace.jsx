@@ -1382,10 +1382,10 @@ function ProjectPhotoUpdate({ project, api, setNotice, onDone }) {
       ) : (
         <form onSubmit={submit}>
           <div className="photo-source-grid">
-            <label className="photo-capture"><Camera size={22}/><span>צילום בטלפון</span><input type="file" accept="image/*" capture="environment" onChange={event=>setFile(event.target.files?.[0]||null)}/></label>
-            <label className="photo-capture"><Upload size={22}/><span>תמונה מהגלריה</span><input type="file" accept="image/*" onChange={event=>setFile(event.target.files?.[0]||null)}/></label>
+            <label className="photo-capture"><Camera size={22}/><span>צילום בטלפון</span><input type="file" accept="image/*" capture="environment" aria-label="צילום תמונה בטלפון" onChange={event=>setFile(event.target.files?.[0]||null)}/></label>
+            <label className="photo-capture"><Upload size={22}/><span>בחירה מהגלריה</span><input type="file" accept="image/*" aria-label="בחירת תמונה מהגלריה" onChange={event=>setFile(event.target.files?.[0]||null)}/></label>
             <button type="button" className="photo-capture" onClick={openComputerCamera}><Camera size={22}/><span>מצלמת מחשב</span></button>
-            <label className="photo-capture"><Film size={22}/><span>סרטון עד 30MB</span><input type="file" accept="video/*" onChange={event=>setFile(event.target.files?.[0]||null)}/></label>
+            <label className="photo-capture"><Film size={22}/><span>סרטון עד 30MB</span><input type="file" accept="video/*" aria-label="בחירת סרטון" onChange={event=>setFile(event.target.files?.[0]||null)}/></label>
           </div>
           {cameraOpen && <div className="webcam-capture"><video ref={videoRef} playsInline muted/><div><button type="button" className="ops-secondary" onClick={closeCamera}>ביטול</button><button type="button" className="ops-primary" onClick={captureComputerPhoto}><Camera size={16}/>צילום</button></div></div>}
           {file&&<div className="selected-media"><Check size={16}/><span>{file.name}</span><small>{(file.size/1024/1024).toFixed(1)} MB</small></div>}

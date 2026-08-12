@@ -1064,6 +1064,10 @@ export function ReportsWorkspace({ api, setNotice }) {
     "#d95984",
     "#1d9b66",
   ];
+  const localizedStageData = data.stages.map((item) => ({
+    ...item,
+    label: stageNames[item.stage] || "שלב לא מוגדר",
+  }));
   return (
     <div className="ops-page reports-page">
       <section className="ops-hero compact-work-hero">
@@ -1112,27 +1116,30 @@ export function ReportsWorkspace({ api, setNotice }) {
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie
-                data={data.stages}
+                data={localizedStageData}
                 dataKey="count"
-                nameKey="stage"
+                nameKey="label"
                 innerRadius={62}
                 outerRadius={95}
                 paddingAngle={4}
               >
-                {data.stages.map((_, i) => (
+                {localizedStageData.map((_, i) => (
                   <Cell key={i} fill={stageColors[i % stageColors.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip
+                formatter={(value) => [value, "מספר פרויקטים"]}
+                contentStyle={{ direction: "rtl", textAlign: "right" }}
+              />
             </PieChart>
           </ResponsiveContainer>
           <div className="report-legend">
-            {data.stages.map((x, i) => (
+            {localizedStageData.map((x, i) => (
               <span key={x.stage}>
                 <i
                   style={{ background: stageColors[i % stageColors.length] }}
                 />
-                {x.stage}
+                {x.label}
                 <b>{x.count}</b>
               </span>
             ))}
@@ -1140,16 +1147,20 @@ export function ReportsWorkspace({ api, setNotice }) {
         </div>
         <div className="panel report-panel">
           <h3>עומס והתקדמות לפי מנהל</h3>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer className="report-manager-chart" width="100%" height={300}>
             <BarChart
               data={data.managers}
               layout="vertical"
-              margin={{ right: 20, left: 20 }}
+              margin={{ right: 16, left: 16 }}
             >
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" domain={[0, 100]} />
-              <YAxis type="category" dataKey="name" width={100} />
-              <Tooltip />
+              <XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
+              <YAxis type="category" dataKey="name" width={112} orientation="right" tick={{ fill: "#596174", fontSize: 13 }} />
+              <Tooltip
+                formatter={(value) => [`${value || 0}%`, "התקדמות ממוצעת"]}
+                labelFormatter={(label) => `מנהל: ${label}`}
+                contentStyle={{ direction: "rtl", textAlign: "right" }}
+              />
               <Bar dataKey="progress" fill="#6957df" radius={[5, 5, 5, 5]} />
             </BarChart>
           </ResponsiveContainer>

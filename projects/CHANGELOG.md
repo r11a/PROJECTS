@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.4
+
+- Fixed the project media picker layout on desktop and mobile and hid native file-input controls.
+- Added immediate global search results for projects, clients, and professionals from the dashboard header.
+- Localized report stage names, chart tooltips, axes, and legends to Hebrew.
+- Reworked chart direction, spacing, contrast, and the dashboard collection legend.
+
 ## 0.11.3
 
 - Fixed the PDF report wizard height, scrolling, sticky actions, and responsive width so it is no longer clipped by the viewport.

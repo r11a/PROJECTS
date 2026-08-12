@@ -222,6 +222,7 @@ function App() {
   const [startupError, setStartupError] = useState("");
   const [selectedProject, setSelectedProject] = useState(null);
   const [search, setSearch] = useState("");
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [stageFilter, setStageFilter] = useState("all");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -508,6 +509,62 @@ function App() {
       (stageFilter === "all" || project.stage === stageFilter)
     );
   });
+  const globalQuery = search.trim().toLocaleLowerCase("he");
+  const globalSearchResults = globalQuery
+    ? [
+        ...projects
+          .filter((project) =>
+            `${project.name} ${project.client} ${project.location} ${project.address} ${project.id}`
+              .toLocaleLowerCase("he")
+              .includes(globalQuery),
+          )
+          .slice(0, 5)
+          .map((project) => ({
+            id: `project-${project.id}`,
+            type: "פרויקט",
+            title: project.name,
+            subtitle: `${project.id} · ${project.client || project.location || ""}`,
+            icon: FolderKanban,
+            project,
+          })),
+        ...clientOptions
+          .filter((client) =>
+            `${client.firstName || ""} ${client.lastName || ""} ${client.name || ""} ${client.phone || ""} ${client.mobile || ""} ${client.email || ""} ${client.address || ""}`
+              .toLocaleLowerCase("he")
+              .includes(globalQuery),
+          )
+          .slice(0, 3)
+          .map((client) => ({
+            id: `client-${client.id}`,
+            type: "לקוח",
+            title: client.name || `${client.firstName || ""} ${client.lastName || ""}`.trim(),
+            subtitle: client.mobile || client.phone || client.address || "פתיחת מאגר הלקוחות",
+            icon: Users,
+            page: "clients",
+          })),
+        ...professionals
+          .filter((professional) =>
+            `${professional.name || ""} ${professional.role || ""} ${professional.company || ""} ${professional.phone || ""} ${professional.email || ""}`
+              .toLocaleLowerCase("he")
+              .includes(globalQuery),
+          )
+          .slice(0, 3)
+          .map((professional) => ({
+            id: `professional-${professional.id}`,
+            type: "איש מקצוע",
+            title: professional.name,
+            subtitle: professional.role || professional.company || professional.phone || "פתיחת מאגר אנשי המקצוע",
+            icon: UserRound,
+            page: "professionals",
+          })),
+      ].slice(0, 8)
+    : [];
+  const openGlobalSearchResult = (result) => {
+    if (result.project) openProject(result.project);
+    else if (result.page) setPage(result.page);
+    setSearch("");
+    setGlobalSearchOpen(false);
+  };
 
   const secondaryTitles = {
     tasks: "משימות ואבני דרך",
@@ -694,15 +751,47 @@ function App() {
             </div>
           </div>
           <div className="topbar-actions">
-            <label className="global-search">
-              <Search size={18} />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="חיפוש בכל המערכת..."
-              />
-              <kbd>⌘ K</kbd>
-            </label>
+            <div
+              className="global-search-shell"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget))
+                  setGlobalSearchOpen(false);
+              }}
+            >
+              <label className="global-search">
+                <Search size={18} />
+                <input
+                  value={search}
+                  onFocus={() => setGlobalSearchOpen(true)}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setGlobalSearchOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && globalSearchResults[0])
+                      openGlobalSearchResult(globalSearchResults[0]);
+                    if (event.key === "Escape") setGlobalSearchOpen(false);
+                  }}
+                  placeholder="חיפוש בכל המערכת..."
+                />
+                <kbd>⌘ K</kbd>
+              </label>
+              {globalSearchOpen && globalQuery && (
+                <div className="global-search-results" role="listbox">
+                  {globalSearchResults.map((result) => {
+                    const ResultIcon = result.icon;
+                    return (
+                      <button key={result.id} type="button" onClick={() => openGlobalSearchResult(result)}>
+                        <span><ResultIcon size={17} /></span>
+                        <div><strong>{result.title}</strong><small>{result.subtitle}</small></div>
+                        <em>{result.type}</em>
+                      </button>
+                    );
+                  })}
+                  {!globalSearchResults.length && <p>לא נמצאו תוצאות מתאימות</p>}
+                </div>
+              )}
+            </div>
             <button
               className="icon-button"
               onClick={() => setAlertsOpen(true)}
@@ -1542,7 +1631,7 @@ function Dashboard({ projects, openProject, setPage, insights, user }) {
             action={`${cashData.length} פרויקטים`}
             onAction={() => setPage("finance")}
           />
-          <div className="cash-legend">
+          <div className="cash-legend" aria-label="מקרא גרף הגבייה">
             <span>
               <i className="paid" />
               התקבל
@@ -1570,7 +1659,15 @@ function Dashboard({ projects, openProject, setPage, insights, user }) {
                 tickLine={false}
                 tick={{ fill: "#a1a8b7", fontSize: 11 }}
               />
-              <Tooltip cursor={{ fill: "#f7f8fb" }} />
+              <Tooltip
+                cursor={{ fill: "#f7f8fb" }}
+                formatter={(chartValue, name) => [
+                  `${chartValue} אלפי ₪`,
+                  name === "paid" ? "התקבל" : "היקף חוזה",
+                ]}
+                labelFormatter={(label) => `פרויקט PRJ-${label}`}
+                contentStyle={{ direction: "rtl", textAlign: "right" }}
+              />
               <Bar dataKey="expected" fill="#e8ebf3" radius={[5, 5, 0, 0]} />
               <Bar dataKey="paid" fill="#6d5de8" radius={[5, 5, 0, 0]} />
             </BarChart>
