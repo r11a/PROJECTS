@@ -2,6 +2,9 @@
 .contacts-list-head,.contacts-table.compact .contact-row{min-width:680px;display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(120px,.9fr) minmax(105px,.8fr) minmax(190px,1.3fr)!important;align-items:center;gap:12px;padding:0 16px}
 .contacts-list-head{height:34px;color:#858d9f;background:#f8f9fb;border-bottom:1px solid #e8eaf0;font-size:12px;font-weight:700}
 .contacts-table.compact .contact-row{min-height:44px}
+.section-title-actions .view-toggle button{width:auto!important;min-width:76px;padding-inline:10px!important;display:flex!important;gap:6px;white-space:nowrap;font-size:12px;font-weight:700}
+.section-title-actions .view-toggle button:first-child::after{content:'שורות'}
+.section-title-actions .view-toggle button:nth-child(2)::after{content:'אריחים'}
 .contacts-table.compact .contact-role-icon{display:none}
 .contacts-table.compact .contact-name{min-width:0}
 .contacts-table.compact .contact-name strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -16,4 +19,5 @@
 .contacts-table.cards .contact-email{grid-column:2/4!important}
 .theme-dark .contacts-list-head{color:#aeb3ba;background:#202224;border-color:#3b3e42}
 .theme-dark .contacts-table.compact .contact-role{color:#c4c8ce}
-@media(max-width:700px){.contacts-table.compact{margin-inline:-1px}.contacts-list-head,.contacts-table.compact .contact-row{min-width:640px;padding-inline:12px}.contacts-table.cards .contact-row{min-width:0}}
+@media(max-width:900px){.contacts-list-head,.contacts-table.compact .contact-row{grid-template-columns:minmax(145px,1.1fr) minmax(120px,.85fr) minmax(105px,.75fr) minmax(180px,1.2fr)!important}}
+@media(max-width:700px){.contacts-table.compact{margin-inline:-1px}.contacts-list-head,.contacts-table.compact .contact-row{min-width:640px;padding-inline:12px}.contacts-table.cards .contact-row{min-width:0}.section-title-actions .view-toggle button{min-width:68px;padding-inline:8px!important}}

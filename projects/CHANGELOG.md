@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1
+
+- Made the compact contact-row view explicit and available on desktop, tablet and mobile.
+- Added visible Rows/Cards labels and remembered the selected contact view in the browser.
+- Refined tablet column widths while preserving horizontal scrolling on narrow screens.
+
 ## 0.8.0
 
 - Added a reversible project archive with a dedicated active/archive view and admin/manager audit entries.

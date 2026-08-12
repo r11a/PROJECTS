@@ -156,11 +156,12 @@ function ClientDetail({ data, api, apiRoot, canManage, canExecute, isAdmin, conf
   const { client, contacts, tasks, inspections, files, projects, equipment = [] } = data;
   const [tab, setTab] = useState('overview');
   const [action, setAction] = useState(null);
-  const [contactView, setContactView] = useState('compact');
+  const [contactView, setContactView] = useState(() => localStorage.getItem('projects-contact-view') || 'compact');
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState(client);
   const referrers = contacts.filter((contact) => contact.isReferrer);
   const openTasks = tasks.filter((task) => task.status !== 'done');
+  useEffect(() => { localStorage.setItem('projects-contact-view', contactView); }, [contactView]);
   const saveClient = async () => { try { await api(`/clients/${client.id}`, { method: 'PATCH', body: JSON.stringify(editForm) }); setEditing(false); setNotice('פרטי הלקוח נשמרו'); onRefresh(); } catch (error) { setNotice(error.message); } };
   const deleteClient = async () => { if (!window.confirm(`למחוק את ${client.name}? הפעולה תתועד ב-Audit Log.`)) return; try { await api(`/clients/${client.id}`, { method: 'DELETE' }); setNotice('כרטיס הלקוח נמחק'); onDeleted(); } catch (error) { setNotice(error.message); } };
   const completeTask = async (task) => { try { await api(`/tasks/${task.id}`, { method: 'PATCH', body: JSON.stringify({ status: task.status === 'done' ? 'open' : 'done' }) }); setNotice(task.status === 'done' ? 'המשימה נפתחה מחדש' : 'המשימה הושלמה'); onRefresh(); } catch (error) { setNotice(error.message); } };
