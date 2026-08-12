@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, AlertTriangle, Archive, ArrowLeft, BriefcaseBusiness, Building2, CalendarDays, Camera,
   Check, CheckCircle2, ChevronLeft, CirclePlus, ClipboardCheck, Clock3, Database, Download, FileText,
-  Eye, Filter, Flag, FolderOpen, HardHat, History, LayoutGrid, List, Mail, MapPin, Monitor, Moon, Package, Palette, Pencil, Phone, Plus, Printer, RefreshCw,
+  Copy, Eye, Filter, Flag, FolderOpen, HardHat, History, LayoutGrid, Link2, List, Mail, MapPin, Monitor, Moon, Package, Palette, Pencil, Phone, Plus, Printer, RefreshCw,
   RotateCcw, Save, Search, Settings2, ShieldCheck, Sparkles, Star, Tag, Trash2, Upload, UserRound,
   Sun, Users, X, Zap,
 } from 'lucide-react';
@@ -33,7 +33,7 @@ export function AlertCenter({ alerts, api, onSnoozed, onClose, setNotice }) {
   return <div className="alert-backdrop"><section className="alert-center"><header><span><AlertTriangle size={22} /></span><div><small>דורש תשומת לב</small><h2>{alerts.length === 1 ? 'משימה שלא הושלמה בזמן' : `${alerts.length} משימות שלא הושלמו בזמן`}</h2></div><button onClick={onClose}><X size={18} /></button></header><div className="alert-list">{alerts.map((alert) => <article key={alert.key}><span className={`alert-priority ${alert.priority}`}><ClipboardCheck size={17} /></span><div><strong>{alert.title}</strong><small>{alert.clientName || 'ללא לקוח'} · יעד {formatDate(alert.dueDate)}</small></div><em>{Math.max(1,Math.ceil((Date.now()-new Date(alert.dueDate).getTime())/86400000))} ימים באיחור</em></article>)}</div><footer><label><Clock3 size={16} />Snooze<select value={duration} onChange={(e) => setDuration(e.target.value)}><option value="hour">לשעה</option><option value="day">ליום</option><option value="week">לשבוע</option><option value="month">לחודש</option></select></label><button className="ops-secondary" onClick={onClose}>הצג מאוחר יותר</button><button className="ops-primary" onClick={snooze} disabled={busy}>{busy ? <RefreshCw className="spin" size={16} /> : <Clock3 size={16} />}דחייה מרוכזת</button></footer></section></div>;
 }
 
-export function CalendarWorkspace({ api, user, setNotice }) {
+export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
   const swipeStart = useRef(null);
   const [cursor, setCursor] = useState(() => new Date());
   const [events, setEvents] = useState([]);
@@ -43,6 +43,7 @@ export function CalendarWorkspace({ api, user, setNotice }) {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [projects, setProjects] = useState([]);
   const [projectFilter, setProjectFilter] = useState('');
+  const [calendarFeed,setCalendarFeed]=useState(null);
   const canCreate = ['admin', 'manager'].includes(user.role);
   const year = cursor.getFullYear(), month = cursor.getMonth();
   const weekStart = new Date(year, month, cursor.getDate() - cursor.getDay());
@@ -62,6 +63,12 @@ export function CalendarWorkspace({ api, user, setNotice }) {
     document.addEventListener('visibilitychange', onVisible);
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [year, month, cursor.getDate(), view, projectFilter]);
+  useEffect(()=>{api('/calendar-feed').then(setCalendarFeed).catch(()=>{})},[]);
+  useEffect(()=>{const live=()=>load();window.addEventListener('projects:live-change',live);return()=>window.removeEventListener('projects:live-change',live)},[year,month,cursor.getDate(),view,projectFilter]);
+  const createCalendarFeed=async()=>{try{const result=await api('/calendar-feed',{method:'POST',body:'{}'});setCalendarFeed({active:true,token:result.token});setNotice('קישור Outlook לקריאה בלבד נוצר');}catch(error){setNotice(error.message)}};
+  const calendarFeedUrl=calendarFeed?.token?`${window.location.origin}${apiRoot}/calendar-feed/${calendarFeed.token}.ics`:'';
+  const copyCalendarFeed=async()=>{try{await navigator.clipboard.writeText(calendarFeedUrl);setNotice('הקישור הועתק. ב-Outlook יש לבחור Subscribe from web.');}catch{setNotice(calendarFeedUrl)}};
+  const revokeCalendarFeed=async()=>{if(!confirm('לבטל את קישור Outlook הקיים?'))return;try{await api('/calendar-feed',{method:'DELETE'});setCalendarFeed({active:false,token:null});setNotice('קישור Outlook בוטל');}catch(error){setNotice(error.message)}};
   const first = new Date(year, month, 1), gridStart = new Date(year, month, 1 - first.getDay());
   const days = Array.from({ length: 42 }, (_, index) => new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index));
   const monthDays = Array.from({ length: new Date(year,month+1,0).getDate() }, (_, index) => new Date(year,month,index+1));
@@ -104,7 +111,7 @@ function CalendarEventModal({ api, onClose, onDone, setNotice }) {
   return <div className="ops-modal-backdrop" onMouseDown={onClose}><div className="ops-modal compact" onMouseDown={(e) => e.stopPropagation()}><div className="ops-modal-title"><div><span>לוח שנה</span><h2>אירוע חשוב חדש</h2></div><button onClick={onClose}><X /></button></div><form onSubmit={submit}><div className="ops-form-grid"><label className="wide">כותרת<input autoFocus required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label><label>מועד<input type="datetime-local" required value={form.startAt} onChange={(e) => setForm({ ...form, startAt: e.target.value })} /></label><label>סוג<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="general">כללי</option><option value="meeting">פגישה</option><option value="delivery">אספקה</option><option value="installation">התקנה</option><option value="payment">תשלום</option></select></label><label>פרויקט<select value={form.projectId} onChange={(e) => setForm({ ...form, projectId:e.target.value })}><option value="">ללא שיוך</option>{options.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label>אחראי<select value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId:e.target.value })}><option value="">ללא אחראי</option>{options.users.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select></label><label>צבע<input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} /></label><label className="wide">הערות<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label></div><div className="ops-modal-actions"><button type="button" className="ops-ghost" onClick={onClose}>ביטול</button><button className="ops-primary"><Check size={16} />הוספה ללוח</button></div></form></div></div>;
 }
 
-export function ClientsWorkspace({ api, apiRoot, user, setNotice }) {
+export function ClientsWorkspace({ api, apiRoot, user, setNotice, onDataChanged }) {
   const [clients, setClients] = useState([]);
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState(null);
@@ -126,9 +133,10 @@ export function ClientsWorkspace({ api, apiRoot, user, setNotice }) {
   };
   useEffect(() => { const timer = setTimeout(() => loadClients(query), 240); return () => clearTimeout(timer); }, [query]);
   useEffect(() => { api('/settings').then(setConfiguration).catch((error) => setNotice(error.message)); }, []);
-  const refresh = async () => { await loadClients(); if (selectedId) await loadDetail(selectedId); };
+  useEffect(()=>{const live=()=>{loadClients();if(selectedId)loadDetail(selectedId)};window.addEventListener('projects:live-change',live);return()=>window.removeEventListener('projects:live-change',live)},[selectedId,query]);
+  const refresh = async () => { await loadClients(); if (selectedId) await loadDetail(selectedId); await onDataChanged?.(); };
   const createClient = async (form) => {
-    try { const result = await api('/clients', { method: 'POST', body: JSON.stringify(form) }); setNewOpen(false); setNotice('כרטיס הלקוח נוצר בהצלחה'); await loadClients(''); await loadDetail(result.client.id); }
+    try { const result = await api('/clients', { method: 'POST', body: JSON.stringify(form) }); setNewOpen(false); setNotice('כרטיס הלקוח נוצר בהצלחה'); await loadClients(''); await onDataChanged?.(); await loadDetail(result.client.id); }
     catch (error) { setNotice(error.message); }
   };
 
@@ -143,7 +151,7 @@ export function ClientsWorkspace({ api, apiRoot, user, setNotice }) {
 }
 
 function ClientFormModal({ onClose, onSubmit, initial, configuration = { customFields: [], catalogs: [] } }) {
-  const base = initial || { name: '', address: '', phone: '', email: '', city: '', primaryContactName: '', clientType: 'private', notes: '', additionalPhones: [], additionalEmails: [], customValues: {}, labels: [] };
+  const base = initial || { name: '', address: '', phone: '', email: '', city: '', priorityCustomerNumber:'', primaryContactName: '', clientType: 'private', notes: '', additionalPhones: [], additionalEmails: [], customValues: {}, labels: [] };
   const [form, setForm] = useState({ ...base, additionalPhonesText: (base.additionalPhones || []).join(', '), additionalEmailsText: (base.additionalEmails || []).join(', '), labelIds: (base.labels || []).map((item) => item.id) });
   const [saving, setSaving] = useState(false);
   const customFields = configuration.customFields.filter((field) => field.entityType === 'client' && field.active);
@@ -175,6 +183,7 @@ function ClientDetail({ data, api, apiRoot, canManage, canExecute, isAdmin, conf
   return <div className="ops-page client-detail">
     <div className="client-detail-top"><button className="ops-back" onClick={onBack}><ArrowLeft size={17} />חזרה לכל הלקוחות</button><div className="client-report-actions"><button className="ops-secondary" onClick={printReport}><Printer size={15} />דוח מסכם</button>{isAdmin && <button className="ops-danger" onClick={deleteClient}><Trash2 size={15} />מחיקת לקוח</button>}</div></div>
     <section className="client-profile-hero panel"><div className="profile-glow" /><div className="profile-main"><span className="profile-avatar">{initials(client.name)}</span><div><span className="ops-eyebrow">{client.code}</span><h2>{client.name}</h2><p><MapPin size={14} />{client.address}</p></div></div><div className="profile-actions">{canManage && <button className="ops-secondary" onClick={() => setEditing(true)}><Pencil size={16} />עריכה</button>}<a className="ops-primary" href={`tel:${client.phone}`}><Phone size={16} />חיוג</a></div><div className="profile-meta"><span><Phone />טלפון<strong>{client.phone}</strong></span><span><Mail />דוא״ל<strong>{client.email || 'לא הוגדר'}</strong></span><span><BriefcaseBusiness />פרויקטים<strong>{projects.length}</strong></span><span><ClipboardCheck />משימות פתוחות<strong>{openTasks.length}</strong></span></div><div className="label-strip profile-labels">{client.labels.map((label) => <em key={label.id} style={{ '--label': label.color }}><DynamicIcon name={label.icon} size={13} />{label.name}</em>)}{!client.labels.length && <span>אין תגיות או דגלים</span>}</div></section>
+    {client.priorityCustomerNumber&&<div className="priority-customer-number"><span>מספר לקוח בפריוריטי</span><strong>{client.priorityCustomerNumber}</strong></div>}
     <nav className="ops-tabs">{[['overview','סקירה',Activity],['contacts','אנשי קשר',Users],['systems','מערכות',Package],['tasks','משימות',ClipboardCheck],['inspections','ביקורות אתר',ShieldCheck],['files','קבצים',FolderOpen]].map(([id,label,Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => { setTab(id); setAction(null); }}><Icon size={16} />{label}<em>{id === 'contacts' ? contacts.length : id === 'systems' ? equipment.length : id === 'tasks' ? openTasks.length : id === 'inspections' ? inspections.length : id === 'files' ? files.length : projects.length}</em></button>)}</nav>
     {tab === 'overview' && <div className="ops-detail-grid"><div className="panel ops-section"><SectionTitle icon={BriefcaseBusiness} title="פרויקטים משויכים" action={projects.length ? `${projects.length} פרויקטים` : ''} />{projects.length ? projects.map((project) => <div className="project-link-row" key={project.id}><span className="mini-status" style={{ '--progress': `${project.progress}%` }}><i /></span><div><strong>{project.name}</strong><small>{project.id} · {project.stage}</small></div><b>{project.progress}%</b></div>) : <InlineEmpty text="אין עדיין פרויקט משויך ללקוח" />}</div><aside><div className="panel ops-section"><SectionTitle icon={Star} title="גורמים מפנים" />{referrers.length ? referrers.map((contact) => <ContactMini key={contact.id} contact={contact} />) : <InlineEmpty text="לא הוגדר גורם מפנה" />}</div><div className="panel ops-section note-card"><SectionTitle icon={FileText} title="הערות לקוח" /><p>{client.notes || 'אין הערות בכרטיס זה.'}</p></div></aside></div>}
     {tab === 'contacts' && <div className="panel ops-section"><SectionTitle icon={Users} title="אנשי קשר וגורמים מקצועיים" button={<div className="section-title-actions"><div className="view-toggle"><button className={contactView==='compact'?'active':''} onClick={()=>setContactView('compact')} title="רשימה צרה"><List size={15}/></button><button className={contactView==='cards'?'active':''} onClick={()=>setContactView('cards')} title="כרטיסים"><LayoutGrid size={15}/></button></div>{canManage && <button className="ops-primary small" onClick={() => setAction(action === 'contact' ? null : 'contact')}><Plus size={15} />איש קשר</button>}</div>} />{action === 'contact' && <ContactForm clientId={client.id} api={api} onDone={() => { setAction(null); onRefresh(); }} setNotice={setNotice} />}{contacts.length ? <div className={`contacts-table ${contactView}`}>{contactView==="compact"&&<div className="contacts-list-head"><span>שם</span><span>טלפון</span><span>תפקיד</span><span>דוא״ל</span></div>}{contacts.map((contact) => <div className="contact-row" key={contact.id}><span className="contact-role-icon"><UserRound size={17} /></span><div className="contact-name"><strong>{contact.name}{contact.isReferrer && <em><Star size={11} />מפנה</em>}</strong>{contact.company&&<small>{contact.company}</small>}</div><a className="contact-phone" href={contact.phone?"tel:"+contact.phone:undefined}><Phone size={14} />{contact.phone || "ללא טלפון"}</a><span className="contact-role">{roleNames[contact.role] || contact.role || "ללא תפקיד"}</span><a className="contact-email" href={contact.email?"mailto:"+contact.email:undefined}><Mail size={14} />{contact.email || "ללא מייל"}</a></div>)}</div> : <InlineEmpty text="עדיין לא נוספו אנשי קשר" />}</div>}
@@ -242,16 +251,28 @@ export function OperationalSettings({ api, apiRoot, user, setNotice, onUserChang
   useEffect(() => { if (tab === 'audit') loadAudit(); }, [tab, auditQuery]);
   useEffect(() => { if (tab === 'backup') api('/system/backups').then((r) => setBackups(r.backups)).catch((e) => setNotice(e.message)); }, [tab]);
   const adminTabs = [['business','עסק ומערכת',Building2],['storage','מסמכים ו-Synology',FolderOpen],['catalogs','קטלוגים ועיצוב',Palette],['fields','שדות מותאמים',Settings2],['audit','Audit Log',History],['backup','גיבוי ובריאות',Database]];
-  const tabs = [['appearance','מראה',Palette],...(user.role === 'admin' ? adminTabs : [])];
+  const tabs = [['appearance','מראה',Palette],['calendarShare','Outlook',CalendarDays],...(user.role === 'admin' ? adminTabs : [])];
   return <div className="ops-page settings-workspace"><div className="ops-hero"><div><span className="ops-eyebrow"><Settings2 size={15} />מרכז שליטה</span><h2>המערכת מתאימה את עצמה לדרך שבה אתם עובדים</h2><p>שלטו בתהליך, במונחים, בצבעים, בסמלים ובמידע—בלי לשנות קוד.</p></div><span className="settings-health"><i />כל השירותים פעילים</span></div><nav className="settings-tabs">{tabs.map(([id,label,Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><Icon size={17} />{label}</button>)}</nav>
     {tab === 'business' && <BusinessSettings settings={data.settings} api={api} apiRoot={apiRoot} onSaved={applySavedSetting} setNotice={setNotice} />}
     {tab === 'appearance' && <AppearanceSettings initialTheme={user.appearanceTheme || 'light'} api={api} onUserChanged={onUserChanged} user={user} setNotice={setNotice} />}
+    {tab === 'calendarShare' && <OutlookCalendarShare api={api} apiRoot={apiRoot} setNotice={setNotice} />}
     {tab === 'storage' && <DocumentStorageSettings api={api} setNotice={setNotice} />}
     {tab === 'catalogs' && <CatalogSettings catalogs={data.catalogs} api={api} reload={load} setNotice={setNotice} />}
     {tab === 'fields' && <CustomFields fields={data.customFields} api={api} reload={load} setNotice={setNotice} />}
     {tab === 'audit' && <AuditLog entries={audit} query={auditQuery} setQuery={setAuditQuery} onClear={clearAudit} />}
     {tab === 'backup' && <BackupSettings api={api} backups={backups} reload={() => api('/system/backups').then((r) => setBackups(r.backups))} setNotice={setNotice} />}
   </div>;
+}
+
+function OutlookCalendarShare({api,apiRoot,setNotice}) {
+  const [feed,setFeed]=useState(null); const [busy,setBusy]=useState(false);
+  const load=()=>api('/calendar-feed').then(setFeed).catch(error=>setNotice(error.message));
+  useEffect(()=>{load()},[]);
+  const url=feed?.token?`${window.location.origin}${apiRoot}/calendar-feed/${feed.token}.ics`:'';
+  const create=async()=>{setBusy(true);try{const result=await api('/calendar-feed',{method:'POST',body:'{}'});setFeed({active:true,token:result.token});setNotice('קישור Outlook לקריאה בלבד נוצר');}catch(error){setNotice(error.message)}finally{setBusy(false)}};
+  const copy=async()=>{try{await navigator.clipboard.writeText(url);setNotice('הקישור הועתק. ב-Outlook בחרו הוספת לוח שנה מהאינטרנט.');}catch{setNotice(url)}};
+  const revoke=async()=>{if(!confirm('לבטל את הקישור? כל המנויים הקיימים יפסיקו להתעדכן.'))return;setBusy(true);try{await api('/calendar-feed',{method:'DELETE'});setFeed({active:false});setNotice('קישור Outlook בוטל');}catch(error){setNotice(error.message)}finally{setBusy(false)}};
+  return <section className="panel outlook-share"><header><span><CalendarDays size={23}/></span><div><h3>לוח שנה ב-Outlook — צפייה בלבד</h3><p>מנוי ICS מציג משימות, אבני דרך ואירועים. לא ניתן לערוך את PROJECTS מתוך Outlook.</p></div></header>{feed?.active?<><label>קישור המנוי<input readOnly dir="ltr" value={url}/></label><div className="outlook-share-actions"><button className="ops-primary" onClick={copy}><Copy size={16}/>העתקת קישור</button><button className="ops-danger" onClick={revoke} disabled={busy}>ביטול הקישור</button></div><small>יש לבחור ב-Outlook: Add calendar → Subscribe from web. הכתובת חייבת להיות נגישה מבחוץ ב-HTTPS.</small></>:<button className="ops-primary" onClick={create} disabled={busy}><Link2 size={16}/>{busy?'יוצר קישור...':'יצירת קישור Outlook'}</button>}</section>;
 }
 
 function AppearanceSettings({ initialTheme, api, onUserChanged, user, setNotice }) {

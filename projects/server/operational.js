@@ -5,7 +5,7 @@ import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 
 const CLIENT_FIELDS = {
-  name: 'name', clientType: 'client_type', companyNumber: 'company_number', primaryContactName: 'primary_contact_name',
+  name: 'name', clientType: 'client_type', companyNumber: 'company_number', priorityCustomerNumber: 'priority_customer_number', primaryContactName: 'primary_contact_name',
   phone: 'phone', additionalPhones: 'additional_phones', email: 'email', additionalEmails: 'additional_emails',
   address: 'address', city: 'city', notes: 'notes', status: 'status', customValues: 'custom_values',
 };
@@ -22,7 +22,7 @@ function valuesFor(input, fields) {
 
 function clientFromRow(row) {
   return {
-    id: row.id, code: row.code, name: row.name, clientType: row.client_type, companyNumber: row.company_number,
+    id: row.id, code: row.code, name: row.name, clientType: row.client_type, companyNumber: row.company_number, priorityCustomerNumber: row.priority_customer_number,
     primaryContactName: row.primary_contact_name, phone: row.phone, additionalPhones: row.additional_phones || [],
     email: row.email, additionalEmails: row.additional_emails || [], address: row.address, city: row.city,
     notes: row.notes, status: row.status, customValues: row.custom_values || {}, createdAt: row.created_at,
@@ -52,7 +52,52 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
   const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 
+  const icsText = (value) => String(value || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+  const icsDate = (value) => new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  router.get('/calendar-feed/:token.ics', async (request, response) => {
+    const token = await pool.query('SELECT user_id FROM calendar_feed_tokens WHERE token=$1', [request.params.token]);
+    if (!token.rowCount) return response.status(404).type('text/plain').send('Calendar feed not found');
+    const events = await pool.query(`SELECT h.*,p.name project_name FROM calendar_history h LEFT JOIN projects p ON p.id=h.project_id WHERE h.status<>'deleted' ORDER BY h.event_at`);
+    await pool.query('UPDATE calendar_feed_tokens SET last_used_at=NOW() WHERE token=$1', [request.params.token]);
+    const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//PROJECTS//Read-only calendar//HE','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:PROJECTS'];
+    for (const event of events.rows) {
+      const title = event.source_type === 'task' && event.project_name && !String(event.title).includes(event.project_name) ? `${event.project_name} — ${event.title}` : event.title;
+      lines.push('BEGIN:VEVENT',`UID:${icsText(event.source_type)}-${icsText(event.source_id)}@projects`,`DTSTAMP:${icsDate(event.updated_at || event.first_recorded_at)}`,`DTSTART:${icsDate(event.event_at)}`);
+      if (event.event_end) lines.push(`DTEND:${icsDate(event.event_end)}`);
+      lines.push(`SUMMARY:${icsText(title)}`,`DESCRIPTION:${icsText(event.payload?.notes || event.payload?.description || '')}`,`LOCATION:${icsText(event.payload?.address || '')}`,'END:VEVENT');
+    }
+    lines.push('END:VCALENDAR');
+    response.set({'Content-Type':'text/calendar; charset=utf-8','Content-Disposition':'inline; filename="projects-calendar.ics"','Cache-Control':'no-cache, no-store, must-revalidate'}).send(`${lines.join('\r\n')}\r\n`);
+  });
+
   router.use(authenticate);
+
+  router.get('/calendar-feed', async (request, response) => {
+    const result = await pool.query('SELECT token,created_at,last_used_at FROM calendar_feed_tokens WHERE user_id=$1', [request.user.id]);
+    response.json({ active:Boolean(result.rowCount), token:result.rows[0]?.token || null, createdAt:result.rows[0]?.created_at || null, lastUsedAt:result.rows[0]?.last_used_at || null });
+  });
+  router.post('/calendar-feed', async (request, response) => {
+    const token = `${randomUUID()}${randomUUID().replace(/-/g,'')}`;
+    await pool.query(`INSERT INTO calendar_feed_tokens(user_id,token) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET token=EXCLUDED.token,created_at=NOW(),last_used_at=NULL`, [request.user.id, token]);
+    await audit(request, 'create', 'calendar_feed', String(request.user.id));
+    response.status(201).json({ token });
+  });
+  router.delete('/calendar-feed', async (request, response) => {
+    await pool.query('DELETE FROM calendar_feed_tokens WHERE user_id=$1', [request.user.id]);
+    await audit(request, 'delete', 'calendar_feed', String(request.user.id));
+    response.status(204).end();
+  });
+
+  router.get('/messages', async (request,response) => {
+    const result=await pool.query(`SELECT m.*,sender.display_name sender_name,recipient.display_name recipient_name FROM user_messages m JOIN users sender ON sender.id=m.sender_id JOIN users recipient ON recipient.id=m.recipient_id WHERE m.recipient_id=$1 OR m.sender_id=$1 ORDER BY m.created_at DESC LIMIT 200`,[request.user.id]);
+    response.json({messages:result.rows.map(row=>({id:row.id,senderId:row.sender_id,senderName:row.sender_name,recipientId:row.recipient_id,recipientName:row.recipient_name,subject:row.subject,body:row.body,readAt:row.read_at,createdAt:row.created_at})),unread:result.rows.filter(row=>String(row.recipient_id)===String(request.user.id)&&!row.read_at).length});
+  });
+  router.post('/messages', async (request,response) => {
+    const recipientId=Number(request.body.recipientId);const body=String(request.body.body||'').trim();if(!recipientId||!body)return response.status(400).json({error:'יש לבחור נמען ולכתוב הודעה'});
+    const result=await pool.query('INSERT INTO user_messages(sender_id,recipient_id,subject,body) SELECT $1,id,$2,$3 FROM users WHERE id=$4 AND active=TRUE RETURNING *',[request.user.id,String(request.body.subject||'').trim(),body,recipientId]);
+    if(!result.rowCount)return response.status(404).json({error:'הנמען אינו זמין'});await audit(request,'create','message',String(result.rows[0].id),{recipientId});response.status(201).json({message:result.rows[0]});
+  });
+  router.patch('/messages/:id/read', async (request,response) => { const result=await pool.query('UPDATE user_messages SET read_at=COALESCE(read_at,NOW()) WHERE id=$1 AND recipient_id=$2 RETURNING *',[request.params.id,request.user.id]);if(!result.rowCount)return response.status(404).json({error:'ההודעה לא נמצאה'});response.json({message:result.rows[0]}); });
 
   router.patch('/preferences/appearance', async (request, response) => {
     const theme = ['light', 'dark', 'auto'].includes(request.body?.theme) ? request.body.theme : null;
@@ -61,6 +106,12 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     if (!result.rowCount) return response.status(404).json({ error: 'המשתמש אינו זמין' });
     await audit(request, 'update', 'user_preference', String(request.user.id), { appearanceTheme: theme });
     response.json({ appearanceTheme: result.rows[0].appearance_theme });
+  });
+
+  router.get('/address-search', async (request,response) => {
+    const query=String(request.query.q||'').trim();if(query.length<3)return response.json({addresses:[]});
+    const setting=await pool.query("SELECT value FROM app_settings WHERE key='map'");const key=setting.rows[0]?.value?.googleApiKey;if(!key)return response.status(400).json({error:'יש להגדיר Google API Key בהגדרות מפה ומיקום'});
+    try{const url=new URL('https://maps.googleapis.com/maps/api/geocode/json');url.searchParams.set('address',query);url.searchParams.set('components','country:IL');url.searchParams.set('language','he');url.searchParams.set('key',key);const google=await fetch(url);const data=await google.json();response.json({addresses:(data.results||[]).slice(0,6).map(item=>({address:item.formatted_address,lat:item.geometry.location.lat,lng:item.geometry.location.lng,placeId:item.place_id}))});}catch{response.status(502).json({error:'שירות הכתובות של Google אינו זמין כעת'});}
   });
 
   router.get('/audit', requireRoles('admin'), async (request, response) => {
@@ -254,7 +305,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
         COALESCE((SELECT jsonb_agg(jsonb_build_object('id',ci.id,'name',ci.name,'category',ci.category,'color',ci.color,'icon',ci.icon,'symbol',ci.symbol) ORDER BY ci.sort_order)
           FROM client_labels cl JOIN catalog_items ci ON ci.id=cl.catalog_item_id WHERE cl.client_id=c.id), '[]'::jsonb) AS labels
        FROM clients c
-       WHERE $1='' OR concat_ws(' ',c.code,c.name,c.primary_contact_name,c.phone,c.additional_phones::text,c.email,c.additional_emails::text,c.address,c.city,c.notes) ILIKE $2
+       WHERE $1='' OR concat_ws(' ',c.code,c.name,c.priority_customer_number,c.primary_contact_name,c.phone,c.additional_phones::text,c.email,c.additional_emails::text,c.address,c.city,c.notes) ILIKE $2
          OR EXISTS (SELECT 1 FROM client_contacts cc WHERE cc.client_id=c.id AND concat_ws(' ',cc.name,cc.company,cc.role,cc.phone,cc.additional_phones::text,cc.email) ILIKE $2)
          OR EXISTS (SELECT 1 FROM client_labels cl JOIN catalog_items ci ON ci.id=cl.catalog_item_id WHERE cl.client_id=c.id AND concat_ws(' ',ci.name,ci.symbol) ILIKE $2)
        ORDER BY c.updated_at DESC, c.name LIMIT 200`, [query, like],
@@ -266,7 +317,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     const required = ['name', 'address', 'phone'];
     if (required.some((key) => !String(request.body[key] || '').trim())) return response.status(400).json({ error: 'שם לקוח, כתובת וטלפון הם שדות חובה' });
     const next = await pool.query("SELECT COALESCE(MAX(NULLIF(regexp_replace(code, '\\D','','g'),'')::int),1000)+1 AS value FROM clients");
-    const input = { clientType: 'private', ...request.body };
+    const input = { clientType: 'private', ...request.body, priorityCustomerNumber:request.body.priorityCustomerNumber ?? request.body.customValues?.priorityCustomerNumber ?? '' };
     const entries = valuesFor(input, CLIENT_FIELDS);
     const columns = ['code', ...entries.map(([, column]) => column)];
     const values = [`CUS-${next.rows[0].value}`, ...entries.map(([, , value]) => value)];
@@ -318,6 +369,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
 
   router.patch('/clients/:id', requireRoles('admin', 'manager'), async (request, response) => {
+    if (request.body.priorityCustomerNumber === undefined && request.body.customValues?.priorityCustomerNumber !== undefined) request.body.priorityCustomerNumber=request.body.customValues.priorityCustomerNumber;
     for (const key of ['name', 'address', 'phone']) if (request.body[key] !== undefined && !String(request.body[key]).trim()) return response.status(400).json({ error: 'שם לקוח, כתובת וטלפון אינם יכולים להיות ריקים' });
     const entries = valuesFor(request.body || {}, CLIENT_FIELDS);
     const client = await pool.connect();
@@ -438,7 +490,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
         ORDER BY h.event_at`, [from, to, projectId]),
       pool.query('SELECT id,name FROM projects ORDER BY name'),
     ]);
-    response.json({ projects: projects.rows, events: result.rows.map((row) => ({ id: `${row.source_type}-${row.source_id}`, title: row.title, type: row.source_type, status: row.status, startAt: row.event_at, endAt: row.event_end, allDay: row.payload?.allDay ?? true, color: row.color, icon: row.icon, clientId: row.client_id, projectId: row.project_id, projectName: row.project_name, notes: row.payload?.notes || row.payload?.description || '', assigneeName: row.assignee_name, assigneeColor: row.assignee_color, assigneeIcon: row.assignee_icon })) });
+    response.json({ projects: projects.rows, events: result.rows.map((row) => ({ id: `${row.source_type}-${row.source_id}`, title: row.source_type === 'task' && row.project_name && !String(row.title).includes(row.project_name) ? `${row.project_name} — ${row.title}` : row.title, type: row.source_type, status: row.status, startAt: row.event_at, endAt: row.event_end, allDay: row.payload?.allDay ?? true, color: row.color, icon: row.icon, clientId: row.client_id, projectId: row.project_id, projectName: row.project_name, notes: row.payload?.notes || row.payload?.description || '', assigneeName: row.assignee_name, assigneeColor: row.assignee_color, assigneeIcon: row.assignee_icon })) });
   });
 
   router.get('/calendar-options', async (_request, response) => {

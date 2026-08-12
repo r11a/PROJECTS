@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.0
+
+- Added Priority customer numbers to client cards and live client-list refresh after creation.
+- Replaced the project workflow with the requested 12 fixed stages and automatic stage-based progress.
+- Added project size and contractor-progress tracking.
+- Added task dependencies with same-project validation and self-dependency protection.
+- Added per-project folders under the selected Synology/Share document root.
+- Added direct phone camera/gallery uploads with accompanying project update text.
+- Added read-only Outlook ICS subscriptions with personal revocable links.
+- Added real-time in-app messages between users with unread state and history.
+- Added PostgreSQL-driven live updates over SSE, with silent UI refreshes and no full-screen reload.
+- Added Google geocoding on project address changes when a Google API key is configured.
+- Changed the navigation label from “Clients and contacts” to “Clients” and added project names to task calendar entries.
+
 ## 0.8.1
 
 - Made the compact contact-row view explicit and available on desktop, tablet and mobile.

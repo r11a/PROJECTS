@@ -15,12 +15,14 @@ import { FormsWorkspace } from './FormsWorkspace';
 import { MasterDataWorkspace } from './MasterDataWorkspace';
 import { FinanceWorkspace, ReportsWorkspace, TasksWorkspace } from './Workspaces';
 import { ProjectWorkspace } from './ProjectWorkspace';
+import { MessageCenter } from './Messages';
 import './operational.css';
 import './forms-workspace.css';
 import './master-data.css';
 import './workspaces.css';
 import './theme-dark.css';
 import './contacts.css';
+import './messages.css';
 import projectsMark from './assets/projects-mark.svg';
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 });
@@ -56,19 +58,19 @@ const nav = [
   { id: 'calendar', label: 'לוח שנה', icon: CalendarDays },
   { id: 'projects', label: 'פרויקטים', icon: FolderKanban },
   { id: 'map', label: 'מפת פרויקטים', icon: Map },
-  { id: 'clients', label: 'לקוחות ואנשי קשר', icon: Users },
+  { id: 'clients', label: 'לקוחות', icon: Users },
   { id: 'master', label: 'אנשי מקצוע ומאגרים', icon: Database },
   { id: 'forms', label: 'טפסים ומסמכים', icon: FormInput },
   { id: 'finance', label: 'תשלומים וגבייה', icon: WalletCards },
 ];
 
 function StatusBadge({ stage, compact = false }) {
-  const meta = stageMeta[stage] || stageMeta.planning;
+  const meta = stageMeta[stage] || stageMeta.waiting;
   return <span className={`status-badge ${compact ? 'compact' : ''}`} style={{ '--status': meta.color, '--status-soft': meta.soft }}><i />{meta.label}</span>;
 }
 
 function ProjectMarker({ project, onOpen }) {
-  const meta = stageMeta[project.stage];
+  const meta = stageMeta[project.stage] || stageMeta.waiting;
   const icon = useMemo(() => L.divIcon({
     className: 'project-map-marker-wrap',
     html: `<div class="project-map-marker" style="--marker:${meta.color}"><span>${project.progress}%</span></div>`,
@@ -103,6 +105,7 @@ function App() {
   const [notice, setNotice] = useState('');
   const [insights, setInsights] = useState(null);
   const [alertsOpen, setAlertsOpen] = useState(true);
+  const [messagesOpen,setMessagesOpen]=useState(false); const [unreadMessages,setUnreadMessages]=useState(0);
   const [configuration, setConfiguration] = useState({ settings: {}, catalogs: [], customFields: [] });
   const [team, setTeam] = useState([]);
   const [professionals, setProfessionals] = useState([]);
@@ -132,10 +135,18 @@ function App() {
   }, []);
   useEffect(() => { if (!user) return undefined; const refresh = () => loadProjects().catch(() => {}); window.addEventListener('projects:data-changed', refresh); return () => window.removeEventListener('projects:data-changed', refresh); }, [user?.id]);
   useEffect(() => {
+    if (!user) return undefined;
+    const stream = new EventSource(`${apiRoot}/live`, { withCredentials:true }); let timer;
+    const changed = (event) => { clearTimeout(timer); timer=setTimeout(() => { let table=''; try{table=JSON.parse(event.data).table||''}catch{} loadProjects().catch(()=>{}); if(['clients','client_contacts','projects'].includes(table))loadReferenceData().catch(()=>{}); window.dispatchEvent(new CustomEvent('projects:live-change',{detail:{table}})); },120); };
+    stream.addEventListener('change',changed);
+    return () => { clearTimeout(timer); stream.close(); };
+  }, [user?.id]);
+  useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(''), 2600);
     return () => clearTimeout(timer);
   }, [notice]);
+  useEffect(()=>{if(!user)return undefined;const load=()=>api('/messages').then(result=>setUnreadMessages(result.unread)).catch(()=>{});load();const live=event=>{if(event.detail?.table==='user_messages')load()};window.addEventListener('projects:live-change',live);return()=>window.removeEventListener('projects:live-change',live)},[user?.id]);
   useEffect(() => {
     if (!user) return undefined;
     const loadInsights = () => api('/insights').then((result) => { setInsights(result); if (result.alerts.length) setAlertsOpen(true); }).catch(() => {});
@@ -269,16 +280,17 @@ function App() {
           <div className="topbar-actions">
             <label className="global-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש בכל המערכת..." /><kbd>⌘ K</kbd></label>
             <button className="icon-button" onClick={() => setAlertsOpen(true)} title="התראות"><Bell size={20} />{insights?.alerts?.length > 0 && <i />}</button>
+            <button className="icon-button message-button" onClick={()=>setMessagesOpen(true)} title="הודעות צוות"><MessageSquare size={20}/>{unreadMessages>0&&<em>{unreadMessages}</em>}</button>
             {['admin', 'manager'].includes(user.role) && <button className="primary-button" onClick={() => setNewProjectOpen(true)}><Plus size={18} />פרויקט חדש</button>}
           </div>
         </header>
 
         <div className="page-content">
           {page === 'dashboard' && <Dashboard projects={projects} openProject={openProject} setPage={setPage} insights={insights} user={user} />}
-          {page === 'calendar' && <CalendarWorkspace api={api} user={user} setNotice={setNotice} />}
+          {page === 'calendar' && <CalendarWorkspace api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} />}
           {page === 'projects' && <ProjectsPage projects={filteredProjects} search={search} setSearch={setSearch} stageFilter={stageFilter} setStageFilter={setStageFilter} openProject={openProject} api={api} setNotice={setNotice} />}
           {page === 'map' && <MapPage projects={filteredProjects} openProject={openProject} stageFilter={stageFilter} setStageFilter={setStageFilter} />}
-          {page === 'clients' && <ClientsWorkspace api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} />}
+          {page === 'clients' && <ClientsWorkspace api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} onDataChanged={loadReferenceData} />}
           {page === 'master' && <MasterDataWorkspace api={api} apiRoot={apiRoot} user={user} users={team} clients={clientOptions} projects={projects} setNotice={setNotice} onDataChanged={loadReferenceData} />}
           {page === 'forms' && <FormsWorkspace api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} />}
           {page === 'finance' && <FinanceWorkspace api={api} user={user} projects={projects} setNotice={setNotice} openProject={openProject} />}
@@ -291,6 +303,7 @@ function App() {
       </main>
       {newProjectOpen && <NewProjectModal onClose={() => setNewProjectOpen(false)} onCreate={createProject} professionals={professionals} clients={clientOptions} stageOptions={stageOptions} equipment={equipmentCatalog} />}
       {alertsOpen && insights?.alerts?.length > 0 && <AlertCenter alerts={insights.alerts} api={api} setNotice={setNotice} onClose={() => setAlertsOpen(false)} onSnoozed={() => { setAlertsOpen(false); setInsights((current) => ({ ...current, alerts: [] })); }} />}
+      {messagesOpen&&<MessageCenter api={api} user={user} users={team} onClose={()=>setMessagesOpen(false)} setNotice={setNotice} onUnread={setUnreadMessages}/>}
       {notice && <div className="toast"><CheckCircle2 size={19} />{notice}</div>}
     </div>
   );
@@ -443,7 +456,7 @@ function ProjectsPage({ projects, search, setSearch, stageFilter, setStageFilter
   const managers = [...new Set(sourceProjects.map((project) => project.manager).filter(Boolean))];
   return <div className="section-page">
     <div className="page-intro"><div><h2>{showArchived ? 'ארכיון פרויקטים' : 'כל הפרויקטים'}</h2><p>{showArchived ? 'פרויקטים שהסתיימו נשמרים כאן וניתנים לשחזור מלא' : `ניהול, מעקב ובקרה של ${visibleProjects.length} פרויקטים בתצוגה הנוכחית`}</p></div><div className="project-page-actions"><div className="archive-switch"><button className={!showArchived ? 'active' : ''} onClick={() => switchArchive(false)}>פעילים</button><button className={showArchived ? 'active' : ''} onClick={() => switchArchive(true)}><Archive size={16}/>ארכיון</button></div><div className="view-switch"><button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}><ListFilter size={17} />טבלה</button><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}><FolderKanban size={17} />לוח</button></div></div></div>
-    <div className="toolbar panel"><label className="table-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש פרויקט, לקוח או מזהה..." /></label><div className="stage-chips"><button className={stageFilter === 'all' ? 'active' : ''} onClick={() => setStageFilter('all')}>הכל <b>{sourceProjects.length}</b></button>{Object.entries(stageMeta).slice(0, 5).map(([key, meta]) => <button key={key} className={stageFilter === key ? 'active' : ''} onClick={() => setStageFilter(key)}>{meta.label}</button>)}</div><button className={`filter-button ${filtersOpen?'active':''}`} onClick={()=>setFiltersOpen(!filtersOpen)}><SlidersHorizontal size={17} />מסננים</button></div>
+    <div className="toolbar panel"><label className="table-search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש פרויקט, לקוח או מזהה..." /></label><div className="stage-chips"><button className={stageFilter === 'all' ? 'active' : ''} onClick={() => setStageFilter('all')}>הכל <b>{sourceProjects.length}</b></button>{Object.entries(stageMeta).map(([key, meta]) => <button key={key} className={stageFilter === key ? 'active' : ''} onClick={() => setStageFilter(key)}>{meta.label}</button>)}</div><button className={`filter-button ${filtersOpen?'active':''}`} onClick={()=>setFiltersOpen(!filtersOpen)}><SlidersHorizontal size={17} />מסננים</button></div>
     {filtersOpen&&<div className="advanced-project-filters panel"><label>מנהל פרויקט<select value={manager} onChange={e=>setManager(e.target.value)}><option value="">כולם</option>{managers.map(x=><option key={x}>{x}</option>)}</select></label><label>עדיפות<select value={priority} onChange={e=>setPriority(e.target.value)}><option value="">הכול</option><option value="low">נמוכה</option><option value="normal">רגילה</option><option value="high">גבוהה</option><option value="urgent">דחופה</option></select></label><label className="filter-checkbox"><input type="checkbox" checked={flagged} onChange={e=>setFlagged(e.target.checked)}/>פרויקטים מסומנים בלבד</label><button onClick={()=>{setManager('');setPriority('');setFlagged(false)}}>ניקוי מסננים</button></div>}
     {archiveLoading ? <div className="panel inline-empty">טוען ארכיון...</div> : view === 'table' ? <div className="panel projects-table-wrap"><table className="projects-table"><thead><tr><th>פרויקט</th><th>שלב נוכחי</th><th>התקדמות</th><th>מנהל פרויקט</th><th>אבן דרך הבאה</th><th>יתרה לגבייה</th><th /></tr></thead><tbody>{visibleProjects.map((project) => <tr key={project.id} onClick={() => openProject(project)}><td><div className="project-cell"><div className="project-thumb"><Home size={18} /></div><div><strong>{project.name}</strong><span>{project.id} · {project.location}</span>{showArchived&&<small className="archived-date">בארכיון מ־{new Date(project.archivedAt).toLocaleDateString('he-IL')}</small>}</div>{project.flag && <Flag size={14} className="row-flag" />}</div></td><td><StatusBadge stage={project.stage} /></td><td><div className="table-progress"><div><i style={{ width: `${project.progress}%`, background: stageMeta[project.stage].color }} /></div><b>{project.progress}%</b></div></td><td><div className="manager-cell"><span>{project.ownerInitials}</span>{project.manager||'לא הוקצה'}</div></td><td><div className="milestone-cell"><strong>{project.nextMilestone||'לא הוגדר'}</strong><span><CalendarDays size={13} />{project.due||'ללא תאריך'}</span></div></td><td><strong className="money-cell">{money.format(project.value - project.paid)}</strong></td><td><button className="round-more" onClick={e=>{e.stopPropagation();openProject(project)}} title="פתיחת פרויקט"><MoreHorizontal size={18} /></button></td></tr>)}</tbody></table>{!visibleProjects.length&&<div className="inline-empty">{showArchived?'הארכיון ריק.':'לא נמצאו פרויקטים התואמים למסננים.'}</div>}</div>
     : <BoardView projects={visibleProjects} openProject={openProject} />}
@@ -451,7 +464,7 @@ function ProjectsPage({ projects, search, setSearch, stageFilter, setStageFilter
 }
 
 function BoardView({ projects, openProject }) {
-  return <div className="board-view">{Object.entries(stageMeta).slice(0, 5).map(([key, meta]) => { const items = projects.filter((p) => p.stage === key); return <div className="board-column" key={key}><div className="board-head"><span><i style={{ background: meta.color }} />{meta.label}</span><b>{items.length}</b><Plus size={17} /></div><div className="board-cards">{items.map((project) => <button className="board-card" key={project.id} onClick={() => openProject(project)}><div className="board-card-top"><span>{project.id}</span>{project.flag && <Flag size={14} />}</div><strong>{project.name}</strong><small><MapPin size={13} />{project.location}</small><div className="systems-mini">{project.systems.slice(0, 2).map((s) => <em key={s}>{s}</em>)}</div><div className="board-card-bottom"><div className="mini-avatar">{project.ownerInitials}</div><div className="micro-progress"><i style={{ width: `${project.progress}%`, background: meta.color }} /></div><b>{project.progress}%</b></div></button>)}</div></div>; })}</div>;
+  return <div className="board-view">{Object.entries(stageMeta).map(([key, meta]) => { const items = projects.filter((p) => p.stage === key); return <div className="board-column" key={key}><div className="board-head"><span><i style={{ background: meta.color }} />{meta.label}</span><b>{items.length}</b><Plus size={17} /></div><div className="board-cards">{items.map((project) => <button className="board-card" key={project.id} onClick={() => openProject(project)}><div className="board-card-top"><span>{project.id}</span>{project.flag && <Flag size={14} />}</div><strong>{project.name}</strong><small><MapPin size={13} />{project.location}</small><div className="systems-mini">{project.systems.slice(0, 2).map((s) => <em key={s}>{s}</em>)}</div><div className="board-card-bottom"><div className="mini-avatar">{project.ownerInitials}</div><div className="micro-progress"><i style={{ width: `${project.progress}%`, background: meta.color }} /></div><b>{project.progress}%</b></div></button>)}</div></div>; })}</div>;
 }
 
 function MapPage({ projects, openProject, stageFilter, setStageFilter }) {

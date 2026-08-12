@@ -19,5 +19,6 @@
 .contacts-table.cards .contact-email{grid-column:2/4!important}
 .theme-dark .contacts-list-head{color:#aeb3ba;background:#202224;border-color:#3b3e42}
 .theme-dark .contacts-table.compact .contact-role{color:#c4c8ce}
+.priority-customer-number{display:flex;align-items:center;justify-content:flex-start;gap:10px;margin-top:-8px;padding:9px 14px;border:1px solid var(--line,#e5e7ee);border-radius:10px;background:var(--surface,#fff);width:max-content}.priority-customer-number span{color:#858c9c;font-size:12px}.priority-customer-number strong{direction:ltr}
 @media(max-width:900px){.contacts-list-head,.contacts-table.compact .contact-row{grid-template-columns:minmax(145px,1.1fr) minmax(120px,.85fr) minmax(105px,.75fr) minmax(180px,1.2fr)!important}}
 @media(max-width:700px){.contacts-table.compact{margin-inline:-1px}.contacts-list-head,.contacts-table.compact .contact-row{min-width:640px;padding-inline:12px}.contacts-table.cards .contact-row{min-width:0}.section-title-actions .view-toggle button{min-width:68px;padding-inline:8px!important}}

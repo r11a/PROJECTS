@@ -56,6 +56,13 @@ function databaseConfig(database = process.env.PGDATABASE || 'projects') {
 
 await ensureDatabase();
 const pool = new Pool(databaseConfig());
+const liveResponses = new Set();
+const liveListener = await pool.connect();
+await liveListener.query('LISTEN projects_live_change');
+liveListener.on('notification', (message) => {
+  for (const response of liveResponses) response.write(`event: change\ndata: ${message.payload || '{}'}\n\n`);
+});
+liveListener.on('error', (error) => console.error('Live update listener error', error.message));
 
 async function runMigrations() {
   await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -86,6 +93,7 @@ const projectColumns = [
   'id', 'name', 'client', 'location', 'address', 'lat', 'lng', 'stage', 'progress', 'manager',
   'owner_initials', 'value', 'paid', 'due', 'priority', 'flag', 'systems', 'next_milestone',
   'phone', 'email', 'health', 'tasks_done', 'tasks_total', 'manager_professional_id', 'client_id',
+  'project_size', 'contractor_progress',
 ];
 const inputToColumn = {
   id: 'id', name: 'name', client: 'client', location: 'location', address: 'address', lat: 'lat', lng: 'lng',
@@ -95,7 +103,9 @@ const inputToColumn = {
   tasksDone: 'tasks_done', tasksTotal: 'tasks_total',
   managerId: 'manager_professional_id',
   clientId: 'client_id',
+  projectSize: 'project_size', contractorProgress: 'contractor_progress',
 };
+const STAGE_PROGRESS = { waiting:0,mobilization:9,infrastructure:18,threading:27,electrician_threading:36,threading_done:45,installation_a:55,installation_b:65,installation_c:75,activation_programming:85,finishes:93,post_delivery:100 };
 
 function projectFromRow(row) {
   return {
@@ -106,6 +116,7 @@ function projectFromRow(row) {
     nextMilestone: row.next_milestone, phone: row.phone, email: row.email, health: Number(row.health),
     tasksDone: Number(row.tasks_done), tasksTotal: Number(row.tasks_total), managerId: row.manager_professional_id, clientId: row.client_id,
     archived: Boolean(row.archived_at), archivedAt: row.archived_at, archivedBy: row.archived_by,
+    projectSize: row.project_size || 'medium', contractorProgress: row.contractor_progress || 'waiting',
   };
 }
 
@@ -143,6 +154,16 @@ async function resolveProjectClient(db, input, currentProject = null) {
   return null;
 }
 
+async function geocodeAddress(address) {
+  if (!String(address || '').trim()) return null;
+  try {
+    const setting=await pool.query("SELECT value FROM app_settings WHERE key='map'"); const key=setting.rows[0]?.value?.googleApiKey;
+    if(!key)return null;
+    const url=new URL('https://maps.googleapis.com/maps/api/geocode/json');url.searchParams.set('address',address);url.searchParams.set('components','country:IL');url.searchParams.set('language','he');url.searchParams.set('key',key);
+    const response=await fetch(url);if(!response.ok)return null;const data=await response.json();const first=data.results?.[0];return first?{lat:first.geometry.location.lat,lng:first.geometry.location.lng,formattedAddress:first.formatted_address}:null;
+  } catch { return null; }
+}
+
 async function seedDatabase() {
   const options = await readOptions();
   const username = String(options.admin_username || 'admin').trim();
@@ -158,9 +179,12 @@ async function seedDatabase() {
   const count = await pool.query('SELECT COUNT(*)::int AS count FROM projects');
   if (count.rows[0].count > 0) return;
   for (const project of seedProjects) {
+    const legacyStages = { planning:'waiting',installation:'installation_b',programming:'activation_programming',handover:'finishes',completed:'post_delivery' };
+    const seededProject = { projectSize:'medium', contractorProgress:'waiting', ...project, stage:legacyStages[project.stage] || project.stage };
+    seededProject.progress = STAGE_PROGRESS[seededProject.stage] ?? seededProject.progress;
     const values = projectColumns.map((column) => {
       const inputKey = Object.keys(inputToColumn).find((key) => inputToColumn[key] === column);
-      return column === 'systems' ? JSON.stringify(project[inputKey] || []) : project[inputKey];
+      return column === 'systems' ? JSON.stringify(seededProject[inputKey] || []) : seededProject[inputKey];
     });
     const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
     await pool.query(`INSERT INTO projects(${projectColumns.join(', ')}) VALUES(${placeholders})`, values);
@@ -321,6 +345,13 @@ app.post('/api/auth/logout', (_request, response) => {
 
 app.get('/api/auth/me', authenticate, (request, response) => response.json({ user: request.user }));
 
+app.get('/api/live', authenticate, (request, response) => {
+  response.set({'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
+  response.flushHeaders(); response.write('event: ready\ndata: {}\n\n'); liveResponses.add(response);
+  const heartbeat=setInterval(()=>response.write(': keepalive\n\n'),25000);
+  request.on('close',()=>{clearInterval(heartbeat);liveResponses.delete(response)});
+});
+
 app.get('/api/projects', authenticate, async (request, response) => {
   const scope = ['active', 'archived', 'all'].includes(request.query.scope) ? request.query.scope : 'active';
   const where = scope === 'all' ? '' : scope === 'archived' ? 'WHERE p.archived_at IS NOT NULL' : 'WHERE p.archived_at IS NULL';
@@ -339,16 +370,17 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
     const selectedManager = await resolveProjectManager(request.body.managerId);
     const selectedClient = await resolveProjectClient(db, request.body);
     if (!selectedClient) throw Object.assign(new Error('יש לבחור לקוח קיים או ליצור לקוח חדש'), { status: 400 });
+    const geocoded=await geocodeAddress(request.body.address || selectedClient.address || request.body.location);
     const project = {
     id: request.body.id || `PRJ-${nextNumber.rows[0].value}`,
     name: request.body.name || 'פרויקט חדש', client: selectedClient.name, location: request.body.location || selectedClient.city || '',
-    address: request.body.address || selectedClient.address || request.body.location || '', lat: request.body.lat ?? 32.0853, lng: request.body.lng ?? 34.7818,
-    stage: request.body.stage || 'planning', progress: request.body.progress ?? 0, manager: selectedManager?.display_name || '',
+    address: geocoded?.formattedAddress || request.body.address || selectedClient.address || request.body.location || '', lat: geocoded?.lat ?? request.body.lat ?? 32.0853, lng: geocoded?.lng ?? request.body.lng ?? 34.7818,
+    stage: request.body.stage || 'waiting', progress: STAGE_PROGRESS[request.body.stage || 'waiting'] ?? 0, manager: selectedManager?.display_name || '',
     ownerInitials: selectedManager?.display_name?.slice(0, 2) || '', value: request.body.value ?? 0,
     paid: request.body.paid ?? 0, due: request.body.due || '', priority: request.body.priority || 'normal', flag: request.body.flag || '',
     systems: request.body.systems || [], nextMilestone: request.body.nextMilestone || 'אפיון ראשוני', phone: request.body.phone || selectedClient.phone || '',
     email: request.body.email || selectedClient.email || '', health: request.body.health ?? 100, tasksDone: request.body.tasksDone ?? 0, tasksTotal: request.body.tasksTotal ?? 0,
-    managerId: request.body.managerId || null, clientId: selectedClient.id,
+    managerId: request.body.managerId || null, clientId: selectedClient.id, projectSize: request.body.projectSize || 'medium', contractorProgress: request.body.contractorProgress || 'waiting',
     };
     const values = Object.keys(inputToColumn).map((key) => key === 'systems' ? JSON.stringify(project[key]) : project[key]);
     const columns = Object.values(inputToColumn);
@@ -378,6 +410,10 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
     request.body.manager = selectedManager?.display_name || '';
     request.body.ownerInitials = selectedManager?.display_name?.slice(0, 2) || '';
   }
+  if (Object.prototype.hasOwnProperty.call(request.body || {}, 'stage')) {
+    if (Object.prototype.hasOwnProperty.call(STAGE_PROGRESS, request.body.stage)) request.body.progress = STAGE_PROGRESS[request.body.stage];
+  }
+  if (!Object.prototype.hasOwnProperty.call(request.body || {}, 'stage')) delete request.body.progress;
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
@@ -388,6 +424,7 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
       request.body.clientId = selectedClient.id;
       request.body.client = selectedClient.name;
     }
+    if (['admin','manager'].includes(request.user.role) && request.body.address && request.body.address!==current.rows[0].address) { const geocoded=await geocodeAddress(request.body.address);if(geocoded){request.body.address=geocoded.formattedAddress;request.body.lat=geocoded.lat;request.body.lng=geocoded.lng;} }
     if (['admin', 'manager'].includes(request.user.role) && Object.prototype.hasOwnProperty.call(request.body, 'clientName')) {
       const clientName = String(request.body.clientName || '').trim();
       if (!clientName) throw Object.assign(new Error('שם לקוח אינו יכול להיות ריק'), { status: 400 });

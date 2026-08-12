@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
-import { access, mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 
@@ -281,10 +281,20 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
     let tags = [];
     try { tags = JSON.parse(request.body.tags || '[]'); } catch { tags = String(request.body.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean); }
     const storage = await currentStorage();
+    let storagePath = storage.relativePath;
+    if (projectId && storage.mode !== 'internal') {
+      const project = await pool.query('SELECT id,name FROM projects WHERE id=$1',[projectId]);
+      if (project.rowCount) {
+        const folder = `${project.rows[0].id}-${project.rows[0].name}`.replace(/[<>:"/\\|?*\x00-\x1F]/g,'-').replace(/\s+/g,' ').trim().slice(0,100);
+        storagePath = [storage.relativePath,folder].filter(Boolean).join('/');
+        const projectDirectory = safeStoragePath(storage.mode,storagePath); await mkdir(projectDirectory,{recursive:true});
+        await rename(request.file.path,path.join(projectDirectory,request.file.filename));
+      }
+    }
     const result = await pool.query(
       `INSERT INTO client_files(client_id,project_id,form_record_id,title,original_name,stored_name,mime_type,size_bytes,category,description,tags,version,storage_area,storage_path,uploaded_by)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
-      [clientId, projectId, formRecordId, request.body.title || request.file.originalname, request.file.originalname, request.file.filename, request.file.mimetype, request.file.size, request.body.category || 'אחר', request.body.description || '', JSON.stringify(tags), Number(request.body.version) || 1, storage.mode, storage.relativePath, request.user.id],
+      [clientId, projectId, formRecordId, request.body.title || request.file.originalname, request.file.originalname, request.file.filename, request.file.mimetype, request.file.size, request.body.category || 'אחר', request.body.description || '', JSON.stringify(tags), Number(request.body.version) || 1, storage.mode, storagePath, request.user.id],
     );
     await audit(request, 'upload', 'document', String(result.rows[0].id), { originalName: request.file.originalname, clientId, projectId });
     response.status(201).json({ document: result.rows[0] });

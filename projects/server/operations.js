@@ -21,10 +21,10 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const q = String(request.query.q || '').trim();
     const status = String(request.query.status || '');
     const projectId = String(request.query.projectId || '');
-    const result = await pool.query(`SELECT t.*,p.name project_name,c.name client_name,
+    const result = await pool.query(`SELECT t.*,p.name project_name,c.name client_name,dependency.title dependency_title,
       COALESCE(pr.display_name,u.display_name) assignee_name,pr.color assignee_color
       FROM tasks t LEFT JOIN projects p ON p.id=t.project_id LEFT JOIN clients c ON c.id=t.client_id
-      LEFT JOIN professionals pr ON pr.id=t.assignee_professional_id LEFT JOIN users u ON u.id=t.assignee_id
+      LEFT JOIN professionals pr ON pr.id=t.assignee_professional_id LEFT JOIN users u ON u.id=t.assignee_id LEFT JOIN tasks dependency ON dependency.id=t.dependency_task_id
       WHERE ($1='' OR concat_ws(' ',t.title,t.description,p.name,c.name,pr.display_name,u.display_name) ILIKE $2)
         AND ($3='' OR t.status=$3) AND ($4='' OR t.project_id=$4)
       ORDER BY (t.status IN ('done','cancelled')),t.due_date NULLS LAST,t.priority DESC,t.created_at DESC`, [q, `%${q}%`, status, projectId]);
@@ -35,6 +35,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const title = String(request.body.title || '').trim();
     if (!title || !request.body.dueDate || (!request.body.projectId && !request.body.clientId)) return response.status(400).json({ error: 'כותרת, תאריך יעד ופרויקט או לקוח הם שדות חובה' });
     if (request.body.startDate && request.body.startDate > request.body.dueDate) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
+    if (request.body.dependencyTaskId) { const dependency=await pool.query('SELECT project_id FROM tasks WHERE id=$1',[request.body.dependencyTaskId]); if(!dependency.rowCount||dependency.rows[0].project_id!==request.body.projectId)return response.status(400).json({error:'משימת התלות חייבת להשתייך לאותו פרויקט'}); }
     const result = await pool.query(`INSERT INTO tasks(client_id,project_id,title,description,status,priority,assignee_professional_id,start_date,due_date,estimated_hours,task_type,dependency_task_id,created_by)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null, request.body.startDate || request.body.dueDate, request.body.dueDate, Number(request.body.estimatedHours) || 0, request.body.taskType || 'task', request.body.dependencyTaskId || null, request.user.id]);
     await syncProjectMetrics(pool, request.body.projectId);
@@ -48,6 +49,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const row = current.rows[0];
     const status = TASK_STATUSES.includes(request.body.status) ? request.body.status : row.status;
     const nextStart = request.body.startDate ?? row.start_date; const nextDue = request.body.dueDate ?? row.due_date;
+    if(String(request.body.dependencyTaskId||'')===String(request.params.id))return response.status(400).json({error:'משימה אינה יכולה להיות תלויה בעצמה'});
     if (nextStart && nextDue && String(nextStart).slice(0,10) > String(nextDue).slice(0,10)) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
     const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,start_date=$6,due_date=$7,estimated_hours=$8,task_type=$9,dependency_task_id=$10,
       completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$11 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, request.body.estimatedHours ?? row.estimated_hours, request.body.taskType ?? row.task_type, request.body.dependencyTaskId ?? row.dependency_task_id, request.params.id]);
