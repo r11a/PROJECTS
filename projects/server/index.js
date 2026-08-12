@@ -3,10 +3,8 @@ import helmet from 'helmet';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pg from 'pg';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { seedProjects } from '../src/data.js';
 import { createOperationalRouter } from './operational.js';
@@ -14,19 +12,16 @@ import { createFormsRouter } from './forms.js';
 import { createManagementRouter } from './management.js';
 import { createOperationsRouter } from './operations.js';
 import { createGeocoder } from './geocoder.js';
+import { createBackupRouter } from './backup.js';
 
 const { Pool, Client } = pg;
-const execFileAsync = promisify(execFile);
 const DATA_DIR = process.env.PROJECTS_DATA_DIR || '/data';
-const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const OPTIONS_FILE = process.env.PROJECTS_OPTIONS_FILE || '/data/options.json';
 const MIGRATIONS_DIR = new URL('../migrations/', import.meta.url);
 const PORT = Number(process.env.PORT || 3000);
 const APP_VERSION = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const ROLES = ['admin', 'manager', 'technician', 'finance', 'viewer'];
 const EDIT_ROLES = ['admin', 'manager', 'technician', 'finance'];
-
-await mkdir(BACKUP_DIR, { recursive: true });
 
 async function readOptions() {
   try {
@@ -511,37 +506,7 @@ app.delete('/api/users/:id', authenticate, requireRoles('admin'), async (request
   response.status(204).end();
 });
 
-app.get('/api/system/backups', authenticate, requireRoles('admin'), async (_request, response) => {
-  const files = await readdir(BACKUP_DIR);
-  const backups = await Promise.all(files.filter((name) => /^projects-.*\.dump$/.test(name)).map(async (name) => {
-    const info = await stat(path.join(BACKUP_DIR, name));
-    return { name, size: info.size, createdAt: info.mtime.toISOString() };
-  }));
-  response.json({ backups: backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
-});
-
-app.post('/api/system/backups', authenticate, requireRoles('admin'), async (request, response) => {
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const name = `projects-${stamp}.dump`;
-  await execFileAsync('pg_dump', ['--format=custom', '--no-owner', '--file', path.join(BACKUP_DIR, name), 'projects'], { env: process.env });
-  await audit(request, 'backup', 'system', name);
-  response.status(201).json({ backup: { name } });
-});
-
-app.post('/api/system/restore', authenticate, requireRoles('admin'), async (request, response) => {
-  const name = path.basename(String(request.body.name || ''));
-  if (!/^projects-.*\.dump$/.test(name)) return response.status(400).json({ error: 'Invalid backup name' });
-  const backupPath = path.join(BACKUP_DIR, name);
-  await stat(backupPath);
-  await audit(request, 'restore_requested', 'system', name);
-  await writeFile(path.join(DATA_DIR, 'restore.request'), backupPath);
-  response.status(202).json({ status: 'restarting', message: 'Restore scheduled' });
-  setTimeout(async () => {
-    await pool.end();
-    process.exit(0);
-  }, 500);
-});
-
+app.use('/api', await createBackupRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR, appVersion:APP_VERSION }));
 app.use('/api', await createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR, geocoder }));
 app.use('/api', createFormsRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));

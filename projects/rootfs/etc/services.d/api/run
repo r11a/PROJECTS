@@ -14,7 +14,7 @@ while true; do
   if [ -s /data/restore.request ]; then
     restore_file="$(cat /data/restore.request)"
     case "$restore_file" in
-      /data/backups/*.dump) ;;
+      /data/backups/*.dump|/data/backups/*.projects-backup) ;;
       *) echo "Invalid restore request"; rm -f /data/restore.request; exit 1 ;;
     esac
     if [ ! -f "$restore_file" ]; then
@@ -22,9 +22,37 @@ while true; do
       rm -f /data/restore.request
       exit 1
     fi
+    database_dump="$restore_file"
+    restore_staging=/data/restore-staging
+    full_restore=0
+    case "$restore_file" in
+      *.projects-backup)
+        full_restore=1
+        rm -rf /data/restore-staging
+        mkdir -p "$restore_staging"
+        tar -xzf "$restore_file" -C "$restore_staging"
+        database_dump="$restore_staging/database.dump"
+        if [ ! -s "$database_dump" ]; then
+          echo "Backup package does not contain database.dump"
+          rm -f /data/restore.request
+          exit 1
+        fi
+        ;;
+    esac
     dropdb --if-exists --force -h "$PGHOST" -U "$PGUSER" projects
     createdb -h "$PGHOST" -U "$PGUSER" projects
-    pg_restore --no-owner --no-privileges -h "$PGHOST" -U "$PGUSER" -d projects "$restore_file"
+    pg_restore --no-owner --no-privileges -h "$PGHOST" -U "$PGUSER" -d projects "$database_dump"
+    if [ "$full_restore" -eq 1 ] && [ -d "$restore_staging/files/uploads" ]; then
+      rm -rf /data/uploads
+      mkdir -p /data/uploads
+      cp -a "$restore_staging/files/uploads/." /data/uploads/
+    fi
+    if [ "$full_restore" -eq 1 ] && [ -d "$restore_staging/files/branding" ]; then
+      rm -rf /data/branding
+      mkdir -p /data/branding
+      cp -a "$restore_staging/files/branding/." /data/branding/
+    fi
+    rm -rf /data/restore-staging
     rm -f /data/restore.request
     echo "Database restore completed"
   fi

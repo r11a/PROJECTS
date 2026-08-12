@@ -232,7 +232,7 @@ INSERT INTO app_settings(key, value) VALUES
   ('projectNumbering', '{"prefix":"PRJ","includeYear":true,"nextNumber":1}'),
   ('map', '{"provider":"openstreetmap","addressProvider":"photon","photonUrl":"https://photon.komoot.io","addressLanguage":"default","defaultLat":32.0853,"defaultLng":34.7818,"defaultZoom":10}'),
   ('notifications', '{"taskDue":true,"paymentDue":true,"milestoneRisk":true,"emailEnabled":false}'),
-  ('backupPolicy', '{"enabled":true,"frequency":"daily","retention":14,"hour":"02:00"}')
+  ('backupPolicy', '{"enabled":true,"frequency":"daily","retention":14,"hour":"02:00","destination":"internal","relativePath":"PROJECTS/Backups"}')
 ON CONFLICT(key) DO NOTHING;
 
 INSERT INTO catalog_items(category, name, color, icon, symbol, sort_order) VALUES

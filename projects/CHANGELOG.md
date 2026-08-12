@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0
+
+- Added full PROJECTS backup packages containing PostgreSQL, internal uploads, and company branding.
+- Added automatic daily or weekly backup scheduling with retention control and Israel timezone support.
+- Added verified backup storage in an internal directory or a configurable Home Assistant `/share` path.
+- Added backup export/download, package import validation, and controlled full restore.
+- Preserved manually typed house numbers when Photon only knows the street, with an approximate-location indicator.
+- Added explicit CA certificates for reliable HTTPS address lookup.
+
 ## 0.9.5
 
 - Enabled Photon street suggestions in both new-client and edit-client forms.

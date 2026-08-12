@@ -26,6 +26,7 @@ function addressFromFeature(feature) {
   return {
     address: displayAddress(properties),
     city: properties.city || properties.locality || properties.district || '',
+    houseNumber: properties.housenumber || '',
     lat,
     lng,
     placeId: `osm-${properties.osm_type || 'x'}-${properties.osm_id || `${lat}-${lng}`}`,
@@ -55,12 +56,21 @@ export function createGeocoder(pool) {
     url.searchParams.set('lat', '31.7683');
     url.searchParams.set('lon', '35.2137');
     const response = await fetch(url, {
-      headers: { Accept: 'application/geo+json, application/json', 'User-Agent': 'PROJECTS-Smart-Project-Management/0.9' },
+      headers: { Accept: 'application/geo+json, application/json', 'User-Agent': 'PROJECTS-Smart-Project-Management/0.10' },
       signal: AbortSignal.timeout(7000),
     });
     if (!response.ok) throw new Error(`Photon returned ${response.status}`);
     const data = await response.json();
-    const items = (data.features || []).map(addressFromFeature).filter((item) => item?.address);
+    const requestedHouseNumber = normalized.match(/(?:^|\s)(\d+[A-Za-z\u0590-\u05ff]?)(?=\s|,|$)/)?.[1] || '';
+    const items = (data.features || []).map(addressFromFeature).filter((item) => item?.address).map((item) => {
+      if (!requestedHouseNumber) return { ...item, approximate:false };
+      if (String(item.houseNumber).toLocaleLowerCase('he-IL') === requestedHouseNumber.toLocaleLowerCase('he-IL')) return { ...item, approximate:false };
+      const [streetWithNumber, ...rest] = item.address.split(',').map((part) => part.trim());
+      const street = item.houseNumber
+        ? streetWithNumber.replace(new RegExp(`\\s${String(item.houseNumber).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`), '').trim()
+        : streetWithNumber;
+      return { ...item, houseNumber:requestedHouseNumber, address:[`${street} ${requestedHouseNumber}`,...rest].filter(Boolean).join(', '), approximate:true };
+    });
     cache.set(cacheKey, { createdAt: Date.now(), items });
     if (cache.size > 300) cache.delete(cache.keys().next().value);
     return items;

@@ -12,7 +12,7 @@ Premium project management for smart-home professionals, packaged as a Home Assi
 - Payment and collection overview
 - PostgreSQL shared persistence and automatic migrations
 - Standalone users with role-based permissions
-- Audit logging, health checks and database backup/restore
+- Audit logging, health checks, and automatic full backup/restore to internal storage or `/share`
 - Detailed customer cards, contacts, files, tasks and site inspections
 - Reusable company/external professional directory with multiple roles and optional user access
 - Hierarchical system types, systems and components
