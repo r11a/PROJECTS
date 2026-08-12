@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.4
+
+- Replaced the generic browser icon with the PROJECTS P mark.
+- Added the PROJECTS icon for mobile home-screen shortcuts.
+
 ## 0.9.3
 
 - Added the installed application version to the sidebar.
