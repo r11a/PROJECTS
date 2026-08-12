@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.5
+
+- Enabled Photon street suggestions in both new-client and edit-client forms.
+- Added automatic city completion when an address suggestion is selected.
+- Preserved manual address entry when an address is missing from OpenStreetMap.
+- Synchronized the package, add-on, health endpoint, sidebar, and Docker versions.
+
 ## 0.9.4
 
 - Replaced the generic browser icon with the PROJECTS P mark.
