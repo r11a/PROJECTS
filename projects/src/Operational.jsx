@@ -1113,7 +1113,7 @@ export function ClientsWorkspace({
     );
 
   return (
-    <div className={`ops-page clients-workspace ${viewMode}-view`}>
+    <div className={`ops-page clients-workspace clients-${viewMode}-view`}>
       <div className="ops-hero">
         <div>
           <span className="ops-eyebrow">

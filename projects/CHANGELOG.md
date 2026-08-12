@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.1
+
+- Fixed a CSS class collision that compressed the customer tile view into narrow project-board columns.
+- Made the customer tile grid use the full available page width while preserving the compact table view.
+
 ## 0.11.0
 
 - Split customer first and last names, added apartment number, richer table/board views, and deterministic sorting.
