@@ -3,6 +3,10 @@ const ISRAEL_BBOX = '34.2,29.3,35.9,33.4';
 const CACHE_TTL = 15 * 60 * 1000;
 const cache = new Map();
 
+function withoutArabic(value = '') {
+  return String(value).replace(/[\u0600-\u06ff]+/g, '').replace(/\s+,/g, ',').replace(/,\s*,+/g, ', ').replace(/\s{2,}/g, ' ').replace(/^[\s,]+|[\s,]+$/g, '').trim();
+}
+
 function normalizeBaseUrl(value) {
   try {
     const url = new URL(String(value || DEFAULT_PHOTON_URL));
@@ -16,7 +20,7 @@ function normalizeBaseUrl(value) {
 function displayAddress(properties = {}) {
   const street = [properties.street || properties.name, properties.housenumber].filter(Boolean).join(' ');
   const locality = properties.city || properties.locality || properties.district || properties.county;
-  return [...new Set([street, locality, properties.postcode, properties.country].filter(Boolean))].join(', ');
+  return withoutArabic([...new Set([street, locality, properties.postcode, properties.country].filter(Boolean))].join(', '));
 }
 
 function addressFromFeature(feature) {
@@ -25,7 +29,7 @@ function addressFromFeature(feature) {
   const properties = feature.properties || {};
   return {
     address: displayAddress(properties),
-    city: properties.city || properties.locality || properties.district || '',
+    city: withoutArabic(properties.city || properties.locality || properties.district || ''),
     houseNumber: properties.housenumber || '',
     lat,
     lng,

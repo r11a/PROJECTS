@@ -16,6 +16,10 @@ const CONTACT_FIELDS = {
 const CATALOG_CATEGORIES = ['stage', 'system', 'tag', 'flag', 'priority', 'contact_role', 'task_status', 'inspection_template'];
 const JSON_FIELDS = new Set(['additionalPhones', 'additionalEmails', 'customValues', 'findings', 'metadata', 'options']);
 
+function withoutArabic(value = '') {
+  return String(value).replace(/[\u0600-\u06ff]+/g, '').replace(/\s+,/g, ',').replace(/,\s*,+/g, ', ').replace(/\s{2,}/g, ' ').replace(/^[\s,]+|[\s,]+$/g, '').trim();
+}
+
 function valuesFor(input, fields) {
   return Object.entries(fields).filter(([key]) => input[key] !== undefined).map(([key, column]) => [key, column, JSON_FIELDS.has(key) ? JSON.stringify(input[key]) : input[key]]);
 }
@@ -24,7 +28,7 @@ function clientFromRow(row) {
   return {
     id: row.id, code: row.code, name: row.name, firstName:row.first_name || row.name, lastName:row.last_name || '', apartmentNumber:row.apartment_number || '', clientType: row.client_type, companyNumber: row.company_number, priorityCustomerNumber: row.priority_customer_number,
     primaryContactName: row.primary_contact_name, phone: row.phone, additionalPhones: row.additional_phones || [],
-    email: row.email, additionalEmails: row.additional_emails || [], address: row.address, city: row.city,
+    email: row.email, additionalEmails: row.additional_emails || [], address: withoutArabic(row.address), city: withoutArabic(row.city),
     notes: row.notes, status: row.status, customValues: row.custom_values || {}, createdAt: row.created_at,
     updatedAt: row.updated_at, projectCount: Number(row.project_count || 0), openTaskCount: Number(row.open_task_count || 0),
     labels: row.labels || [],
@@ -335,7 +339,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     const required = ['firstName','lastName', 'address', 'phone'];
     if (required.some((key) => !String(request.body[key] || '').trim())) return response.status(400).json({ error: 'שם לקוח, כתובת וטלפון הם שדות חובה' });
     const next = await pool.query("SELECT COALESCE(MAX(NULLIF(regexp_replace(code, '\\D','','g'),'')::int),1000)+1 AS value FROM clients");
-    const input = { clientType: 'private', ...request.body, priorityCustomerNumber:request.body.priorityCustomerNumber ?? request.body.customValues?.priorityCustomerNumber ?? '' };
+    const input = { clientType: 'private', ...request.body, address:withoutArabic(request.body.address), city:withoutArabic(request.body.city), priorityCustomerNumber:request.body.priorityCustomerNumber ?? request.body.customValues?.priorityCustomerNumber ?? '' };
     const entries = valuesFor(input, CLIENT_FIELDS);
     const columns = ['code', ...entries.map(([, column]) => column)];
     const values = [`CUS-${next.rows[0].value}`, ...entries.map(([, , value]) => value)];
@@ -387,6 +391,8 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
 
   router.patch('/clients/:id', requireRoles('admin', 'manager'), async (request, response) => {
+    if (request.body.address !== undefined) request.body.address=withoutArabic(request.body.address);
+    if (request.body.city !== undefined) request.body.city=withoutArabic(request.body.city);
     if(request.body.firstName!==undefined||request.body.lastName!==undefined){const current=await pool.query('SELECT first_name,last_name,name FROM clients WHERE id=$1',[request.params.id]);if(!current.rowCount)return response.status(404).json({error:'הלקוח לא נמצא'});request.body.firstName=String(request.body.firstName??current.rows[0].first_name??current.rows[0].name).trim();request.body.lastName=String(request.body.lastName??current.rows[0].last_name??'').trim();request.body.name=[request.body.firstName,request.body.lastName].filter(Boolean).join(' ');}
     if (request.body.priorityCustomerNumber === undefined && request.body.customValues?.priorityCustomerNumber !== undefined) request.body.priorityCustomerNumber=request.body.customValues.priorityCustomerNumber;
     for (const key of ['name', 'address', 'phone']) if (request.body[key] !== undefined && !String(request.body[key]).trim()) return response.status(400).json({ error: 'שם לקוח, כתובת וטלפון אינם יכולים להיות ריקים' });

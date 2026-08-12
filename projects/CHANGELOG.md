@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.3
+
+- Fixed the PDF report wizard height, scrolling, sticky actions, and responsive width so it is no longer clipped by the viewport.
+- Removed Arabic script from Photon results, runtime project/client responses, manual address saves, and existing stored addresses.
+- Added Hebrew labels for the current project stage inside generated reports.
+
 ## 0.11.2
 
 - Fixed the reports overview endpoint so one incompatible analytics query can no longer blank the entire reports screen.

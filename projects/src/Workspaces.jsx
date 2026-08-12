@@ -56,8 +56,18 @@ const milestoneStatus = {
 };
 const paymentStatus = { pending: "ממתין", paid: "שולם", cancelled: "בוטל" };
 const stageNames = {
+  waiting: "בהמתנה",
+  mobilization: "בהנעה",
   planning: "תכנון",
   infrastructure: "תשתיות",
+  threading: "השחלות",
+  threading_done: "בוצעו השחלות",
+  installation_a: "התקנות שלב א׳",
+  installation_b: "התקנות שלב ב׳",
+  installation_c: "התקנות שלב ג׳",
+  activation_programming: "הפעלות ותכנות",
+  finishes: "פינישים",
+  post_delivery: "מוכן למסירה",
   installation: "התקנה",
   programming: "תכנות",
   handover: "לקראת מסירה",
@@ -83,11 +93,11 @@ function EmptyState({ icon: Icon, title, text, action, onAction }) {
   );
 }
 
-function Modal({ title, subtitle, onClose, children }) {
+function Modal({ title, subtitle, onClose, children, className = "" }) {
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className={`modal-backdrop ${className ? `${className}-backdrop` : ""}`.trim()} onMouseDown={onClose}>
       <div
-        className="modal work-modal"
+        className={`modal work-modal ${className}`.trim()}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-head">
@@ -963,9 +973,12 @@ export function ReportsWorkspace({ api, setNotice }) {
     if (!nextProjectId) return;
     try {
       const result = await api(`/projects/${encodeURIComponent(nextProjectId)}/workspace`);
+      const selectedProject = projects.find((item) => item.id === nextProjectId);
       setProjectReport({
         ...result,
-        project: projects.find((item) => item.id === nextProjectId),
+        project: selectedProject
+          ? { ...selectedProject, stage: stageNames[selectedProject.stage] || selectedProject.stage }
+          : null,
       });
     } catch (error) {
       setNotice(error.message);
@@ -1173,7 +1186,7 @@ export function ReportsWorkspace({ api, setNotice }) {
         </table>
       </div>
       {wizardOpen && (
-        <Modal title="אשף הפקת דוח PDF" subtitle="בחירת תוכן, פרויקט ויעד השמירה" onClose={() => setWizardOpen(false)}>
+        <Modal title="אשף הפקת דוח PDF" subtitle="בחירת תוכן, פרויקט ויעד השמירה" className="report-modal" onClose={() => setWizardOpen(false)}>
           <div className="report-wizard">
             <div className="report-wizard-options">
               <label>סוג הדוח<select value={reportType} onChange={(event) => { setReportType(event.target.value); if (event.target.value !== "project") setSaveToProject(false); }}><option value="overview">תמונת מצב מלאה</option><option value="project">דוח פרויקט</option><option value="finance">כספים וגבייה</option><option value="professionals">אנשי מקצוע ומנהלים</option></select></label>

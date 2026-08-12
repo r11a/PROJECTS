@@ -105,9 +105,13 @@ const inputToColumn = {
 };
 const STAGE_PROGRESS = { waiting:0,mobilization:9,infrastructure:18,threading:27,electrician_threading:36,threading_done:45,installation_a:55,installation_b:65,installation_c:75,activation_programming:85,finishes:93,post_delivery:100 };
 
+function withoutArabic(value = '') {
+  return String(value).replace(/[\u0600-\u06ff]+/g, '').replace(/\s+,/g, ',').replace(/,\s*,+/g, ', ').replace(/\s{2,}/g, ' ').replace(/^[\s,]+|[\s,]+$/g, '').trim();
+}
+
 function projectFromRow(row) {
   return {
-    id: row.id, name: row.name, client: row.client, location: row.location, address: row.address,
+    id: row.id, name: row.name, client: row.client, location: row.location, address: withoutArabic(row.address),
     lat: Number(row.lat), lng: Number(row.lng), stage: row.stage, progress: Number(row.progress),
     manager: row.manager, ownerInitials: row.owner_initials, value: Number(row.value), paid: Number(row.paid),
     due: row.due, priority: row.priority, flag: row.flag, systems: row.systems || [],
@@ -381,7 +385,7 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
     const project = {
     id: request.body.id || `PRJ-${nextNumber.rows[0].value}`,
     name: request.body.name || 'פרויקט חדש', client: selectedClient.name, location: request.body.location || selectedClient.city || '',
-    address: geocoded?.formattedAddress || request.body.address || selectedClient.address || request.body.location || '', lat: geocoded?.lat ?? request.body.lat ?? 32.0853, lng: geocoded?.lng ?? request.body.lng ?? 34.7818,
+    address: withoutArabic(geocoded?.formattedAddress || request.body.address || selectedClient.address || request.body.location || ''), lat: geocoded?.lat ?? request.body.lat ?? 32.0853, lng: geocoded?.lng ?? request.body.lng ?? 34.7818,
     stage: request.body.stage || 'waiting', progress: STAGE_PROGRESS[request.body.stage || 'waiting'] ?? 0, manager: selectedManager?.display_name || '',
     ownerInitials: selectedManager?.display_name?.slice(0, 2) || '', value: request.body.value ?? 0,
     paid: request.body.paid ?? 0, due: request.body.due || '', priority: request.body.priority || 'normal', flag: request.body.flag || '',
@@ -431,7 +435,7 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
       request.body.clientId = selectedClient.id;
       request.body.client = selectedClient.name;
     }
-    if (['admin','manager'].includes(request.user.role) && request.body.address && request.body.address!==current.rows[0].address) { const geocoded=await geocodeAddress(request.body.address);if(geocoded){request.body.address=geocoded.formattedAddress;request.body.lat=geocoded.lat;request.body.lng=geocoded.lng;} }
+    if (['admin','manager'].includes(request.user.role) && request.body.address && request.body.address!==current.rows[0].address) { const geocoded=await geocodeAddress(request.body.address);if(geocoded){request.body.address=geocoded.formattedAddress;request.body.lat=geocoded.lat;request.body.lng=geocoded.lng;}request.body.address=withoutArabic(request.body.address); }
     if (['admin', 'manager'].includes(request.user.role) && Object.prototype.hasOwnProperty.call(request.body, 'clientName')) {
       const clientName = String(request.body.clientName || '').trim();
       if (!clientName) throw Object.assign(new Error('שם לקוח אינו יכול להיות ריק'), { status: 400 });
