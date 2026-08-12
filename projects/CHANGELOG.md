@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+- Added a reversible project archive with a dedicated active/archive view and admin/manager audit entries.
+- Made every new project link to an existing client or atomically create a complete client card with required name, address and phone.
+- Added full project editing, including client reassignment, client creation and synchronized client-name editing.
+- Synchronized client-name changes from the client card across every linked project.
+- Added a data migration that repairs legacy project/client links by normalized client name.
+
 ## 0.7.5
 
 - Rebuilt the client contact list as compact rows with Name, Phone, Role and Email columns.

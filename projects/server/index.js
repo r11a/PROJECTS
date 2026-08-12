@@ -105,7 +105,42 @@ function projectFromRow(row) {
     due: row.due, priority: row.priority, flag: row.flag, systems: row.systems || [],
     nextMilestone: row.next_milestone, phone: row.phone, email: row.email, health: Number(row.health),
     tasksDone: Number(row.tasks_done), tasksTotal: Number(row.tasks_total), managerId: row.manager_professional_id, clientId: row.client_id,
+    archived: Boolean(row.archived_at), archivedAt: row.archived_at, archivedBy: row.archived_by,
   };
+}
+
+async function resolveProjectClient(db, input, currentProject = null) {
+  const requestedId = input.clientId;
+  if (requestedId) {
+    const selected = await db.query('SELECT * FROM clients WHERE id=$1', [requestedId]);
+    if (!selected.rowCount) throw Object.assign(new Error('הלקוח שנבחר לא נמצא'), { status: 400 });
+    return selected.rows[0];
+  }
+
+  const draft = input.newClient || ((!currentProject && input.client) ? {
+    name: input.client, address: input.address, phone: input.phone, email: input.email, city: input.location,
+  } : null);
+  if (draft) {
+    const name = String(draft.name || '').trim();
+    const address = String(draft.address || '').trim();
+    const phone = String(draft.phone || '').trim();
+    if (!name || !address || !phone) throw Object.assign(new Error('ללקוח חדש חובה להזין שם, כתובת וטלפון'), { status: 400 });
+    const existing = await db.query('SELECT * FROM clients WHERE lower(btrim(name))=lower($1) AND btrim(phone)=btrim($2) LIMIT 1', [name, phone]);
+    if (existing.rowCount) return existing.rows[0];
+    const next = await db.query("SELECT COALESCE(MAX(NULLIF(regexp_replace(code, '\\D','','g'),'')::int),1000)+1 AS value FROM clients");
+    const created = await db.query(
+      `INSERT INTO clients(code,name,client_type,primary_contact_name,phone,email,address,city)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [`CUS-${next.rows[0].value}`, name, draft.clientType || 'private', draft.primaryContactName || name, phone, draft.email || '', address, draft.city || input.location || ''],
+    );
+    return created.rows[0];
+  }
+
+  if (currentProject?.client_id) {
+    const current = await db.query('SELECT * FROM clients WHERE id=$1', [currentProject.client_id]);
+    if (current.rowCount) return current.rows[0];
+  }
+  return null;
 }
 
 async function seedDatabase() {
@@ -286,35 +321,49 @@ app.post('/api/auth/logout', (_request, response) => {
 
 app.get('/api/auth/me', authenticate, (request, response) => response.json({ user: request.user }));
 
-app.get('/api/projects', authenticate, async (_request, response) => {
+app.get('/api/projects', authenticate, async (request, response) => {
+  const scope = ['active', 'archived', 'all'].includes(request.query.scope) ? request.query.scope : 'active';
+  const where = scope === 'all' ? '' : scope === 'archived' ? 'WHERE p.archived_at IS NOT NULL' : 'WHERE p.archived_at IS NULL';
   const result = await pool.query(`SELECT p.*,COALESCE(pr.display_name,p.manager) manager
     FROM projects p LEFT JOIN professionals pr ON pr.id=p.manager_professional_id
+    ${where}
     ORDER BY p.created_at DESC,p.id DESC`);
   response.json({ projects: result.rows.map(projectFromRow) });
 });
 
 app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async (request, response) => {
-  const nextNumber = await pool.query("SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 1000) + 1 AS value FROM projects");
-  const selectedManager = await resolveProjectManager(request.body.managerId);
-  const project = {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const nextNumber = await db.query("SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 1000) + 1 AS value FROM projects");
+    const selectedManager = await resolveProjectManager(request.body.managerId);
+    const selectedClient = await resolveProjectClient(db, request.body);
+    if (!selectedClient) throw Object.assign(new Error('יש לבחור לקוח קיים או ליצור לקוח חדש'), { status: 400 });
+    const project = {
     id: request.body.id || `PRJ-${nextNumber.rows[0].value}`,
-    name: request.body.name || 'פרויקט חדש', client: request.body.client || '', location: request.body.location || '',
-    address: request.body.address || request.body.location || '', lat: request.body.lat ?? 32.0853, lng: request.body.lng ?? 34.7818,
+    name: request.body.name || 'פרויקט חדש', client: selectedClient.name, location: request.body.location || selectedClient.city || '',
+    address: request.body.address || selectedClient.address || request.body.location || '', lat: request.body.lat ?? 32.0853, lng: request.body.lng ?? 34.7818,
     stage: request.body.stage || 'planning', progress: request.body.progress ?? 0, manager: selectedManager?.display_name || '',
     ownerInitials: selectedManager?.display_name?.slice(0, 2) || '', value: request.body.value ?? 0,
     paid: request.body.paid ?? 0, due: request.body.due || '', priority: request.body.priority || 'normal', flag: request.body.flag || '',
-    systems: request.body.systems || [], nextMilestone: request.body.nextMilestone || 'אפיון ראשוני', phone: request.body.phone || '',
-    email: request.body.email || '', health: request.body.health ?? 100, tasksDone: request.body.tasksDone ?? 0, tasksTotal: request.body.tasksTotal ?? 0,
-    managerId: request.body.managerId || null, clientId: request.body.clientId || null,
-  };
-  const values = Object.keys(inputToColumn).map((key) => key === 'systems' ? JSON.stringify(project[key]) : project[key]);
-  const columns = Object.values(inputToColumn);
-  const result = await pool.query(
+    systems: request.body.systems || [], nextMilestone: request.body.nextMilestone || 'אפיון ראשוני', phone: request.body.phone || selectedClient.phone || '',
+    email: request.body.email || selectedClient.email || '', health: request.body.health ?? 100, tasksDone: request.body.tasksDone ?? 0, tasksTotal: request.body.tasksTotal ?? 0,
+    managerId: request.body.managerId || null, clientId: selectedClient.id,
+    };
+    const values = Object.keys(inputToColumn).map((key) => key === 'systems' ? JSON.stringify(project[key]) : project[key]);
+    const columns = Object.values(inputToColumn);
+    const result = await db.query(
     `INSERT INTO projects(${columns.join(', ')}) VALUES(${values.map((_, index) => `$${index + 1}`).join(', ')}) RETURNING *`,
     values,
-  );
-  await audit(request, 'create', 'project', project.id);
-  response.status(201).json({ project: projectFromRow(result.rows[0]) });
+    );
+    await db.query('COMMIT');
+    await audit(request, 'create', 'project', project.id, { clientId: selectedClient.id });
+    response.status(201).json({ project: projectFromRow(result.rows[0]) });
+  } catch (error) {
+    await db.query('ROLLBACK');
+    if (error.status) return response.status(error.status).json({ error: error.message });
+    throw error;
+  } finally { db.release(); }
 });
 
 app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async (request, response) => {
@@ -329,16 +378,51 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
     request.body.manager = selectedManager?.display_name || '';
     request.body.ownerInitials = selectedManager?.display_name?.slice(0, 2) || '';
   }
-  const entries = Object.entries(request.body || {}).filter(([key]) => allowedByRole[request.user.role].includes(key));
-  if (!entries.length) return response.status(400).json({ error: 'No editable fields supplied' });
-  const sets = entries.map(([key], index) => `${inputToColumn[key]} = $${index + 1}`);
-  const values = entries.map(([key, value]) => key === 'systems' ? JSON.stringify(value) : value);
-  values.push(request.params.id);
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const current = await db.query('SELECT * FROM projects WHERE id=$1 FOR UPDATE', [request.params.id]);
+    if (!current.rowCount) { await db.query('ROLLBACK'); return response.status(404).json({ error: 'Project not found' }); }
+    if (['admin', 'manager'].includes(request.user.role) && (request.body.clientId || request.body.newClient)) {
+      const selectedClient = await resolveProjectClient(db, request.body, current.rows[0]);
+      request.body.clientId = selectedClient.id;
+      request.body.client = selectedClient.name;
+    }
+    if (['admin', 'manager'].includes(request.user.role) && Object.prototype.hasOwnProperty.call(request.body, 'clientName')) {
+      const clientName = String(request.body.clientName || '').trim();
+      if (!clientName) throw Object.assign(new Error('שם לקוח אינו יכול להיות ריק'), { status: 400 });
+      const clientId = request.body.clientId || current.rows[0].client_id;
+      if (!clientId) throw Object.assign(new Error('יש לקשר את הפרויקט ללקוח לפני שינוי שמו'), { status: 400 });
+      await db.query('UPDATE clients SET name=$1,updated_at=NOW() WHERE id=$2', [clientName, clientId]);
+      await db.query('UPDATE projects SET client=$1,updated_at=NOW() WHERE client_id=$2', [clientName, clientId]);
+      request.body.client = clientName;
+      delete request.body.clientName;
+    }
+    delete request.body.newClient;
+    const entries = Object.entries(request.body || {}).filter(([key]) => allowedByRole[request.user.role].includes(key));
+    if (!entries.length) { await db.query('ROLLBACK'); return response.status(400).json({ error: 'No editable fields supplied' }); }
+    const sets = entries.map(([key], index) => `${inputToColumn[key]} = $${index + 1}`);
+    const values = entries.map(([key, value]) => key === 'systems' ? JSON.stringify(value) : value);
+    values.push(request.params.id);
+    const result = await db.query(`UPDATE projects SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`, values);
+    await db.query('COMMIT');
+    await audit(request, 'update', 'project', request.params.id, Object.fromEntries(entries));
+    response.json({ project: projectFromRow(result.rows[0]) });
+  } catch (error) {
+    await db.query('ROLLBACK');
+    if (error.status) return response.status(error.status).json({ error: error.message });
+    throw error;
+  } finally { db.release(); }
+});
+
+app.patch('/api/projects/:id/archive', authenticate, requireRoles('admin', 'manager'), async (request, response) => {
+  const archived = request.body.archived !== false;
   const result = await pool.query(
-    `UPDATE projects SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`, values,
+    `UPDATE projects SET archived_at=$1,archived_by=$2,updated_at=NOW() WHERE id=$3 RETURNING *`,
+    [archived ? new Date() : null, archived ? request.user.id : null, request.params.id],
   );
   if (!result.rowCount) return response.status(404).json({ error: 'Project not found' });
-  await audit(request, 'update', 'project', request.params.id, Object.fromEntries(entries));
+  await audit(request, archived ? 'archive' : 'restore', 'project', request.params.id);
   response.json({ project: projectFromRow(result.rows[0]) });
 });
 

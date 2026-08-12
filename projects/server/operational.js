@@ -249,7 +249,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     const like = `%${query}%`;
     const result = await pool.query(
       `SELECT c.*,
-        (SELECT COUNT(*) FROM projects p WHERE p.client_id=c.id) AS project_count,
+        (SELECT COUNT(*) FROM projects p WHERE p.client_id=c.id AND p.archived_at IS NULL) AS project_count,
         (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.status NOT IN ('done','cancelled')) AS open_task_count,
         COALESCE((SELECT jsonb_agg(jsonb_build_object('id',ci.id,'name',ci.name,'category',ci.category,'color',ci.color,'icon',ci.icon,'symbol',ci.symbol) ORDER BY ci.sort_order)
           FROM client_labels cl JOIN catalog_items ci ON ci.id=cl.catalog_item_id WHERE cl.client_id=c.id), '[]'::jsonb) AS labels
@@ -328,6 +328,9 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
       if (entries.length) {
         const values = entries.map(([, , value]) => value); values.push(request.params.id);
         result = await client.query(`UPDATE clients SET ${entries.map(([, column], index) => `${column}=$${index + 1}`).join(',')},updated_at=NOW() WHERE id=$${values.length} RETURNING *`, values);
+        if (request.body.name !== undefined) {
+          await client.query('UPDATE projects SET client=$1,updated_at=NOW() WHERE client_id=$2', [result.rows[0].name, request.params.id]);
+        }
       }
       if (Array.isArray(request.body.labelIds)) {
         await client.query('DELETE FROM client_labels WHERE client_id=$1', [request.params.id]);

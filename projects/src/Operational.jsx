@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 const roleNames = { architect: 'אדריכל', electrician: 'חשמלאי', supervisor: 'מפקח', contractor: 'קבלן', designer: 'מעצב פנים', other: 'אחר' };
-const actionNames = { create: 'יצירה', update: 'עדכון', delete: 'מחיקה', upload: 'העלאת קובץ', login: 'כניסה', backup: 'גיבוי', restore_requested: 'בקשת שחזור', snooze: 'דחיית התראה' };
+const actionNames = { create: 'יצירה', update: 'עדכון', delete: 'מחיקה', archive: 'העברה לארכיון', restore: 'שחזור מהארכיון', upload: 'העלאת קובץ', login: 'כניסה', backup: 'גיבוי', restore_requested: 'בקשת שחזור', snooze: 'דחיית התראה' };
 const categoryNames = { stage: 'שלבים', system: 'מערכות', tag: 'תגיות', flag: 'דגלים', priority: 'עדיפויות', contact_role: 'תפקידי אנשי קשר', task_status: 'סטטוסי משימות', inspection_template: 'תבניות ביקורת' };
 const iconOptions = ['circle', 'star', 'flag', 'clock', 'home', 'camera', 'network', 'speaker', 'cpu', 'zap', 'shield', 'ruler', 'palette', 'hard-hat'];
 
