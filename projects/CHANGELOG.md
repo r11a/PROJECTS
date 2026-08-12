@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.3
+
+- Added the installed application version to the sidebar.
+- Added Photon street suggestions to the new-project wizard with automatic city selection.
+- Made the health endpoint report the package version instead of a stale hard-coded value.
+- Added responsive light/dark styling for the address suggestions.
+
 ## 0.9.2
 
 - Replaced Google address lookup and project geocoding with free Photon/OpenStreetMap search.

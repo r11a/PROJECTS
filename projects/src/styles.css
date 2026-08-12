@@ -36,6 +36,7 @@ button { cursor: pointer; }
 .main-nav button.active em { background: #ffffff20; color: #fff; }
 .sidebar-footer { flex: none; margin-top: auto; border-top: 1px solid #262b43; padding-top: 10px; }
 .sidebar-footer > button { width: 100%; }
+.sidebar-version{display:flex;align-items:center;justify-content:space-between;padding:3px 12px 1px;color:#737b98;font-size:10px;letter-spacing:.08em}.sidebar-version b{color:#9a91cc;font-size:10px;font-weight:600;letter-spacing:0}
 .user-card { display: grid; grid-template-columns: 36px 1fr 20px; gap: 9px; align-items: center; margin-top: 8px; padding: 10px; background: #191e34; border-radius: 11px; }
 .avatar, .mini-avatar { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; font-weight: 700; color: #4939af; background: #dcd7ff; position: relative; }
 .avatar span { position: absolute; width: 9px; height: 9px; border: 2px solid #191e34; background: #31c889; border-radius: 50%; bottom: 0; left: 0; }

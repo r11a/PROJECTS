@@ -22,6 +22,7 @@ const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const OPTIONS_FILE = process.env.PROJECTS_OPTIONS_FILE || '/data/options.json';
 const MIGRATIONS_DIR = new URL('../migrations/', import.meta.url);
 const PORT = Number(process.env.PORT || 3000);
+const APP_VERSION = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const ROLES = ['admin', 'manager', 'technician', 'finance', 'viewer'];
 const EDIT_ROLES = ['admin', 'manager', 'technician', 'finance'];
 
@@ -317,7 +318,7 @@ async function resolveProjectManager(managerId) {
 app.get('/api/health', async (_request, response) => {
   try {
     await pool.query('SELECT 1');
-    response.json({ status: 'ok', database: 'ok', version: '0.7.5' });
+    response.json({ status: 'ok', database: 'ok', version: APP_VERSION });
   } catch (error) {
     response.status(503).json({ status: 'error', database: 'unavailable', message: error.message });
   }
