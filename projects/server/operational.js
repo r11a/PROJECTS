@@ -38,7 +38,7 @@ function contactFromRow(row) {
   };
 }
 
-export async function createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir }) {
+export async function createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir, geocoder }) {
   const router = express.Router();
   const uploadDir = path.join(dataDir, 'uploads', 'clients');
   const brandingDir = path.join(dataDir, 'branding');
@@ -110,8 +110,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
 
   router.get('/address-search', async (request,response) => {
     const query=String(request.query.q||'').trim();if(query.length<3)return response.json({addresses:[]});
-    const setting=await pool.query("SELECT value FROM app_settings WHERE key='map'");const key=setting.rows[0]?.value?.googleApiKey;if(!key)return response.status(400).json({error:'יש להגדיר Google API Key בהגדרות מפה ומיקום'});
-    try{const url=new URL('https://maps.googleapis.com/maps/api/geocode/json');url.searchParams.set('address',query);url.searchParams.set('components','country:IL');url.searchParams.set('language','he');url.searchParams.set('key',key);const google=await fetch(url);const data=await google.json();response.json({addresses:(data.results||[]).slice(0,6).map(item=>({address:item.formatted_address,lat:item.geometry.location.lat,lng:item.geometry.location.lng,placeId:item.place_id}))});}catch{response.status(502).json({error:'שירות הכתובות של Google אינו זמין כעת'});}
+    try{response.json({addresses:await geocoder.search(query,6),provider:'photon'});}catch(error){console.error('Photon address search failed',error.message);response.status(502).json({error:'שירות הכתובות של Photon אינו זמין כעת'});}
   });
 
   router.get('/audit', requireRoles('admin'), async (request, response) => {

@@ -64,7 +64,7 @@ function GoogleAddressField({project,api,updateProject,setNotice}) {
   const [query,setQuery]=useState(project.address||'');const [addresses,setAddresses]=useState([]);const [open,setOpen]=useState(false);
   useEffect(()=>{if(!open||query.length<3)return;const timer=setTimeout(()=>api(`/address-search?q=${encodeURIComponent(query)}`).then(result=>setAddresses(result.addresses)).catch(error=>{setAddresses([]);setNotice(error.message)}),350);return()=>clearTimeout(timer)},[query,open]);
   const choose=async item=>{setQuery(item.address);setOpen(false);await updateProject(project.id,{address:item.address,lat:item.lat,lng:item.lng})};
-  return <section className="panel google-address-field"><label><MapPin size={17}/><span>כתובת הפרויקט מתוך Google</span><input value={query} onFocus={()=>setOpen(true)} onChange={event=>{setQuery(event.target.value);setOpen(true)}} placeholder="הקלדת רחוב, מספר ועיר"/></label>{open&&addresses.length>0&&<div>{addresses.map(item=><button key={item.placeId} onClick={()=>choose(item)}><MapPin size={14}/>{item.address}</button>)}</div>}<small>דורש Google Geocoding API Key במסך הגדרות → מפה ומיקום.</small></section>;
+  return <section className="panel google-address-field"><label><MapPin size={17}/><span>חיפוש כתובת חכם</span><input value={query} onFocus={()=>setOpen(true)} onChange={event=>{setQuery(event.target.value);setOpen(true)}} placeholder="הקלדת רחוב, מספר ועיר" autoComplete="off"/></label>{open&&addresses.length>0&&<div>{addresses.map(item=><button key={item.placeId} onClick={()=>choose(item)}><MapPin size={14}/>{item.address}</button>)}</div>}<small>Photon · OpenStreetMap — ללא מפתח API וללא עלות שימוש.</small></section>;
 }
 
 function ProjectGantt({ tasks, milestones }) {

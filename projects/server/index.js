@@ -13,6 +13,7 @@ import { createOperationalRouter } from './operational.js';
 import { createFormsRouter } from './forms.js';
 import { createManagementRouter } from './management.js';
 import { createOperationsRouter } from './operations.js';
+import { createGeocoder } from './geocoder.js';
 
 const { Pool, Client } = pg;
 const execFileAsync = promisify(execFile);
@@ -56,6 +57,7 @@ function databaseConfig(database = process.env.PGDATABASE || 'projects') {
 
 await ensureDatabase();
 const pool = new Pool(databaseConfig());
+const geocoder = createGeocoder(pool);
 const liveResponses = new Set();
 const liveListener = await pool.connect();
 await liveListener.query('LISTEN projects_live_change');
@@ -157,10 +159,7 @@ async function resolveProjectClient(db, input, currentProject = null) {
 async function geocodeAddress(address) {
   if (!String(address || '').trim()) return null;
   try {
-    const setting=await pool.query("SELECT value FROM app_settings WHERE key='map'"); const key=setting.rows[0]?.value?.googleApiKey;
-    if(!key)return null;
-    const url=new URL('https://maps.googleapis.com/maps/api/geocode/json');url.searchParams.set('address',address);url.searchParams.set('components','country:IL');url.searchParams.set('language','he');url.searchParams.set('key',key);
-    const response=await fetch(url);if(!response.ok)return null;const data=await response.json();const first=data.results?.[0];return first?{lat:first.geometry.location.lat,lng:first.geometry.location.lng,formattedAddress:first.formatted_address}:null;
+    return await geocoder.geocode(address);
   } catch { return null; }
 }
 
@@ -542,7 +541,7 @@ app.post('/api/system/restore', authenticate, requireRoles('admin'), async (requ
   }, 500);
 });
 
-app.use('/api', await createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
+app.use('/api', await createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR, geocoder }));
 app.use('/api', createFormsRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
 app.use('/api', createOperationsRouter({ pool, authenticate, requireRoles, audit }));

@@ -315,7 +315,7 @@ function BusinessSettings({ settings, api, apiRoot, onSaved, setNotice }) {
     ['company','פרטי החברה','זהות העסק שתופיע במסמכים ובמערכת',[['name','שם החברה','text'],['companyNumber','ח.פ / עוסק','text'],['phone','טלפון','tel'],['email','דוא״ל','email'],['address','כתובת','text']]],
     ['localization','אזוריות וכספים','כללי ברירת מחדל לתאריכים וגבייה',[['currency','מטבע','select',['ILS','USD','EUR']],['vatRate','מע״מ (%)','number'],['timezone','אזור זמן','text'],['dateFormat','פורמט תאריך','select',['DD.MM.YYYY','YYYY-MM-DD']]]],
     ['projectNumbering','מספור פרויקטים','קוד עקבי לכל פרויקט חדש',[['prefix','קידומת','text'],['includeYear','כלול שנה','boolean'],['nextNumber','המספר הבא','number']]],
-    ['map','מפה ומיקום','ספק המפה ונקודת הפתיחה',[['provider','ספק','select',['openstreetmap','google']],['googleApiKey','Google API Key','password'],['defaultLat','קו רוחב','number'],['defaultLng','קו אורך','number'],['defaultZoom','זום','number']]],
+    ['map','מפה, כתובות ומיקום','מפת OpenStreetMap וחיפוש כתובות חינמי באמצעות Photon',[['provider','ספק מפה','select',['openstreetmap']],['photonUrl','שרת Photon','url'],['addressLanguage','שפת כתובות','select',['default','en']],['defaultLat','קו רוחב','number'],['defaultLng','קו אורך','number'],['defaultZoom','זום','number']]],
     ['notifications','התראות','אירועים שייצרו התראה',[['taskDue','משימה מתקרבת','boolean'],['paymentDue','גבייה מתקרבת','boolean'],['milestoneRisk','אבן דרך בסיכון','boolean'],['emailEnabled','שליחת מייל','boolean']]],
     ['backupPolicy','מדיניות גיבוי','תזמון ושמירת גרסאות',[['enabled','גיבוי אוטומטי','boolean'],['frequency','תדירות','select',['daily','weekly']],['retention','מספר גיבויים לשמירה','number'],['hour','שעת ביצוע','time']]],
   ];

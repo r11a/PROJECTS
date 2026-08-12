@@ -230,7 +230,7 @@ INSERT INTO app_settings(key, value) VALUES
   ('company', '{"name":"Smart Home Israel","phone":"","email":"","address":"","companyNumber":"","logo":""}'),
   ('localization', '{"currency":"ILS","vatRate":18,"timezone":"Asia/Jerusalem","dateFormat":"DD.MM.YYYY"}'),
   ('projectNumbering', '{"prefix":"PRJ","includeYear":true,"nextNumber":1}'),
-  ('map', '{"provider":"openstreetmap","googleApiKey":"","defaultLat":32.0853,"defaultLng":34.7818,"defaultZoom":10}'),
+  ('map', '{"provider":"openstreetmap","addressProvider":"photon","photonUrl":"https://photon.komoot.io","addressLanguage":"default","defaultLat":32.0853,"defaultLng":34.7818,"defaultZoom":10}'),
   ('notifications', '{"taskDue":true,"paymentDue":true,"milestoneRisk":true,"emailEnabled":false}'),
   ('backupPolicy', '{"enabled":true,"frequency":"daily","retention":14,"hour":"02:00"}')
 ON CONFLICT(key) DO NOTHING;

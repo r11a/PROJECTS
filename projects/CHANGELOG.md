@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.2
+
+- Replaced Google address lookup and project geocoding with free Photon/OpenStreetMap search.
+- Added Israel-focused results, request timeout, short typing delay, and a 15-minute server cache.
+- Added configurable Photon server URL for a future private/self-hosted instance.
+- Removed the Google API key requirement from map settings.
+
 ## 0.9.1
 
 - Replaced the crowded project-stage chip row with a compact responsive selector.
