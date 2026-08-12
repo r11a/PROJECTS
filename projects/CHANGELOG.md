@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+- Replaced the crowded project-stage chip row with a compact responsive selector.
+- Added live project counts and a colored stage indicator to the selector.
+- Improved filtering layout on desktop, tablet, mobile, and dark mode.
+
 ## 0.9.0
 
 - Added Priority customer numbers to client cards and live client-list refresh after creation.
