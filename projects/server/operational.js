@@ -5,7 +5,7 @@ import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 
 const CLIENT_FIELDS = {
-  name: 'name', clientType: 'client_type', companyNumber: 'company_number', priorityCustomerNumber: 'priority_customer_number', primaryContactName: 'primary_contact_name',
+  name: 'name', firstName:'first_name', lastName:'last_name', apartmentNumber:'apartment_number', clientType: 'client_type', companyNumber: 'company_number', priorityCustomerNumber: 'priority_customer_number', primaryContactName: 'primary_contact_name',
   phone: 'phone', additionalPhones: 'additional_phones', email: 'email', additionalEmails: 'additional_emails',
   address: 'address', city: 'city', notes: 'notes', status: 'status', customValues: 'custom_values',
 };
@@ -22,7 +22,7 @@ function valuesFor(input, fields) {
 
 function clientFromRow(row) {
   return {
-    id: row.id, code: row.code, name: row.name, clientType: row.client_type, companyNumber: row.company_number, priorityCustomerNumber: row.priority_customer_number,
+    id: row.id, code: row.code, name: row.name, firstName:row.first_name || row.name, lastName:row.last_name || '', apartmentNumber:row.apartment_number || '', clientType: row.client_type, companyNumber: row.company_number, priorityCustomerNumber: row.priority_customer_number,
     primaryContactName: row.primary_contact_name, phone: row.phone, additionalPhones: row.additional_phones || [],
     email: row.email, additionalEmails: row.additional_emails || [], address: row.address, city: row.city,
     notes: row.notes, status: row.status, customValues: row.custom_values || {}, createdAt: row.created_at,
@@ -89,7 +89,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
 
   router.get('/messages', async (request,response) => {
-    const result=await pool.query(`SELECT m.*,sender.display_name sender_name,recipient.display_name recipient_name FROM user_messages m JOIN users sender ON sender.id=m.sender_id JOIN users recipient ON recipient.id=m.recipient_id WHERE m.recipient_id=$1 OR m.sender_id=$1 ORDER BY m.created_at DESC LIMIT 200`,[request.user.id]);
+    const result=await pool.query(`SELECT m.*,sender.display_name sender_name,recipient.display_name recipient_name FROM user_messages m JOIN users sender ON sender.id=m.sender_id JOIN users recipient ON recipient.id=m.recipient_id WHERE (m.recipient_id=$1 OR m.sender_id=$1) AND NOT ($1=ANY(m.hidden_for)) ORDER BY m.created_at DESC LIMIT 200`,[request.user.id]);
     response.json({messages:result.rows.map(row=>({id:row.id,senderId:row.sender_id,senderName:row.sender_name,recipientId:row.recipient_id,recipientName:row.recipient_name,subject:row.subject,body:row.body,readAt:row.read_at,createdAt:row.created_at})),unread:result.rows.filter(row=>String(row.recipient_id)===String(request.user.id)&&!row.read_at).length});
   });
   router.post('/messages', async (request,response) => {
@@ -98,6 +98,13 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     if(!result.rowCount)return response.status(404).json({error:'הנמען אינו זמין'});await audit(request,'create','message',String(result.rows[0].id),{recipientId});response.status(201).json({message:result.rows[0]});
   });
   router.patch('/messages/:id/read', async (request,response) => { const result=await pool.query('UPDATE user_messages SET read_at=COALESCE(read_at,NOW()) WHERE id=$1 AND recipient_id=$2 RETURNING *',[request.params.id,request.user.id]);if(!result.rowCount)return response.status(404).json({error:'ההודעה לא נמצאה'});response.json({message:result.rows[0]}); });
+  router.delete('/messages', async (request,response) => {
+    const ids=Array.isArray(request.body?.ids)?request.body.ids.map(Number).filter(Number.isInteger):[];
+    if(!ids.length)return response.status(400).json({error:'יש לבחור לפחות הודעה אחת'});
+    const result=await pool.query(`UPDATE user_messages SET hidden_for=array_append(hidden_for,$1) WHERE id=ANY($2::bigint[]) AND (sender_id=$1 OR recipient_id=$1) AND NOT ($1=ANY(hidden_for)) RETURNING id`,[request.user.id,ids]);
+    await audit(request,'delete','messages',result.rows.map(row=>row.id).join(','),{count:result.rowCount});
+    response.json({deleted:result.rowCount});
+  });
 
   router.patch('/preferences/appearance', async (request, response) => {
     const theme = ['light', 'dark', 'auto'].includes(request.body?.theme) ? request.body.theme : null;
@@ -153,11 +160,16 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
                          COUNT(*) FILTER (WHERE status='done' AND completed_at>=NOW()-INTERVAL '7 days')::int completed_week FROM tasks`),
       pool.query(`SELECT COALESCE(SUM(value-paid),0)::numeric outstanding,COUNT(*) FILTER (WHERE paid<value)::int open_projects FROM projects`),
       pool.query(`SELECT COUNT(*) FILTER (WHERE health<70)::int health_risks,COUNT(*) FILTER (WHERE flag<>'')::int flagged FROM projects`),
-      pool.query(`SELECT t.id,t.title,t.due_date,t.priority,c.name client_name,c.id client_id
+      pool.query(`SELECT t.id,t.title,t.due_date,t.priority,t.project_id,p.name project_name,c.name client_name,c.id client_id
                   FROM tasks t LEFT JOIN clients c ON c.id=t.client_id
+                  LEFT JOIN projects p ON p.id=t.project_id
                   LEFT JOIN user_alert_snoozes s ON s.user_id=$1 AND s.alert_key='task:'||t.id
-                  WHERE t.status NOT IN ('done','cancelled') AND t.due_date<CURRENT_DATE AND (s.snoozed_until IS NULL OR s.snoozed_until<=NOW())
-                  ORDER BY t.due_date,t.priority DESC LIMIT 25`, [request.user.id]),
+                  LEFT JOIN user_alert_dismissals d ON d.user_id=$1 AND d.alert_key='task:'||t.id
+                  WHERE t.status NOT IN ('done','cancelled') AND t.due_date<CURRENT_DATE
+                    AND (s.snoozed_until IS NULL OR s.snoozed_until<=NOW()) AND d.alert_key IS NULL
+                    AND ($2='admin' OR t.assignee_id=$1 OR EXISTS(SELECT 1 FROM professionals pr WHERE pr.id=t.assignee_professional_id AND pr.affiliation='company' AND pr.linked_user_id=$1)
+                      OR EXISTS(SELECT 1 FROM project_professionals pp JOIN professionals pr ON pr.id=pp.professional_id WHERE pp.project_id=t.project_id AND pr.affiliation='company' AND pr.linked_user_id=$1))
+                  ORDER BY t.due_date,t.priority DESC LIMIT 25`, [request.user.id,request.user.role]),
       pool.query(`SELECT a.id,a.action,a.entity_type,a.entity_id,a.created_at,COALESCE(u.display_name,u.username,'מערכת') user_name
                   FROM audit_log a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.created_at DESC LIMIT 8`),
     ]);
@@ -168,12 +180,12 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     if (stats.health_risks) suggestions.push({ tone: 'danger', title: `${stats.health_risks} פרויקטים בסיכון`, text: 'מדד הבריאות נמוך מ־70', target: 'projects' });
     if (stats.outstanding) suggestions.push({ tone: 'info', title: `₪${Math.round(stats.outstanding).toLocaleString('he-IL')} לגבייה`, text: `${stats.openProjects} פרויקטים עם יתרה פתוחה`, target: 'finance' });
     if (!suggestions.length) suggestions.push({ tone: 'success', title: 'המערכת מאוזנת', text: 'אין כרגע חריגות הדורשות טיפול', target: 'dashboard' });
-    response.json({ stats, suggestions, alerts: alerts.rows.map((row) => ({ key: `task:${row.id}`, taskId: row.id, title: row.title, dueDate: row.due_date, priority: row.priority, clientName: row.client_name, clientId: row.client_id })), recentActivities: recent.rows.map((row) => ({ id: row.id, action: row.action, entityType: row.entity_type, entityId: row.entity_id, userName: row.user_name, createdAt: row.created_at })) });
+    response.json({ stats, suggestions, alerts: alerts.rows.map((row) => ({ key: `task:${row.id}`, taskId: row.id, projectId:row.project_id, projectName:row.project_name, title: row.title, dueDate: row.due_date, priority: row.priority, clientName: row.client_name, clientId: row.client_id })), recentActivities: recent.rows.map((row) => ({ id: row.id, action: row.action, entityType: row.entity_type, entityId: row.entity_id, userName: row.user_name, createdAt: row.created_at })) });
   });
 
   router.get('/team', async (_request, response) => {
-    const result = await pool.query('SELECT id,username,display_name,role,active,avatar_color,avatar_icon FROM users ORDER BY active DESC,display_name');
-    response.json({ users: result.rows.map((row) => ({ id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, avatarColor: row.avatar_color, avatarIcon: row.avatar_icon })) });
+    const result = await pool.query('SELECT id,username,display_name,role,active,avatar_color,avatar_icon,last_seen_at,last_login_at FROM users ORDER BY active DESC,display_name');
+    response.json({ users: result.rows.map((row) => ({ id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, avatarColor: row.avatar_color, avatarIcon: row.avatar_icon, lastSeenAt:row.last_seen_at,lastLoginAt:row.last_login_at,online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) })) });
   });
 
   router.post('/alerts/snooze', async (request, response) => {
@@ -185,6 +197,12 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
       ON CONFLICT(user_id,alert_key) DO UPDATE SET snoozed_until=EXCLUDED.snoozed_until`, [request.user.id, keys, duration]);
     await audit(request, 'snooze', 'alerts', keys.join(','), { duration: request.body.duration });
     response.status(204).end();
+  });
+  router.post('/alerts/dismiss', async (request,response) => {
+    const keys=Array.isArray(request.body.keys)?request.body.keys.filter(key=>/^task:\d+$/.test(key)):[];
+    if(!keys.length)return response.status(400).json({error:'יש לבחור התראה לביטול'});
+    await pool.query(`INSERT INTO user_alert_dismissals(user_id,alert_key) SELECT $1,unnest($2::text[]) ON CONFLICT(user_id,alert_key) DO UPDATE SET dismissed_at=NOW()`,[request.user.id,keys]);
+    await audit(request,'dismiss','alerts',keys.join(','));response.status(204).end();
   });
 
   router.get('/settings', async (_request, response) => {
@@ -304,7 +322,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
         COALESCE((SELECT jsonb_agg(jsonb_build_object('id',ci.id,'name',ci.name,'category',ci.category,'color',ci.color,'icon',ci.icon,'symbol',ci.symbol) ORDER BY ci.sort_order)
           FROM client_labels cl JOIN catalog_items ci ON ci.id=cl.catalog_item_id WHERE cl.client_id=c.id), '[]'::jsonb) AS labels
        FROM clients c
-       WHERE $1='' OR concat_ws(' ',c.code,c.name,c.priority_customer_number,c.primary_contact_name,c.phone,c.additional_phones::text,c.email,c.additional_emails::text,c.address,c.city,c.notes) ILIKE $2
+       WHERE $1='' OR concat_ws(' ',c.code,c.name,c.first_name,c.last_name,c.priority_customer_number,c.primary_contact_name,c.phone,c.additional_phones::text,c.email,c.additional_emails::text,c.address,c.apartment_number,c.city,c.notes) ILIKE $2
          OR EXISTS (SELECT 1 FROM client_contacts cc WHERE cc.client_id=c.id AND concat_ws(' ',cc.name,cc.company,cc.role,cc.phone,cc.additional_phones::text,cc.email) ILIKE $2)
          OR EXISTS (SELECT 1 FROM client_labels cl JOIN catalog_items ci ON ci.id=cl.catalog_item_id WHERE cl.client_id=c.id AND concat_ws(' ',ci.name,ci.symbol) ILIKE $2)
        ORDER BY c.updated_at DESC, c.name LIMIT 200`, [query, like],
@@ -313,7 +331,8 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
 
   router.post('/clients', requireRoles('admin', 'manager'), async (request, response) => {
-    const required = ['name', 'address', 'phone'];
+    request.body.firstName=String(request.body.firstName||request.body.name||'').trim();request.body.lastName=String(request.body.lastName||'').trim();request.body.name=[request.body.firstName,request.body.lastName].filter(Boolean).join(' ');
+    const required = ['firstName','lastName', 'address', 'phone'];
     if (required.some((key) => !String(request.body[key] || '').trim())) return response.status(400).json({ error: 'שם לקוח, כתובת וטלפון הם שדות חובה' });
     const next = await pool.query("SELECT COALESCE(MAX(NULLIF(regexp_replace(code, '\\D','','g'),'')::int),1000)+1 AS value FROM clients");
     const input = { clientType: 'private', ...request.body, priorityCustomerNumber:request.body.priorityCustomerNumber ?? request.body.customValues?.priorityCustomerNumber ?? '' };
@@ -368,6 +387,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
 
   router.patch('/clients/:id', requireRoles('admin', 'manager'), async (request, response) => {
+    if(request.body.firstName!==undefined||request.body.lastName!==undefined){const current=await pool.query('SELECT first_name,last_name,name FROM clients WHERE id=$1',[request.params.id]);if(!current.rowCount)return response.status(404).json({error:'הלקוח לא נמצא'});request.body.firstName=String(request.body.firstName??current.rows[0].first_name??current.rows[0].name).trim();request.body.lastName=String(request.body.lastName??current.rows[0].last_name??'').trim();request.body.name=[request.body.firstName,request.body.lastName].filter(Boolean).join(' ');}
     if (request.body.priorityCustomerNumber === undefined && request.body.customValues?.priorityCustomerNumber !== undefined) request.body.priorityCustomerNumber=request.body.customValues.priorityCustomerNumber;
     for (const key of ['name', 'address', 'phone']) if (request.body[key] !== undefined && !String(request.body[key]).trim()) return response.status(400).json({ error: 'שם לקוח, כתובת וטלפון אינם יכולים להיות ריקים' });
     const entries = valuesFor(request.body || {}, CLIENT_FIELDS);

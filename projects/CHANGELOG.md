@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.0
+
+- Split customer first and last names, added apartment number, richer table/board views, and deterministic sorting.
+- Embedded the project map inside Projects and promoted Systems & Components to a dedicated main workspace.
+- Added project NAS folders, in-app document previews, reliable mobile gallery/camera inputs, desktop webcam capture, and controlled video uploads.
+- Added same-project task dependencies, due-day indicators, dependency lines on Gantt, scoped overdue alerts, working snooze/dismiss actions, and direct task opening.
+- Added user presence, session login/logout audit entries, bulk message deletion, and users/permissions inside system settings.
+- Added a real PDF report wizard with optional project-document/NAS storage.
+- Added Priority order PDF text extraction, SKU and quantity detection, catalog matching, and project assignment.
+- Removed obsolete client referral/summary widgets and the document repository from Professionals.
+- Updated the project stages by removing electrician threading and renaming the final stage to Ready for Handover.
+
 ## 0.10.0
 
 - Added full PROJECTS backup packages containing PostgreSQL, internal uploads, and company branding.

@@ -1,7 +1,7 @@
 {
   "name": "projects-home-assistant-app",
   "private": true,
-  "version": "0.10.0",
+  "version": "0.11.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -15,7 +15,9 @@
     "bcryptjs": "latest",
     "express": "latest",
     "helmet": "latest",
+    "html2canvas": "latest",
     "jsonwebtoken": "latest",
+    "jspdf": "latest",
     "leaflet": "latest",
     "lucide-react": "latest",
     "multer": "latest",

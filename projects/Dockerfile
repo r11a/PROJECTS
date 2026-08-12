@@ -17,7 +17,7 @@ RUN npm ci --omit=dev
 
 FROM ${BUILD_FROM}
 
-RUN apk add --no-cache ca-certificates nginx nodejs postgresql17 postgresql17-client su-exec
+RUN apk add --no-cache ca-certificates nginx nodejs poppler-utils postgresql17 postgresql17-client su-exec
 
 COPY --from=web-builder /build/dist /var/www/projects
 COPY --from=server-dependencies /build/node_modules /opt/projects/node_modules
@@ -31,7 +31,7 @@ RUN chmod +x /etc/services.d/nginx/run /etc/services.d/postgresql/run /etc/servi
     && rm -f /etc/nginx/http.d/default.conf
 
 LABEL \
-  io.hass.version="0.10.0" \
+  io.hass.version="0.11.0" \
   io.hass.type="app" \
   io.hass.arch="amd64"
 

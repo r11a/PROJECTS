@@ -4,6 +4,10 @@ import path from 'node:path';
 import { access, mkdir, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 const PROFESSIONAL_FIELDS = {
   displayName: 'display_name', companyName: 'company_name', jobTitle: 'job_title', affiliation: 'affiliation', employeeNumber: 'employee_number', phone: 'phone',
@@ -87,8 +91,45 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
     fileFilter: (_request, file, callback) => callback(null, ['image/png','image/jpeg','image/webp'].includes(file.mimetype)),
     limits: { fileSize: 5 * 1024 * 1024, files: 1 },
   });
+  const priorityUpload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (_request, file, callback) => callback(null, file.mimetype === 'application/pdf'),
+    limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+  });
 
   router.use(authenticate);
+
+  router.post('/priority-orders/scan', requireRoles('admin', 'manager'), priorityUpload.single('file'), async (request, response) => {
+    if (!request.file) return response.status(400).json({ error: 'יש לבחור קובץ PDF של הזמנה' });
+    const source = path.join(dataDir, 'tmp', `${randomUUID()}.pdf`);
+    await mkdir(path.dirname(source), { recursive: true });
+    try {
+      await writeFile(source, request.file.buffer);
+      const { stdout } = await execFileAsync('pdftotext', ['-layout', '-enc', 'UTF-8', source, '-'], { maxBuffer: 8 * 1024 * 1024 });
+      const parsed = String(stdout || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
+        const columns = line.split(/\s{2,}|\t+/).map((value) => value.trim()).filter(Boolean);
+        if (columns.length < 2) return null;
+        const codeIndex = columns.findIndex((value) => /[A-Za-z0-9][A-Za-z0-9._\/-]{2,}/.test(value) && /\d/.test(value));
+        const quantityIndex = columns.findLastIndex((value) => /^\d+(?:\.\d+)?$/.test(value.replace(/,/g, '')));
+        if (codeIndex < 0 || quantityIndex <= codeIndex) return null;
+        const quantity = Number(columns[quantityIndex].replace(/,/g, ''));
+        if (!(quantity > 0) || quantity > 100000) return null;
+        return { code: columns[codeIndex], description: columns.slice(codeIndex + 1, quantityIndex).join(' '), quantity };
+      }).filter(Boolean);
+      const unique = [...new Map(parsed.map((item) => [`${item.code}:${item.description}`, item])).values()].slice(0, 500);
+      const codes = unique.map((item) => item.code);
+      const catalog = codes.length ? await pool.query('SELECT id,code,name,unit FROM equipment_catalog WHERE code=ANY($1::text[]) AND active=TRUE', [codes]) : { rows: [] };
+      const byCode = new Map(catalog.rows.map((item) => [String(item.code).toLowerCase(), item]));
+      const items = unique.map((item) => ({ ...item, catalogItem: byCode.get(item.code.toLowerCase()) || null }));
+      await audit(request, 'import', 'priority_order', request.file.originalname, { rows: items.length, matched: items.filter((item) => item.catalogItem).length });
+      response.json({ fileName: request.file.originalname, items, textDetected: Boolean(String(stdout || '').trim()) });
+    } catch (error) {
+      if (error.code === 'ENOENT') return response.status(503).json({ error: 'שירות פענוח ה־PDF אינו מותקן בגרסה זו' });
+      throw error;
+    } finally {
+      await unlink(source).catch(() => {});
+    }
+  });
 
   router.get('/professional-roles', async (_request, response) => {
     const result = await pool.query('SELECT * FROM professional_role_types ORDER BY sort_order,name');
@@ -274,6 +315,7 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
 
   router.post('/documents', requireRoles('admin', 'manager', 'technician'), upload.single('file'), async (request, response) => {
     if (!request.file) return response.status(400).json({ error: 'לא נבחר קובץ' });
+    if(request.file.mimetype.startsWith('video/')&&request.file.size>30*1024*1024&&(!['admin','manager'].includes(request.user.role)||request.body.largeFileApproved!=='true')){await unlink(request.file.path).catch(()=>{});return response.status(413).json({error:'סרטון מוגבל ל־30MB. מנהל יכול לאשר העלאה חריגה במפורש.'});}
     const clientId = request.body.clientId || null;
     const projectId = request.body.projectId || null;
     const formRecordId = request.body.formRecordId || null;
@@ -283,9 +325,9 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
     const storage = await currentStorage();
     let storagePath = storage.relativePath;
     if (projectId && storage.mode !== 'internal') {
-      const project = await pool.query('SELECT id,name FROM projects WHERE id=$1',[projectId]);
+      const project = await pool.query('SELECT id,name,document_folder FROM projects WHERE id=$1',[projectId]);
       if (project.rowCount) {
-        const folder = `${project.rows[0].id}-${project.rows[0].name}`.replace(/[<>:"/\\|?*\x00-\x1F]/g,'-').replace(/\s+/g,' ').trim().slice(0,100);
+        const folder = (project.rows[0].document_folder||`${project.rows[0].id}-${project.rows[0].name}`).replace(/[<>:"/\\|?*\x00-\x1F]/g,'-').replace(/\s+/g,' ').trim().slice(0,100);
         storagePath = [storage.relativePath,folder].filter(Boolean).join('/');
         const projectDirectory = safeStoragePath(storage.mode,storagePath); await mkdir(projectDirectory,{recursive:true});
         await rename(request.file.path,path.join(projectDirectory,request.file.filename));

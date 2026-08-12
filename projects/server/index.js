@@ -91,7 +91,7 @@ const projectColumns = [
   'id', 'name', 'client', 'location', 'address', 'lat', 'lng', 'stage', 'progress', 'manager',
   'owner_initials', 'value', 'paid', 'due', 'priority', 'flag', 'systems', 'next_milestone',
   'phone', 'email', 'health', 'tasks_done', 'tasks_total', 'manager_professional_id', 'client_id',
-  'project_size', 'contractor_progress',
+  'project_size', 'contractor_progress', 'document_folder',
 ];
 const inputToColumn = {
   id: 'id', name: 'name', client: 'client', location: 'location', address: 'address', lat: 'lat', lng: 'lng',
@@ -101,7 +101,7 @@ const inputToColumn = {
   tasksDone: 'tasks_done', tasksTotal: 'tasks_total',
   managerId: 'manager_professional_id',
   clientId: 'client_id',
-  projectSize: 'project_size', contractorProgress: 'contractor_progress',
+  projectSize: 'project_size', contractorProgress: 'contractor_progress', documentFolder:'document_folder',
 };
 const STAGE_PROGRESS = { waiting:0,mobilization:9,infrastructure:18,threading:27,electrician_threading:36,threading_done:45,installation_a:55,installation_b:65,installation_c:75,activation_programming:85,finishes:93,post_delivery:100 };
 
@@ -114,7 +114,7 @@ function projectFromRow(row) {
     nextMilestone: row.next_milestone, phone: row.phone, email: row.email, health: Number(row.health),
     tasksDone: Number(row.tasks_done), tasksTotal: Number(row.tasks_total), managerId: row.manager_professional_id, clientId: row.client_id,
     archived: Boolean(row.archived_at), archivedAt: row.archived_at, archivedBy: row.archived_by,
-    projectSize: row.project_size || 'medium', contractorProgress: row.contractor_progress || 'waiting',
+    projectSize: row.project_size || 'medium', contractorProgress: row.contractor_progress || 'waiting', documentFolder:row.document_folder || '',
   };
 }
 
@@ -130,7 +130,11 @@ async function resolveProjectClient(db, input, currentProject = null) {
     name: input.client, address: input.address, phone: input.phone, email: input.email, city: input.location,
   } : null);
   if (draft) {
-    const name = String(draft.name || '').trim();
+    const rawName = String(draft.name || '').trim();
+    const nameParts = rawName.split(/\s+/).filter(Boolean);
+    const firstName = String(draft.firstName || (nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : rawName)).trim();
+    const lastName = String(draft.lastName || (nameParts.length > 1 ? nameParts.at(-1) : '')).trim();
+    const name = [firstName,lastName].filter(Boolean).join(' ');
     const address = String(draft.address || '').trim();
     const phone = String(draft.phone || '').trim();
     if (!name || !address || !phone) throw Object.assign(new Error('ללקוח חדש חובה להזין שם, כתובת וטלפון'), { status: 400 });
@@ -138,9 +142,9 @@ async function resolveProjectClient(db, input, currentProject = null) {
     if (existing.rowCount) return existing.rows[0];
     const next = await db.query("SELECT COALESCE(MAX(NULLIF(regexp_replace(code, '\\D','','g'),'')::int),1000)+1 AS value FROM clients");
     const created = await db.query(
-      `INSERT INTO clients(code,name,client_type,primary_contact_name,phone,email,address,city)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [`CUS-${next.rows[0].value}`, name, draft.clientType || 'private', draft.primaryContactName || name, phone, draft.email || '', address, draft.city || input.location || ''],
+      `INSERT INTO clients(code,name,first_name,last_name,client_type,primary_contact_name,phone,email,address,city,apartment_number)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [`CUS-${next.rows[0].value}`, name, firstName, lastName, draft.clientType || 'private', draft.primaryContactName || name, phone, draft.email || '', address, draft.city || input.location || '', draft.apartmentNumber || ''],
     );
     return created.rows[0];
   }
@@ -252,8 +256,11 @@ function cookieValue(request, name) {
 }
 
 function publicUser(row) {
-  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, haUserId: row.ha_user_id, avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', appearanceTheme: row.appearance_theme || 'light' };
+  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, haUserId: row.ha_user_id, avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', appearanceTheme: row.appearance_theme || 'light', lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
 }
+
+const presenceWrites=new Map();
+async function touchPresence(user){const previous=presenceWrites.get(String(user.id))||0;if(Date.now()-previous<45000)return;presenceWrites.set(String(user.id),Date.now());const returningAfterAbsence=!user.lastSeenAt||Date.now()-new Date(user.lastSeenAt).getTime()>15*60*1000;await pool.query('UPDATE users SET last_seen_at=NOW(),last_login_at=CASE WHEN $2 THEN NOW() ELSE last_login_at END WHERE id=$1',[user.id,returningAfterAbsence]);if(returningAfterAbsence)await audit({user},'login','session',String(user.id),{automatic:true});}
 
 async function authenticate(request, response, next) {
   try {
@@ -272,6 +279,7 @@ async function authenticate(request, response, next) {
       );
       request.user = publicUser(result.rows[0]);
       if (!request.user.active) return response.status(403).json({ error: 'User is disabled' });
+      await touchPresence(request.user);
       return next();
     }
 
@@ -281,6 +289,7 @@ async function authenticate(request, response, next) {
     const result = await pool.query('SELECT * FROM users WHERE id = $1 AND active = TRUE', [payload.sub]);
     if (!result.rowCount) return response.status(401).json({ error: 'User is unavailable' });
     request.user = publicUser(result.rows[0]);
+    await touchPresence(request.user);
     next();
   } catch {
     response.status(401).json({ error: 'Invalid or expired session' });
@@ -329,11 +338,14 @@ app.post('/api/auth/login', async (request, response) => {
   const user = publicUser(result.rows[0]);
   const token = jwt.sign({ sub: String(user.id), role: user.role }, jwtSecret, { expiresIn: '12h' });
   response.cookie('projects_session', token, { httpOnly: true, sameSite: 'strict', secure: request.secure, maxAge: 12 * 60 * 60 * 1000, path: '/' });
+  await pool.query('UPDATE users SET last_login_at=NOW(),last_seen_at=NOW() WHERE id=$1',[user.id]);
   await audit({ user }, 'login', 'session', String(user.id));
   response.json({ user });
 });
 
-app.post('/api/auth/logout', (_request, response) => {
+app.post('/api/auth/logout', authenticate, async (request, response) => {
+  await audit(request,'logout','session',String(request.user.id));
+  await pool.query("UPDATE users SET last_seen_at=NOW()-INTERVAL '10 minutes' WHERE id=$1",[request.user.id]);
   response.clearCookie('projects_session', { path: '/' });
   response.status(204).end();
 });
@@ -425,7 +437,8 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
       if (!clientName) throw Object.assign(new Error('שם לקוח אינו יכול להיות ריק'), { status: 400 });
       const clientId = request.body.clientId || current.rows[0].client_id;
       if (!clientId) throw Object.assign(new Error('יש לקשר את הפרויקט ללקוח לפני שינוי שמו'), { status: 400 });
-      await db.query('UPDATE clients SET name=$1,updated_at=NOW() WHERE id=$2', [clientName, clientId]);
+      const nameParts=clientName.split(/\s+/).filter(Boolean);const firstName=nameParts.length>1?nameParts.slice(0,-1).join(' '):clientName;const lastName=nameParts.length>1?nameParts.at(-1):'';
+      await db.query('UPDATE clients SET name=$1,first_name=$2,last_name=$3,updated_at=NOW() WHERE id=$4', [clientName,firstName,lastName,clientId]);
       await db.query('UPDATE projects SET client=$1,updated_at=NOW() WHERE client_id=$2', [clientName, clientId]);
       request.body.client = clientName;
       delete request.body.clientName;

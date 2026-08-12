@@ -37,7 +37,7 @@ export function createGeocoder(pool) {
   async function settings() {
     const result = await pool.query("SELECT value FROM app_settings WHERE key='map'");
     const value = result.rows[0]?.value || {};
-    return { baseUrl: normalizeBaseUrl(value.photonUrl), language: value.addressLanguage || 'default' };
+    return { baseUrl: normalizeBaseUrl(value.photonUrl), language: value.addressLanguage === 'en' ? 'en' : 'he' };
   }
 
   async function search(query, limit = 6) {
@@ -62,7 +62,10 @@ export function createGeocoder(pool) {
     if (!response.ok) throw new Error(`Photon returned ${response.status}`);
     const data = await response.json();
     const requestedHouseNumber = normalized.match(/(?:^|\s)(\d+[A-Za-z\u0590-\u05ff]?)(?=\s|,|$)/)?.[1] || '';
-    const items = (data.features || []).map(addressFromFeature).filter((item) => item?.address).map((item) => {
+    const mapped = (data.features || []).map(addressFromFeature).filter((item) => item?.address);
+    const hebrewItems = mapped.filter((item) => !/[\u0600-\u06ff]/.test(item.address));
+    const localizedItems = language === 'he' ? hebrewItems : mapped;
+    const items = localizedItems.map((item) => {
       if (!requestedHouseNumber) return { ...item, approximate:false };
       if (String(item.houseNumber).toLocaleLowerCase('he-IL') === requestedHouseNumber.toLocaleLowerCase('he-IL')) return { ...item, approximate:false };
       const [streetWithNumber, ...rest] = item.address.split(',').map((part) => part.trim());
