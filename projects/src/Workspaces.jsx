@@ -933,6 +933,7 @@ export function FinanceWorkspace({
 
 export function ReportsWorkspace({ api, setNotice }) {
   const [data, setData] = useState(null);
+  const [reportError, setReportError] = useState("");
   const [projects, setProjects] = useState([]);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [reportType, setReportType] = useState("overview");
@@ -941,13 +942,20 @@ export function ReportsWorkspace({ api, setNotice }) {
   const [saveToProject, setSaveToProject] = useState(false);
   const [generating, setGenerating] = useState(false);
   const reportRef = useRef(null);
-  useEffect(() => {
-    Promise.all([api("/reports/overview"), api("/projects")])
+  const loadReports = () => {
+    setReportError("");
+    return Promise.all([api("/reports/overview"), api("/projects")])
       .then(([overview, projectData]) => {
         setData(overview);
         setProjects(projectData.projects || []);
       })
-      .catch((e) => setNotice(e.message));
+      .catch((error) => {
+        setReportError(error.message);
+        setNotice(error.message);
+      });
+  };
+  useEffect(() => {
+    loadReports();
   }, []);
   const prepareProjectReport = async (nextProjectId) => {
     setProjectId(nextProjectId);
@@ -1033,6 +1041,7 @@ export function ReportsWorkspace({ api, setNotice }) {
     a.click();
     URL.revokeObjectURL(a.href);
   };
+  if (!data && reportError) return <div className="work-error panel"><AlertTriangle size={28}/><h3>לא ניתן לטעון את הדוחות</h3><p>{reportError}</p><button className="ops-primary" onClick={loadReports}>ניסיון חוזר</button></div>;
   if (!data) return <div className="work-loading">מכין דוחות…</div>;
   const stageColors = [
     "#6957df",

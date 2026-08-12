@@ -173,14 +173,25 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
   router.delete('/projects/:id/equipment/:itemId', requireRoles('admin'), async (request, response) => { await pool.query('DELETE FROM project_equipment WHERE id=$1 AND project_id=$2',[request.params.itemId,request.params.id]); await audit(request,'delete','project_equipment',request.params.itemId,{projectId:request.params.id}); response.status(204).end(); });
 
   router.get('/reports/overview', async (_request, response) => {
+    const reportQuery = async (name, sql, fallback) => {
+      try {
+        return (await pool.query(sql)).rows;
+      } catch (error) {
+        console.error(`PROJECTS report query failed [${name}]`, error.message);
+        return fallback;
+      }
+    };
     const [stages, tasks, finance, managers, monthly] = await Promise.all([
-      pool.query('SELECT stage,COUNT(*)::int count,COALESCE(SUM(value),0)::numeric value FROM projects GROUP BY stage ORDER BY count DESC'),
-      pool.query(`SELECT status,COUNT(*)::int count FROM tasks GROUP BY status`),
-      pool.query(`SELECT COALESCE(SUM(value),0)::numeric total,COALESCE(SUM(paid),0)::numeric paid,COALESCE(SUM(value-paid),0)::numeric open FROM projects`),
-      pool.query(`SELECT COALESCE(pr.display_name,p.manager,'ללא מנהל') name,COUNT(*)::int projects,ROUND(AVG(p.progress))::int progress FROM projects p LEFT JOIN professionals pr ON pr.id=p.manager_professional_id GROUP BY COALESCE(pr.display_name,p.manager,'ללא מנהל') ORDER BY projects DESC`),
-      pool.query(`SELECT to_char(date_trunc('month',COALESCE(paid_at,due_date)),'YYYY-MM') month,SUM(amount)::numeric amount,status FROM project_payments WHERE COALESCE(paid_at,due_date) IS NOT NULL GROUP BY 1,status ORDER BY 1`),
+      reportQuery('stages', 'SELECT stage,COUNT(*)::int count,COALESCE(SUM(value),0)::numeric value FROM projects GROUP BY stage ORDER BY count DESC', []),
+      reportQuery('tasks', 'SELECT status,COUNT(*)::int count FROM tasks GROUP BY status', []),
+      reportQuery('finance', 'SELECT COALESCE(SUM(value),0)::numeric total,COALESCE(SUM(paid),0)::numeric paid,COALESCE(SUM(value-paid),0)::numeric AS "open" FROM projects', [{ total: 0, paid: 0, open: 0 }]),
+      reportQuery('managers', `SELECT COALESCE(NULLIF(pr.display_name,''),NULLIF(p.manager,''),'ללא מנהל') name,COUNT(*)::int projects,COALESCE(ROUND(AVG(p.progress)),0)::int progress
+        FROM projects p LEFT JOIN professionals pr ON pr.id=p.manager_professional_id
+        GROUP BY pr.id,pr.display_name,p.manager ORDER BY COUNT(*) DESC`, []),
+      reportQuery('monthly', `SELECT to_char(date_trunc('month',COALESCE(paid_at,due_date)::timestamp),'YYYY-MM') month,COALESCE(SUM(amount),0)::numeric amount,status
+        FROM project_payments WHERE COALESCE(paid_at,due_date) IS NOT NULL GROUP BY 1,status ORDER BY 1`, []),
     ]);
-    response.json({ stages: stages.rows, tasks: tasks.rows, finance: finance.rows[0], managers: managers.rows, monthly: monthly.rows });
+    response.json({ stages, tasks, finance: finance[0] || { total: 0, paid: 0, open: 0 }, managers, monthly });
   });
 
   return router;

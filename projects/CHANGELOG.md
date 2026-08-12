@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.2
+
+- Fixed the reports overview endpoint so one incompatible analytics query can no longer blank the entire reports screen.
+- Hardened manager, finance, and monthly aggregation queries for upgraded and historical databases.
+- Added safe zero-value fallbacks for empty report datasets while logging the exact failing aggregation in the add-on log.
+
 ## 0.11.1
 
 - Fixed a CSS class collision that compressed the customer tile view into narrow project-board columns.
