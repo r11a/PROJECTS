@@ -1,7 +1,12 @@
 import express from 'express';
 import path from 'node:path';
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
+import { buildOperationalInsights } from './insights.js';
+
+const INSIGHT_CACHE_TTL = 30 * 60 * 1000;
+const INSIGHT_REFRESH_COOLDOWN = 5 * 60 * 1000;
+const insightCache = new Map();
 
 const PROVIDERS = {
   gemini: {
@@ -81,31 +86,69 @@ function providerError(provider, status, payload) {
   return detail ? `הספק החזיר שגיאה: ${detail.slice(0, 220)}` : `בדיקת החיבור נכשלה (HTTP ${status}).`;
 }
 
-async function testProvider(provider, model, apiKey) {
+async function generateProviderText(provider, model, apiKey, prompt, { test = false } = {}) {
   const timeout = AbortSignal.timeout(25000);
   let response;
   if (provider === 'gemini') {
     response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method:'POST', signal:timeout,
       headers:{ 'Content-Type':'application/json', 'x-goog-api-key':apiKey },
-      body:JSON.stringify({ contents:[{ parts:[{ text:'Reply with exactly OK' }] }], generationConfig:{ maxOutputTokens:16, temperature:0 } }),
+      body:JSON.stringify({
+        contents:[{ parts:[{ text:prompt }] }],
+        generationConfig:{ maxOutputTokens:test ? 16 : 900, temperature:test ? 0 : 0.2, ...(test ? {} : { responseMimeType:'application/json' }) },
+      }),
     });
   } else {
     response = await fetch('https://api.openai.com/v1/responses', {
       method:'POST', signal:timeout,
       headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${apiKey}` },
-      body:JSON.stringify({ model, input:'Reply with exactly OK', max_output_tokens:16 }),
+      body:JSON.stringify({ model, input:prompt, max_output_tokens:test ? 16 : 900 }),
     });
   }
   const payload = await response.json().catch(()=>({}));
   if (!response.ok) throw Object.assign(new Error(providerError(provider, response.status, payload)), { statusCode:400 });
+  if (provider === 'gemini') return payload.candidates?.[0]?.content?.parts?.map((part)=>part.text || '').join('') || '';
+  if (payload.output_text) return payload.output_text;
+  return payload.output?.flatMap((item)=>item.content || []).map((item)=>item.text || '').join('') || '';
+}
+
+async function testProvider(provider, model, apiKey) {
+  await generateProviderText(provider, model, apiKey, 'Reply with exactly OK', { test:true });
   return true;
+}
+
+function parseInsightResponse(text) {
+  const cleaned = String(text || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('AI response did not contain valid JSON');
+  const parsed = JSON.parse(cleaned.slice(start, end + 1));
+  const tones = new Set(['danger','warning','info','success']);
+  const targets = new Set(['dashboard','projects','tasks','calendar','finance','reports','systems']);
+  const suggestions = (Array.isArray(parsed.suggestions) ? parsed.suggestions : []).slice(0, 4).map((item)=>({
+    tone:tones.has(item?.tone) ? item.tone : 'info',
+    title:String(item?.title || '').trim().slice(0, 90),
+    text:String(item?.text || '').trim().slice(0, 180),
+    target:targets.has(item?.target) ? item.target : 'dashboard',
+  })).filter((item)=>item.title && item.text);
+  if (!suggestions.length) throw new Error('AI response did not contain usable insights');
+  return { summary:String(parsed.summary || '').trim().slice(0, 240), suggestions };
+}
+
+function insightPrompt(snapshot) {
+  return `אתה סוכן תפעולי בתוך PROJECTS, מערכת לניהול פרויקטי בית חכם ומתח נמוך.
+נתח רק את נתוני הסיכום המצורפים. אל תנחש מידע שאינו קיים ואל תחזור על אותו מדד בניסוחים שונים.
+בחר 3–4 תובנות קצרות, מעשיות ובעדיפות ניהולית: איחורים וסיכונים, עומס, גבייה, קצב התקדמות וצווארי בקבוק.
+החזר JSON בלבד במבנה הבא:
+{"summary":"משפט מנהלים אחד","suggestions":[{"tone":"danger|warning|info|success","title":"כותרת קצרה","text":"פעולה מומלצת וקונקרטית","target":"dashboard|projects|tasks|calendar|finance|reports|systems"}]}
+כל הטקסט למשתמש חייב להיות בעברית. הנתונים:
+${JSON.stringify(snapshot)}`;
 }
 
 export async function createAiRouter({ pool, authenticate, requireRoles, audit, dataDir }) {
   const router = express.Router();
   const encryptionKey = await getEncryptionKey(dataDir);
-  router.use(authenticate, requireRoles('admin'));
+  router.use(authenticate);
 
   async function getSettings() {
     const [globalResult, providerResult] = await Promise.all([
@@ -116,6 +159,52 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     const rows = Object.fromEntries(providerResult.rows.map((row)=>[row.provider,row]));
     return { ...global, providers:Object.fromEntries(Object.keys(PROVIDERS).map((provider)=>[provider,publicProvider(rows[provider],provider)])) };
   }
+
+  router.get('/ai/insights', async (request, response) => {
+    const base = await buildOperationalInsights({ pool, user:request.user });
+    const [globalResult, providerResult] = await Promise.all([
+      pool.query("SELECT value FROM app_settings WHERE key='ai'"),
+      pool.query('SELECT provider,enabled,model,api_key_encrypted FROM ai_provider_settings'),
+    ]);
+    const global = { activeProvider:'gemini', ...(globalResult.rows[0]?.value || {}) };
+    const selected = providerResult.rows.find((row)=>row.provider === global.activeProvider);
+    const definition = PROVIDERS[global.activeProvider];
+    if (!definition || !selected?.enabled || !selected.api_key_encrypted) {
+      return response.json({ ...base, ai:{ status:selected?.enabled ? 'unconfigured' : 'disabled', provider:global.activeProvider, model:selected?.model || definition?.defaultModel || '', generatedAt:new Date().toISOString() } });
+    }
+
+    const snapshot = {
+      stats:base.stats,
+      stages:base.analysisContext.stages,
+      workload:base.analysisContext.workload.map((item,index)=>({ teamMember:index + 1, projects:item.projects, averageProgress:item.average_progress })),
+    };
+    const fingerprint = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+    const cacheKey = `${request.user.role}:${global.activeProvider}:${selected.model}`;
+    const cached = insightCache.get(cacheKey);
+    const now = Date.now();
+    const force = request.query.refresh === '1';
+    const canReuse = cached && !force && (cached.fingerprint === fingerprint && now - cached.createdAt < INSIGHT_CACHE_TTL || now - cached.createdAt < INSIGHT_REFRESH_COOLDOWN);
+    if (canReuse) {
+      return response.json({ ...base, ...cached.value, ai:{ ...cached.value.ai, cached:true } });
+    }
+
+    try {
+      const text = await generateProviderText(global.activeProvider, selected.model, decrypt(selected.api_key_encrypted,encryptionKey), insightPrompt(snapshot));
+      const generated = parseInsightResponse(text);
+      const value = {
+        summary:generated.summary,
+        suggestions:[...generated.suggestions, ...base.suggestions].filter((item,index,items)=>items.findIndex((candidate)=>candidate.title === item.title) === index).slice(0,4),
+        ai:{ status:'ready', provider:global.activeProvider, providerName:definition.name, model:selected.model, generatedAt:new Date().toISOString(), cached:false },
+      };
+      insightCache.set(cacheKey,{ fingerprint, createdAt:now, value });
+      return response.json({ ...base, ...value });
+    } catch (error) {
+      console.error('AI insights generation failed', global.activeProvider, error.message);
+      return response.json({ ...base, ai:{ status:'fallback', provider:global.activeProvider, providerName:definition.name, model:selected.model, generatedAt:new Date().toISOString(), error:'לא ניתן היה לעדכן את ניתוח ה-AI. מוצגות תובנות מקומיות עד לניסיון הבא.' } });
+    }
+  });
+
+  router.use(requireRoles('admin'));
 
   router.get('/ai/settings', async (_request, response) => response.json(await getSettings()));
 

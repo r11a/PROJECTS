@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.6
+
+- Connected the dashboard insights tile to the selected Gemini or OpenAI provider with concise Hebrew management analysis.
+- Added privacy-conscious aggregate snapshots, validated structured output, a 30-minute cache and a five-minute change cooldown to keep usage inexpensive.
+- Kept deterministic local insights as a permanent fallback when AI is disabled, unconfigured or temporarily unavailable.
+- Added live data refresh, explicit manual AI refresh, provider/model status and actionable navigation from every insight.
+- Fixed Outlook ICS subscriptions being intercepted by authenticated API routers and repeatedly prompting for Windows credentials.
+
 ## 0.11.5
 
 - Added secure Gemini and OpenAI provider configuration with encrypted server-side API keys.

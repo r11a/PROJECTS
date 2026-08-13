@@ -184,7 +184,7 @@ function DynamicIcon({ name, size = 16 }) {
   return <Icon size={size} />;
 }
 
-export function InsightsTile({ insights, onNavigate }) {
+export function InsightsTile({ insights, onNavigate, refreshing, onRefresh }) {
   if (!insights)
     return (
       <section className="insights-tile panel loading">
@@ -201,12 +201,19 @@ export function InsightsTile({ insights, onNavigate }) {
           </span>
           <div>
             <h3>תובנות אוטומטיות</h3>
-            <p>PROJECTS מנתח משימות, גבייה ובריאות פרויקטים</p>
+            <p>{insights.summary || "PROJECTS מנתח משימות, גבייה ובריאות פרויקטים"}</p>
           </div>
         </div>
-        <em>LIVE</em>
+        <div className="insight-status">
+          <em className={insights.ai?.status || "local"}>
+            {insights.ai?.status === "ready" ? "AI" : insights.ai?.status === "fallback" || insights.ai?.status === "disabled" || insights.ai?.status === "unconfigured" ? "מקומי" : "LIVE"}
+          </em>
+          <button type="button" onClick={onRefresh} disabled={refreshing} title="רענון ניתוח חכם">
+            <RefreshCw className={refreshing ? "spin" : ""} size={15} />
+          </button>
+        </div>
       </header>
-      <div>
+      <div className="insight-results">
         {insights.suggestions.slice(0, 4).map((item, index) => (
           <button
             key={`${item.title}-${index}`}
@@ -231,6 +238,10 @@ export function InsightsTile({ insights, onNavigate }) {
             <ChevronLeft size={16} />
           </button>
         ))}
+        <footer>
+          <span>{insights.ai?.providerName || "מנוע תובנות מקומי"}{insights.ai?.model ? ` · ${insights.ai.model}` : ""}</span>
+          <small>{insights.ai?.error || `${insights.ai?.cached ? "ניתוח שמור" : "מתעדכן אוטומטית ברקע"}${insights.ai?.generatedAt ? ` · ${new Date(insights.ai.generatedAt).toLocaleTimeString("he-IL", { hour:"2-digit", minute:"2-digit" })}` : ""}`}</small>
+        </footer>
       </div>
     </section>
   );

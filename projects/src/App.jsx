@@ -228,6 +228,7 @@ function App() {
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [insights, setInsights] = useState(null);
+  const [insightsRefreshing, setInsightsRefreshing] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(true);
   const hiddenAlertSignature = useRef("");
   const [messagesOpen, setMessagesOpen] = useState(false);
@@ -282,6 +283,19 @@ function App() {
       );
       return result.projects;
     });
+  const loadInsights = async (force = false) => {
+    setInsightsRefreshing(true);
+    try {
+      const result = await api(`/ai/insights${force ? "?refresh=1" : ""}`);
+      setInsights(result);
+      const signature = result.alerts.map((alert) => alert.key).sort().join("|");
+      if (signature && signature !== hiddenAlertSignature.current) setAlertsOpen(true);
+      if (!signature) hiddenAlertSignature.current = "";
+      return result;
+    } finally {
+      setInsightsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     api("/auth/me")
@@ -350,20 +364,17 @@ function App() {
   }, [user?.id]);
   useEffect(() => {
     if (!user) return undefined;
-    const loadInsights = () =>
-      api("/insights")
-        .then((result) => {
-          setInsights(result);
-          const signature = result.alerts.map((alert) => alert.key).sort().join("|");
-          if (signature && signature !== hiddenAlertSignature.current) {
-            setAlertsOpen(true);
-          }
-          if (!signature) hiddenAlertSignature.current = "";
-        })
-        .catch(() => {});
-    loadInsights();
-    const timer = setInterval(loadInsights, 60000);
-    return () => clearInterval(timer);
+    const refresh = () => loadInsights(false).catch(() => {});
+    refresh();
+    const timer = setInterval(refresh, 60000);
+    const live = (event) => {
+      if (["projects","tasks","payments"].includes(event.detail?.table)) refresh();
+    };
+    window.addEventListener("projects:live-change", live);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("projects:live-change", live);
+    };
   }, [user?.id]);
 
   const appearanceMode = user?.appearanceTheme || "light";
@@ -827,6 +838,8 @@ function App() {
               openProject={openProject}
               setPage={setPage}
               insights={insights}
+              insightsRefreshing={insightsRefreshing}
+              onRefreshInsights={() => loadInsights(true).catch((error) => setNotice(error.message))}
               user={user}
             />
           )}
@@ -1451,7 +1464,7 @@ function SystemPage({ setNotice }) {
   );
 }
 
-function Dashboard({ projects, openProject, setPage, insights, user }) {
+function Dashboard({ projects, openProject, setPage, insights, insightsRefreshing, onRefreshInsights, user }) {
   const active = projects.filter((p) => p.stage !== "completed");
   const value = active.reduce((sum, p) => sum + p.value, 0);
   const unpaid = active.reduce((sum, p) => sum + (p.value - p.paid), 0);
@@ -1530,7 +1543,7 @@ function Dashboard({ projects, openProject, setPage, insights, user }) {
           alert
         />
       </section>
-      <InsightsTile insights={insights} onNavigate={setPage} />
+      <InsightsTile insights={insights} onNavigate={setPage} refreshing={insightsRefreshing} onRefresh={onRefreshInsights} />
       <section className="dashboard-grid top">
         <div className="panel portfolio-panel">
           <PanelHead

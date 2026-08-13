@@ -1,12 +1,12 @@
 {
   "name": "projects-home-assistant-app",
   "private": true,
-  "version": "0.11.5",
+  "version": "0.11.6",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "server": "node server/index.js",
-    "check": "node --check server/index.js && node --check server/ai.js && node --check server/backup.js && node --check server/geocoder.js && node --check server/operational.js && node --check server/forms.js && node --check server/management.js && node --check server/operations.js",
+    "check": "node --check server/index.js && node --check server/ai.js && node --check server/insights.js && node --check server/backup.js && node --check server/geocoder.js && node --check server/operational.js && node --check server/forms.js && node --check server/management.js && node --check server/operations.js",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
