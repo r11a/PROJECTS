@@ -35,7 +35,7 @@ export function AiChat({ api, onClose }) {
       const result = await api("/ai/chat",{ method:"POST",body:JSON.stringify({ question:text,history }) });
       setMessages((current)=>[...current,{ role:"assistant",text:result.answer,meta:`${result.providerName} · ${result.model}` }]);
     } catch (error) {
-      setMessages((current)=>[...current,{ role:"error",text:error.message }]);
+      setMessages((current)=>[...current,{ role:"error",text:error.message,meta:"אפשר לבדוק את החיבור תחת הגדרות ומערכת › סוכן AI" }]);
     } finally { setBusy(false); }
   };
   const useExample = (example) => { setQuestion(example); setHelpOpen(false); };

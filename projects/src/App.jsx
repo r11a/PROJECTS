@@ -140,11 +140,15 @@ export async function api(path, options = {}) {
       ? { ...options.headers }
       : { "Content-Type": "application/json", ...options.headers },
   });
-  const body =
-    response.status === 204 ? null : await response.json().catch(() => ({}));
+  const rawBody = response.status === 204 ? "" : await response.text();
+  let body = null;
+  if (rawBody) {
+    try { body = JSON.parse(rawBody); }
+    catch { body = { error: rawBody.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 260) }; }
+  }
   if (!response.ok) {
     const error = new Error(
-      body?.error || `Request failed (${response.status})`,
+      body?.error || `הבקשה נכשלה (HTTP ${response.status})`,
     );
     error.status = response.status;
     throw error;

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.9
+
+- Added one safe retry for temporary AI-provider network, rate-limit and upstream failures.
+- Replaced the generic chat 502 response with the exact sanitized provider error for invalid keys, unavailable models, exhausted quota and Home Assistant network/DNS failures.
+- Made the client preserve readable errors returned through Home Assistant Ingress even when the response is not JSON.
+
 ## 0.11.8
 
 - Fixed AI chat help and message updates scrolling the entire Home Assistant Ingress document into a blank area.

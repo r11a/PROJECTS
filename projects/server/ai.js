@@ -88,34 +88,66 @@ function publicProvider(row, provider) {
 }
 
 function providerError(provider, status, payload) {
-  const detail = payload?.error?.message || payload?.message || '';
+  const detail = payload?.error?.message || payload?.message || payload?.raw || '';
   if (status === 401 || status === 403) return 'מפתח ה-API אינו תקין או שאין לו הרשאה לשירות.';
   if (status === 429) return 'המכסה הסתיימה או שמגבלת הקצב נחצתה. בדקו את מסלול החיוב והמכסה.';
   if (status === 404) return `המודל שנבחר אינו זמין בחשבון ${PROVIDERS[provider].name}.`;
   return detail ? `הספק החזיר שגיאה: ${detail.slice(0, 220)}` : `בדיקת החיבור נכשלה (HTTP ${status}).`;
 }
 
-async function generateProviderText(provider, model, apiKey, prompt, { test = false, responseJson = false, onUsage } = {}) {
-  const timeout = AbortSignal.timeout(25000);
-  let response;
-  if (provider === 'gemini') {
-    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method:'POST', signal:timeout,
-      headers:{ 'Content-Type':'application/json', 'x-goog-api-key':apiKey },
-      body:JSON.stringify({
-        contents:[{ parts:[{ text:prompt }] }],
-        generationConfig:{ maxOutputTokens:test ? 16 : 900, temperature:test ? 0 : 0.2, ...(responseJson ? { responseMimeType:'application/json' } : {}) },
-      }),
-    });
-  } else {
-    response = await fetch('https://api.openai.com/v1/responses', {
-      method:'POST', signal:timeout,
-      headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${apiKey}` },
-      body:JSON.stringify({ model, input:prompt, max_output_tokens:test ? 16 : 900 }),
-    });
+const wait = (milliseconds) => new Promise((resolve)=>setTimeout(resolve,milliseconds));
+
+async function requestProvider(provider, model, apiKey, prompt, { test, responseJson }) {
+  const url = provider === 'gemini'
+    ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
+    : 'https://api.openai.com/v1/responses';
+  const options = provider === 'gemini' ? {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'x-goog-api-key':apiKey },
+    body:JSON.stringify({
+      contents:[{ parts:[{ text:prompt }] }],
+      generationConfig:{ maxOutputTokens:test ? 32 : 900, temperature:test ? 0 : 0.2, ...(responseJson ? { responseMimeType:'application/json' } : {}) },
+    }),
+  } : {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${apiKey}` },
+    body:JSON.stringify({ model, input:prompt, max_output_tokens:test ? 32 : 900 }),
+  };
+  let lastError;
+  for (let attempt=0;attempt<2;attempt+=1) {
+    try {
+      const response = await fetch(url,{ ...options,signal:AbortSignal.timeout(35000) });
+      if ((response.status === 408 || response.status === 429 || response.status >= 500) && attempt === 0) {
+        await response.arrayBuffer().catch(()=>{});
+        await wait(700);
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError=error;
+      if (attempt === 0 && error.name !== 'TimeoutError') { await wait(700);continue; }
+      throw error;
+    }
   }
-  const payload = await response.json().catch(()=>({}));
-  if (!response.ok) throw Object.assign(new Error(providerError(provider, response.status, payload)), { statusCode:400 });
+  throw lastError || new Error('AI provider request failed');
+}
+
+async function generateProviderText(provider, model, apiKey, prompt, { test = false, responseJson = false, onUsage } = {}) {
+  let response;
+  try {
+    response = await requestProvider(provider,model,apiKey,prompt,{ test,responseJson });
+  } catch (error) {
+    if (error.name === 'TimeoutError') throw error;
+    const message=`לא ניתן להתחבר אל ${PROVIDERS[provider].name}. בדקו של־Home Assistant יש גישה לאינטרנט ול־DNS.`;
+    throw Object.assign(new Error(message), { statusCode:503,publicMessage:message });
+  }
+  const raw = await response.text();
+  let payload={};
+  try { payload=raw ? JSON.parse(raw) : {}; } catch { payload={ raw:raw.slice(0,300) }; }
+  if (!response.ok) {
+    const message=providerError(provider,response.status,payload);
+    throw Object.assign(new Error(message), { statusCode:400,publicMessage:message });
+  }
   const text = provider === 'gemini'
     ? payload.candidates?.[0]?.content?.parts?.map((part)=>part.text || '').join('') || ''
     : payload.output_text || payload.output?.flatMap((item)=>item.content || []).map((item)=>item.text || '').join('') || '';
@@ -331,7 +363,10 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
       response.json({ answer:answer.slice(0,6000), provider:global.activeProvider, providerName:definition.name, model:selected.model, generatedAt:new Date().toISOString() });
     } catch (error) {
       console.error('AI chat failed', global.activeProvider, error.message);
-      response.status(502).json({ error:error.name === 'TimeoutError' ? 'הסוכן לא השיב בזמן. נסו שוב בעוד רגע.' : 'לא ניתן לקבל כרגע תשובה מהסוכן. בדקו את החיבור והמכסה של ספק ה-AI.' });
+      const message = error.name === 'TimeoutError'
+        ? 'הסוכן לא השיב בתוך 35 שניות. נסו שוב; אם התקלה חוזרת, בדקו את חיבור האינטרנט של Home Assistant.'
+        : error.publicMessage || 'לא ניתן להכין כרגע את נתוני השיחה. נסו שוב; אם התקלה חוזרת, בדקו את יומן ה־Add-on.';
+      response.status(error.statusCode || 502).json({ error:message, provider:global.activeProvider, model:selected.model });
     }
   });
 
