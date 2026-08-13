@@ -35,6 +35,8 @@ test('portfolio Gantt exposes critical tasks and dependency connectors', async (
   assert.match(timeline, /clampScale/);
   assert.match(timeline, /cg-scale/);
   assert.match(timeline, /onTouchMove=\{movePinch\}/);
+  assert.match(timeline, /onPointerDown=\{startMouseDrag\}/);
+  assert.match(timeline, /event\.shiftKey/);
   assert.match(gantt, /TaskEditor/);
 });
 

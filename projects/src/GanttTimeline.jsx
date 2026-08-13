@@ -34,9 +34,11 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
   const [tooltip, setTooltip] = useState(null);
   const [timelineFocus, setTimelineFocus] = useState(true);
   const [scale, setScale] = useState(1);
+  const [dragging, setDragging] = useState(false);
   const scrollRef = useRef(null);
   const pendingShift = useRef(0);
   const pinch = useRef(null);
+  const mouseDrag = useRef(null);
   const config = zooms[zoom];
   const pixelsPerDay = config.pixelsPerDay * scale;
   const pagePixels = config.pageDays * pixelsPerDay;
@@ -118,9 +120,28 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
     if (event.touches.length < 2) pinch.current = null;
   };
   const wheelZoom = (event) => {
-    if (!event.ctrlKey) return;
-    event.preventDefault();
-    changeScale(event.deltaY < 0 ? 0.1 : -0.1);
+    if (event.ctrlKey) {
+      event.preventDefault();
+      changeScale(event.deltaY < 0 ? 0.1 : -0.1);
+    } else if (event.shiftKey && scrollRef.current) {
+      event.preventDefault();
+      scrollRef.current.scrollLeft += event.deltaY || event.deltaX;
+    }
+  };
+  const startMouseDrag = (event) => {
+    if (event.pointerType !== "mouse" || event.button !== 0 || event.target.closest("button")) return;
+    mouseDrag.current = { pointerId: event.pointerId, x: event.clientX, left: scrollRef.current.scrollLeft };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(true);
+  };
+  const moveMouseDrag = (event) => {
+    if (!mouseDrag.current || mouseDrag.current.pointerId !== event.pointerId) return;
+    scrollRef.current.scrollLeft = mouseDrag.current.left - (event.clientX - mouseDrag.current.x);
+  };
+  const endMouseDrag = (event) => {
+    if (!mouseDrag.current || mouseDrag.current.pointerId !== event.pointerId) return;
+    mouseDrag.current = null;
+    setDragging(false);
   };
   const goToday = () => {
     pendingShift.current = 0;
@@ -158,7 +179,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
             <button type="button" className="cg-item-label" style={{ height: row.height }} key={row.key} onClick={() => onOpen?.(row.item)}><span className="cg-avatar" style={{ background: row.item.assignee_color || palette[row.groupIndex % palette.length] }}>{(row.item.assignee_name || row.item.owner_name || "?").slice(0, 2)}</span><span><strong>{row.item.title}</strong><small>{row.item.assignee_name || row.item.owner_name || "לא הוקצה"} · {dateLabel(row.item.start)}–{dateLabel(row.item.end)}</small>{row.item.dependency_title && <em>תלויה ב: {row.item.dependency_title}</em>}</span></button>
           ))}
         </div>
-        <div className="cg-scroll" ref={scrollRef} onScroll={handleScroll} onTouchStart={startPinch} onTouchMove={movePinch} onTouchEnd={endPinch} onTouchCancel={endPinch} onWheel={wheelZoom}>
+        <div className={`cg-scroll ${dragging ? "dragging" : ""}`} ref={scrollRef} onScroll={handleScroll} onTouchStart={startPinch} onTouchMove={movePinch} onTouchEnd={endPinch} onTouchCancel={endPinch} onWheel={wheelZoom} onPointerDown={startMouseDrag} onPointerMove={moveMouseDrag} onPointerUp={endMouseDrag} onPointerCancel={endMouseDrag}>
           <div className="cg-canvas" style={{ width: canvasWidth }}>
             <div className="cg-ruler">{ticks.map((tick) => <span key={tick.value} style={{ left: tick.left }}>{dateLabel(tick.value, zoom === "day")}</span>)}</div>
             <div className="cg-body" style={{ height: bodyHeight, "--grid": `${config.tickDays * pixelsPerDay}px` }}>
@@ -184,7 +205,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
           </div>
         </div>
       </div>
-      <footer className="cg-legend"><span><i className="active" />משימה פעילה</span><span><i className="done" />הושלמה</span><span><i className="critical" />נתיב קריטי</span><small>גלילה רציפה · לחיצה פותחת משימה · ריחוף מציג פרטים</small></footer>
+      <footer className="cg-legend"><span><i className="active" />משימה פעילה</span><span><i className="done" />הושלמה</span><span><i className="critical" />נתיב קריטי</span><small>גרירה אופקית עם העכבר · Shift + גלגלת · לחיצה פותחת משימה</small></footer>
       {tooltip && <div className="cg-tooltip" style={{ left: Math.min(tooltip.x + 14, window.innerWidth - 285), top: Math.max(12, tooltip.y - 94) }}><strong>{tooltip.item.title}</strong><span>{dateLabel(tooltip.item.start, true)} — {dateLabel(tooltip.item.end, true)}</span><span>{tooltip.item.assignee_name || tooltip.item.owner_name || "ללא אחראי"} · {tooltip.item.status || "ללא סטטוס"}</span>{tooltip.item.dependency_title && <em>תלויה ב: {tooltip.item.dependency_title}</em>}</div>}
     </section>
   );

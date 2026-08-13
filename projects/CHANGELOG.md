@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.3
+
+- Added desktop drag-to-pan navigation directly on both Gantt timelines, removing the need to reach the bottom scrollbar.
+- Added Shift + mouse-wheel horizontal navigation while preserving normal page scrolling.
+- Added clear grab/grabbing feedback and updated the Gantt usage hint.
+
 ## 0.15.2
 
 - Added independent timeline-spacing zoom controls to both project and portfolio Gantt views.
