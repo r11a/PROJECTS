@@ -89,7 +89,7 @@ import {
 } from "./Workspaces";
 import { ProjectWorkspace } from "./ProjectWorkspace";
 import { MessageCenter } from "./Messages";
-import { AiChat } from "./AiChat";
+import { AiChat, AiChatBoundary } from "./AiChat";
 import "./operational.css";
 import "./forms-workspace.css";
 import "./master-data.css";
@@ -1001,7 +1001,7 @@ function App() {
           onUnread={setUnreadMessages}
         />
       )}
-      {aiChatOpen && <AiChat api={api} onClose={() => setAiChatOpen(false)} />}
+      {aiChatOpen && <AiChatBoundary onClose={() => setAiChatOpen(false)}><AiChat api={api} onClose={() => setAiChatOpen(false)} /></AiChatBoundary>}
       {notice && (
         <div className="toast">
           <CheckCircle2 size={19} />

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
 import { CircleHelp, Eraser, Send, Sparkles, X } from "lucide-react";
 
 const helpGroups = [
@@ -14,8 +14,13 @@ export function AiChat({ api, onClose }) {
   const [question,setQuestion] = useState("");
   const [busy,setBusy] = useState(false);
   const [helpOpen,setHelpOpen] = useState(false);
-  const endRef = useRef(null);
-  useEffect(()=>endRef.current?.scrollIntoView({ behavior:"smooth" }),[messages,busy,helpOpen]);
+  const threadRef = useRef(null);
+  useEffect(()=>{
+    const thread = threadRef.current;
+    if (!thread) return undefined;
+    const frame = requestAnimationFrame(()=>{ thread.scrollTop=thread.scrollHeight; });
+    return ()=>cancelAnimationFrame(frame);
+  },[messages,busy]);
 
   const ask = async (event) => {
     event?.preventDefault();
@@ -41,21 +46,20 @@ export function AiChat({ api, onClose }) {
         <header>
           <span><Sparkles size={21}/></span>
           <div><strong>הסוכן החכם</strong><small>תשובות מתוך נתוני PROJECTS · קריאה בלבד</small></div>
-          <button className={helpOpen ? "active" : ""} onClick={()=>setHelpOpen(!helpOpen)} title="עזרה ודוגמאות"><CircleHelp size={19}/><b>עזרה</b></button>
-          <button onClick={onClose} title="סגירה"><X size={21}/></button>
+          <button type="button" className={helpOpen ? "active" : ""} onClick={()=>setHelpOpen(!helpOpen)} title="עזרה ודוגמאות"><CircleHelp size={19}/><b>עזרה</b></button>
+          <button type="button" onClick={onClose} title="סגירה"><X size={21}/></button>
         </header>
         {helpOpen && <section className="ai-chat-help">
           <div><strong>מה אפשר לשאול?</strong><small>לחיצה על דוגמה תעביר אותה לשורת השאלה. אפשר לנסח גם באופן חופשי.</small></div>
-          {helpGroups.map((group)=><article key={group.title}><h4>{group.title}</h4><div>{group.examples.map((example)=><button key={example} onClick={()=>useExample(example)}>{example}</button>)}</div></article>)}
+          {helpGroups.map((group)=><article key={group.title}><h4>{group.title}</h4><div>{group.examples.map((example)=><button type="button" key={example} onClick={()=>useExample(example)}>{example}</button>)}</div></article>)}
           <p><b>טיפ:</b> לקבלת תשובה מדויקת ציינו פרויקט, תקופה או תחום. לדוגמה: “מה המשימות הפתוחות בפרויקט משפחת כהן בשבועיים הקרובים?”</p>
         </section>}
-        <div className="ai-chat-thread">
+        <div className="ai-chat-thread" ref={threadRef}>
           {messages.map((message,index)=><article key={index} className={message.role}>
             {message.role !== "user" && <span><Sparkles size={15}/></span>}
             <div><p>{message.text}</p>{message.meta && <small>{message.meta}</small>}</div>
           </article>)}
           {busy && <article className="assistant thinking"><span><Sparkles size={15}/></span><div><i/><i/><i/></div></article>}
-          <div ref={endRef}/>
         </div>
         <form onSubmit={ask}>
           <button type="button" className="ai-chat-clear" onClick={()=>setMessages((current)=>current.slice(0,1))} title="ניקוי השיחה"><Eraser size={17}/></button>
@@ -66,4 +70,14 @@ export function AiChat({ api, onClose }) {
       </aside>
     </div>
   );
+}
+
+export class AiChatBoundary extends Component {
+  constructor(props) { super(props); this.state={ failed:false }; }
+  static getDerivedStateFromError() { return { failed:true }; }
+  componentDidCatch(error) { console.error("PROJECTS AI chat UI failed",error); }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return <div className="ai-chat-backdrop"><aside className="ai-chat-fallback" dir="rtl"><Sparkles size={28}/><h3>לא ניתן להציג כרגע את חלון הסוכן</h3><p>הממשק הראשי ממשיך לפעול. סגרו את החלון ונסו לפתוח אותו מחדש.</p><button type="button" onClick={this.props.onClose}>סגירה</button></aside></div>;
+  }
 }

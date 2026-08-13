@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.8
+
+- Fixed AI chat help and message updates scrolling the entire Home Assistant Ingress document into a blank area.
+- Confined automatic scrolling to the chat transcript and stabilized all drawer grid rows across help, loading and response states.
+- Added explicit non-submit behavior to every chat help/control button and a local error boundary so chat failures cannot blank the PROJECTS interface.
+
 ## 0.11.7
 
 - Added a full read-only AI chat drawer next to notifications and team messages, using the configured Gemini or OpenAI provider.
