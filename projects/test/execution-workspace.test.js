@@ -25,6 +25,9 @@ test('portfolio Gantt exposes critical tasks and dependency connectors', async (
   assert.match(gantt, /dependency_task_id/);
   assert.match(gantt, /משימה קריטית/);
   assert.match(gantt, /לוח גאנט לכל הפרויקטים/);
+  assert.match(gantt, /pixelsPerDay/);
+  assert.match(gantt, /Math\.max\(actualWidth, 132\)/);
+  assert.match(gantt, /\["fit", "התאם"\]/);
 });
 
 test('project Gantt keeps short tasks readable and projects persist classification', async () => {

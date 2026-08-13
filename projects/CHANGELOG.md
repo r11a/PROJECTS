@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.2
+
+- Rebuilt both project and portfolio Gantt timelines around a precise pixel-based date scale.
+- Added readable task shells that preserve exact duration, adaptive date ticks and clear milestone cards.
+- Added fit-to-screen and today controls, sticky rulers, selected-row emphasis and highlighted dependency paths.
+- Improved responsive density, dark-theme styling and horizontal navigation for desktop and mobile.
+
 ## 0.14.1
 
 - Rebuilt the in-project Gantt on a pixel-based timeline with day, week and month zoom, readable minimum task widths, full labels, dependency lines and mobile horizontal navigation.

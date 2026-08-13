@@ -110,6 +110,7 @@ import "./theme-dark.css";
 import "./contacts.css";
 import "./messages.css";
 import "./ai-chat.css";
+import "./gantt.css";
 import projectsMark from "./assets/projects-mark.svg";
 
 const money = new Intl.NumberFormat("he-IL", {

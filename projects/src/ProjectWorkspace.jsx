@@ -1529,6 +1529,7 @@ function GoogleAddressField({ project, api, updateProject, setNotice }) {
 
 function ProjectGantt({ tasks, milestones }) {
   const [zoom, setZoom] = useState("week");
+  const [selected, setSelected] = useState("");
   const items = [
     ...tasks.map((item) => ({
       ...item,
@@ -1565,10 +1566,11 @@ function ProjectGantt({ tasks, milestones }) {
     week: { pixelsPerDay: 34, tickDays: 7, label: "שבוע" },
     month: { pixelsPerDay: 13, tickDays: 30, label: "חודש" },
   }[zoom];
-  const trackWidth = Math.max(820, Math.ceil(span * zoomConfig.pixelsPerDay));
-  const tickCount = Math.floor((span - 1) / zoomConfig.tickDays) + 1;
+  const trackWidth = Math.max(1080, Math.ceil(span * zoomConfig.pixelsPerDay) + 180);
+  const adaptiveTickDays = span <= 14 ? 1 : span <= 60 ? Math.min(7, zoomConfig.tickDays) : zoomConfig.tickDays;
+  const tickCount = Math.floor((span - 1) / adaptiveTickDays) + 1;
   const ticks = Array.from({ length: tickCount }, (_, index) => {
-    const day = Math.min(span - 1, index * zoomConfig.tickDays);
+    const day = Math.min(span - 1, index * adaptiveTickDays);
     return { day, date: new Date(min + day * 86400000) };
   });
   const dependencyLines = items.flatMap((item, targetIndex) => {
@@ -1627,11 +1629,12 @@ function ProjectGantt({ tasks, milestones }) {
           );
           const startPixels = start * zoomConfig.pixelsPerDay;
           const availableWidth = Math.max(22, trackWidth - startPixels);
+          const actualWidth = Math.max(8, duration * zoomConfig.pixelsPerDay);
           const barWidth = item.kind === "milestone"
-            ? 20
+            ? 148
             : Math.min(availableWidth, Math.max(118, duration * zoomConfig.pixelsPerDay));
           return (
-            <article key={`${item.kind}-${item.id}`}>
+            <article key={`${item.kind}-${item.id}`} className={String(selected) === `${item.kind}-${item.id}` ? "selected" : ""} onClick={() => setSelected(String(selected) === `${item.kind}-${item.id}` ? "" : `${item.kind}-${item.id}`)}>
               <div>
                 <strong>{item.title}</strong>
                 <small>
@@ -1647,10 +1650,12 @@ function ProjectGantt({ tasks, milestones }) {
                   style={{
                     "--start": `${startPixels}px`,
                     "--width": `${barWidth}px`,
+                    "--actual": `${Math.min(actualWidth, barWidth)}px`,
                     "--bar": item.color,
                   }}
                 >
-                  <span>{item.kind === "milestone" ? "◆" : item.critical ? `משימה קריטית · ${item.title}` : item.title}</span>
+                  <u>{item.kind === "milestone" ? "◆" : ""}</u>
+                  <span>{item.kind === "milestone" ? item.title : item.critical ? `משימה קריטית · ${item.title}` : item.title}</span>
                 </i>
               </div>
             </article>
