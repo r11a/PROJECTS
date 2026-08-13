@@ -1530,6 +1530,7 @@ function GoogleAddressField({ project, api, updateProject, setNotice }) {
 function ProjectGantt({ tasks, milestones }) {
   const [zoom, setZoom] = useState("week");
   const [selected, setSelected] = useState("");
+  const [futureDays, setFutureDays] = useState(30);
   const items = [
     ...tasks.map((item) => ({
       ...item,
@@ -1558,8 +1559,10 @@ function ProjectGantt({ tasks, milestones }) {
     );
   const starts = items.map((item) => new Date(item.start).setHours(0, 0, 0, 0));
   const ends = items.map((item) => new Date(item.end).setHours(0, 0, 0, 0));
-  const min = Math.min(...starts);
-  const max = Math.max(...ends, min + 86400000);
+  const dataMin = Math.min(...starts);
+  const dataMax = Math.max(...ends, dataMin + 86400000);
+  const min = dataMin;
+  const max = dataMax + futureDays * 86400000;
   const span = Math.max(1, (max - min) / 86400000 + 1);
   const zoomConfig = {
     day: { pixelsPerDay: 92, tickDays: 1, label: "יום" },
@@ -1589,13 +1592,22 @@ function ProjectGantt({ tasks, milestones }) {
     const midX = (sourceX + targetX) / 2;
     return [{ id: `${source.id}-${item.id}`, d: `M ${sourceX} ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${targetX} ${targetY}` }];
   });
+  const extendTimeline = (event) => {
+    const element = event.currentTarget;
+    const distance = Math.abs(element.scrollLeft);
+    const limit = element.scrollWidth - element.clientWidth;
+    if (limit - distance < 120) {
+      const increment = zoom === "day" ? 7 : zoom === "week" ? 28 : 90;
+      setFutureDays((current) => current + increment);
+    }
+  };
   return (
     <section className="panel gantt-board">
       <header>
         <div>
           <h3>גאנט ביצוע לפרויקט</h3>
           <p>
-            {dateText(min)} — {dateText(max)} · {items.length} פעילויות ואבני
+            {dateText(dataMin)} — {dateText(dataMax)} · {items.length} פעילויות ואבני
             דרך
           </p>
         </div>
@@ -1607,7 +1619,7 @@ function ProjectGantt({ tasks, milestones }) {
           ))}
         </div>
       </header>
-      <div className="project-gantt-viewport">
+      <div className="project-gantt-viewport" onScroll={extendTimeline}>
         <div className="gantt-scale" style={{ width: trackWidth }}>
           {ticks.map(({ day, date }) => (
             <span key={day} style={{ right: day * zoomConfig.pixelsPerDay }}>
@@ -1633,6 +1645,7 @@ function ProjectGantt({ tasks, milestones }) {
           const barWidth = item.kind === "milestone"
             ? 148
             : Math.min(availableWidth, Math.max(118, duration * zoomConfig.pixelsPerDay));
+          const isShort = item.kind === "task" && actualWidth < barWidth;
           return (
             <article key={`${item.kind}-${item.id}`} className={String(selected) === `${item.kind}-${item.id}` ? "selected" : ""} onClick={() => setSelected(String(selected) === `${item.kind}-${item.id}` ? "" : `${item.kind}-${item.id}`)}>
               <div>
@@ -1646,7 +1659,7 @@ function ProjectGantt({ tasks, milestones }) {
               </div>
               <div className="gantt-track" style={{ width: trackWidth }}>
                 <i
-                  className={`${item.kind} ${item.critical ? "critical" : ""}`}
+                  className={`${item.kind} ${item.critical ? "critical" : ""} ${isShort ? "short" : ""}`}
                   style={{
                     "--start": `${startPixels}px`,
                     "--width": `${barWidth}px`,
@@ -1667,7 +1680,7 @@ function ProjectGantt({ tasks, milestones }) {
         <span><i className="planned" />משימה פעילה</span>
         <span><i className="done" />הושלמה</span>
         <span><i className="critical" />משימה קריטית</span>
-        <small>תצוגת {zoomConfig.label} · ניתן לגלול אופקית</small>
+        <small>תצוגת {zoomConfig.label} · הגלילה מרחיבה את ציר הזמן אוטומטית</small>
       </footer>
     </section>
   );

@@ -28,6 +28,8 @@ test('portfolio Gantt exposes critical tasks and dependency connectors', async (
   assert.match(gantt, /pixelsPerDay/);
   assert.match(gantt, /Math\.max\(actualWidth, 132\)/);
   assert.match(gantt, /\["fit", "התאם"\]/);
+  assert.match(gantt, /setFutureDays/);
+  assert.match(gantt, /onScroll=\{extendTimeline\}/);
 });
 
 test('project Gantt keeps short tasks readable and projects persist classification', async () => {
@@ -38,6 +40,7 @@ test('project Gantt keeps short tasks readable and projects persist classificati
   assert.match(workspace, /pixelsPerDay/);
   assert.match(workspace, /Math\.max\(118, duration \* zoomConfig\.pixelsPerDay\)/);
   assert.match(workspace, /project-gantt-actions/);
+  assert.match(workspace, /onScroll=\{extendTimeline\}/);
   assert.match(app, /projectClassificationOptions/);
   assert.match(migration, /project_classification/);
   assert.match(server, /projectClassification: 'project_classification'/);

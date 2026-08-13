@@ -75,6 +75,7 @@ export function GanttWorkspace({ api, setNotice }) {
   const [zoom, setZoom] = useState("week");
   const [collapsed, setCollapsed] = useState(new Set());
   const [selected, setSelected] = useState("");
+  const [futureDays, setFutureDays] = useState(45);
   const viewport = useRef(null);
   const load = () => Promise.all([api("/operations/tasks?q=&status="), api("/operations/milestones?projectId=")]).then(([a, b]) => { setTasks(a.tasks); setMilestones(b.milestones); }).catch((error) => setNotice(error.message));
   useEffect(() => { load(); const live = () => load(); window.addEventListener("projects:live-change", live); return () => window.removeEventListener("projects:live-change", live); }, []);
@@ -97,7 +98,8 @@ export function GanttWorkspace({ api, setNotice }) {
   const all = groups.flatMap(([, items]) => items);
   const today = new Date().setHours(0, 0, 0, 0);
   const min = Math.min(today, ...all.map((item) => atMidnight(item.start))) - 3 * day;
-  const max = Math.max(today + 14 * day, ...all.map((item) => atMidnight(item.end))) + 3 * day;
+  const dataMax = Math.max(today + 14 * day, ...all.map((item) => atMidnight(item.end))) + 3 * day;
+  const max = dataMax + futureDays * day;
   const total = Math.max(1, Math.ceil((max - min) / day));
   const basePixels = zoom === "day" ? 72 : zoom === "week" ? 30 : zoom === "month" ? 13 : Math.max(10, 980 / total);
   const pixelsPerDay = basePixels;
@@ -106,12 +108,21 @@ export function GanttWorkspace({ api, setNotice }) {
   const ticks = Array.from({ length: Math.floor(total / tickDays) + 1 }, (_, index) => ({ value: min + index * tickDays * day, left: index * tickDays * pixelsPerDay }));
   const toggle = (name) => setCollapsed((current) => { const next = new Set(current); next.has(name) ? next.delete(name) : next.add(name); return next; });
   const focusToday = () => viewport.current?.querySelector(".today-line")?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  const extendTimeline = (event) => {
+    const element = event.currentTarget;
+    const distance = Math.abs(element.scrollLeft);
+    const limit = element.scrollWidth - element.clientWidth;
+    if (limit - distance < 140) {
+      const increment = zoom === "day" ? 7 : zoom === "week" ? 28 : zoom === "month" ? 90 : 30;
+      setFutureDays((current) => current + increment);
+    }
+  };
 
   return (
     <div className="ops-page global-gantt-page">
       <section className="ops-hero gantt-hero"><div><span className="ops-eyebrow"><CalendarDays size={15} />תכנון רוחבי</span><h2>לוח גאנט לכל הפרויקטים</h2><p>משימות, אבני דרך, תלות ונתיב קריטי בתמונה אחת ברורה.</p></div><div className="gantt-summary"><b>{groups.length}</b><span>פרויקטים</span><b>{tasks.filter((item) => item.critical).length}</b><span>משימות קריטיות</span></div></section>
       <div className="global-gantt-toolbar panel"><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש פרויקט או משימה" /></label><div><ZoomIn size={16} />{[["day", "יום"], ["week", "שבוע"], ["month", "חודש"], ["fit", "התאם"]].map(([id, label]) => <button className={zoom === id ? "active" : ""} onClick={() => setZoom(id)} key={id}>{label}</button>)}</div><button className="gantt-today-button" type="button" onClick={focusToday}><Maximize2 size={15} />היום</button><span className="critical-key"><i /> נתיב קריטי</span></div>
-      <section ref={viewport} className="global-gantt panel" style={{ "--canvas-width": `${canvasWidth}px` }}>
+      <section ref={viewport} className="global-gantt panel" onScroll={extendTimeline} style={{ "--canvas-width": `${canvasWidth}px` }}>
         <header style={{ width: canvasWidth + 285 }}><div>פרויקט / משימה</div><div className="global-gantt-ruler" style={{ width: canvasWidth }}>{ticks.map(({ value, left }) => <span key={value} style={{ left }}>{date(value)}</span>)}</div></header>
         <div className="global-gantt-body" style={{ width: canvasWidth + 285 }}><div className="today-line" style={{ left: `${((today - min) / day) * pixelsPerDay}px` }} />{groups.map(([name, items], groupIndex) => <ProjectGroup key={name} name={name} items={items} color={colors[groupIndex % colors.length]} collapsed={collapsed.has(name)} onToggle={() => toggle(name)} min={min} canvasWidth={canvasWidth} pixelsPerDay={pixelsPerDay} groupIndex={groupIndex} selected={selected} onSelect={setSelected} />)}</div>
       </section>

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.3
+
+- Corrected Gantt typography contrast: solid colored bars now use white text, while readable extensions for short tasks use dark text.
+- Added continuously extending future timelines to both project and portfolio Gantt views when horizontal scrolling reaches the visible boundary.
+- Matched timeline extension increments to the selected day, week or month zoom level.
+
 ## 0.14.2
 
 - Rebuilt both project and portfolio Gantt timelines around a precise pixel-based date scale.
