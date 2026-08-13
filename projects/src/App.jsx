@@ -91,6 +91,7 @@ import {
   TasksWorkspace,
 } from "./Workspaces";
 import { ProjectWorkspace } from "./ProjectWorkspace";
+import { MyWorkWorkspace, PortfolioControlWorkspace } from "./ProductivityWorkspace";
 
 const projectClassificationOptions = [
   ["private_house", "בית פרטי"],
@@ -116,6 +117,7 @@ import "./task-center.css";
 import "./ai-chat.css";
 import "./commercial-gantt.css";
 import "./modal-system.css";
+import "./productivity.css";
 import projectsMark from "./assets/projects-mark.svg";
 
 const money = new Intl.NumberFormat("he-IL", {
@@ -219,6 +221,7 @@ export async function api(path, options = {}) {
 
 const nav = [
   { id: "dashboard", label: "תמונת מצב", icon: LayoutDashboard },
+  { id: "my-work", label: "העבודה שלי", icon: CheckCircle2 },
   { id: "calendar", label: "לוח שנה", icon: CalendarDays },
   { id: "projects", label: "פרויקטים", icon: FolderKanban },
   { id: "clients", label: "לקוחות", icon: Users },
@@ -315,6 +318,7 @@ function App() {
   const [professionals, setProfessionals] = useState([]);
   const [clientOptions, setClientOptions] = useState([]);
   const [equipmentCatalog, setEquipmentCatalog] = useState([]);
+  const [projectTemplates, setProjectTemplates] = useState([]);
   const [systemPrefersDark, setSystemPrefersDark] = useState(
     () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
   );
@@ -326,24 +330,28 @@ function App() {
       clientsResult,
       professionalsResult,
       equipmentResult,
+      templatesResult,
     ] = await Promise.all([
       api("/settings"),
       api("/team"),
       api("/clients"),
       api("/professionals"),
       api("/equipment-catalog"),
+      api("/project-templates"),
     ]);
     setConfiguration(settingsResult);
     setTeam(teamResult.users);
     setClientOptions(clientsResult.clients);
     setProfessionals(professionalsResult.professionals);
     setEquipmentCatalog(equipmentResult.items);
+    setProjectTemplates(templatesResult.templates);
     return {
       settingsResult,
       teamResult,
       clientsResult,
       professionalsResult,
       equipmentResult,
+      templatesResult,
     };
   };
   const refreshCurrentUser = async (changedUser) => {
@@ -758,6 +766,8 @@ function App() {
   };
 
   const secondaryTitles = {
+    "my-work": "העבודה שלי",
+    control: "בקרת ביצוע",
     tasks: "משימות ואבני דרך",
     reports: "דוחות וניתוחים",
     users: "משתמשים והרשאות",
@@ -869,6 +879,7 @@ function App() {
             {insights?.stats?.overdue > 0 && <em>{insights.stats.overdue}</em>}
           </button>
           <button className={page === "gantt" ? "active" : ""} onClick={()=>{setPage('gantt');setSidebarOpen(false)}}><Activity size={19}/><span>לוח גאנט</span></button>
+          <button className={page === "control" ? "active" : ""} onClick={()=>{setPage('control');setSidebarOpen(false)}}><Gauge size={19}/><span>בקרת ביצוע</span></button>
           <button
             className={page === "reports" ? "active" : ""}
             onClick={() => {
@@ -1047,6 +1058,9 @@ function App() {
               setNotice={setNotice}
             />
           )}
+          {page === "my-work" && (
+            <MyWorkWorkspace api={api} user={user} projects={projects} professionals={professionals} setNotice={setNotice} openProject={openProject}/>
+          )}
           {page === "projects" && (
             <ProjectsPage
               projects={filteredProjects}
@@ -1109,6 +1123,7 @@ function App() {
             />
           )}
           {page==='gantt'&&<GanttWorkspace api={api} setNotice={setNotice} user={user} projects={projects} professionals={professionals}/>}
+          {page==='control'&&<PortfolioControlWorkspace api={api} setNotice={setNotice} openProject={openProject} projects={projects}/>}
           {page === "reports" && (
             <ReportsWorkspace api={api} setNotice={setNotice} company={company} companyLogo={companyLogo} user={user} />
           )}
@@ -1156,6 +1171,7 @@ function App() {
           clients={clientOptions}
           stageOptions={stageOptions}
           equipment={equipmentCatalog}
+          templates={projectTemplates}
         />
       )}
       {alertsOpen && insights?.alerts?.length > 0 && (
@@ -3263,6 +3279,7 @@ function NewProjectModal({
   clients,
   stageOptions,
   equipment,
+  templates,
 }) {
   const managers = professionals.filter(
     (item) =>
@@ -3292,6 +3309,7 @@ function NewProjectModal({
     startDate: new Date().toISOString().slice(0, 10),
     targetDate: "",
     selectedEquipment: {},
+    templateId: "",
   });
   const submit = (event) => {
     event.preventDefault();
@@ -3345,6 +3363,8 @@ function NewProjectModal({
       flag: "",
       systems: [],
       equipmentItems,
+      templateId: form.templateId || null,
+      startDate: form.startDate,
       nextMilestone: "פגישת אפיון ראשונית",
       phone: client?.phone || form.clientPhone || "",
       email: client?.email || form.clientEmail || "",
@@ -3696,6 +3716,14 @@ function NewProjectModal({
           )}
           {step === 2 && (
             <>
+              <label>
+                תבנית עבודה
+                <select value={form.templateId} onChange={(e)=>setForm({...form,templateId:e.target.value})}>
+                  <option value="">פרויקט ריק — ללא תבנית</option>
+                  {templates.filter(item=>item.active).map(template=><option key={template.id} value={template.id}>{template.name} · {template.task_count} משימות</option>)}
+                </select>
+                <small>התבנית תיצור אוטומטית משימות, תלות ויעדי שעות החל מתאריך ההתחלה.</small>
+              </label>
               <div className="form-row">
                 <label>
                   מנהל פרויקט

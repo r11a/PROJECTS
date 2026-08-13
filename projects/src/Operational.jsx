@@ -60,6 +60,7 @@ import {
 } from "lucide-react";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ModalPortal } from "./AppModal";
+import { ProductivitySettings } from "./ProductivityWorkspace";
 
 const roleNames = {
   architect: "אדריכל",
@@ -2937,6 +2938,7 @@ export function OperationalSettings({
     ["audit", "Audit Log", History],
     ["backup", "גיבוי ובריאות", Database],
     ["ai", "סוכן AI", Sparkles],
+    ["productivity", "תבניות ואוטומציות", Zap],
   ];
   const tabs = [
     ["appearance", "מראה", Palette],
@@ -3035,6 +3037,7 @@ export function OperationalSettings({
         />
       )}
       {tab === "ai" && <AiSettings api={api} setNotice={setNotice} />}
+      {tab === "productivity" && <ProductivitySettings api={api} user={user} setNotice={setNotice} />}
     </div>
   );
 }

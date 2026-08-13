@@ -30,6 +30,7 @@ import {
 import { TasksWorkspace, FinanceWorkspace, TaskEditor } from "./Workspaces";
 import { GanttTimeline } from "./GanttTimeline";
 import { AppModal } from "./AppModal";
+import { ProjectGovernancePanel } from "./ProductivityWorkspace";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const money = new Intl.NumberFormat("he-IL", {
@@ -287,6 +288,7 @@ export function ProjectWorkspace({
     ["forms", "טפסים וקבצים"],
     ["finance", "כספים"],
     ["activity", "פעילות"],
+    ["governance", "שינויים ובקרה"],
   ];
   return (
     <div className="project-detail project-workspace">
@@ -504,6 +506,7 @@ export function ProjectWorkspace({
       {tab === "hours" && (
         <ProjectHoursPanel project={project} entries={workspace.timeEntries || []} professionals={professionals} api={api} setNotice={setNotice} onDone={load} canEdit={canEdit} openRequest={hoursReportRequest}/>
       )}
+      {tab === "governance" && <ProjectGovernancePanel project={project} api={api} user={user} setNotice={setNotice}/>}
       {tab === "overview" && (
         <div className="detail-grid">
           <div className="detail-main">

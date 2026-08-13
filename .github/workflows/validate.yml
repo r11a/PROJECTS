@@ -22,6 +22,7 @@ jobs:
           cache-dependency-path: projects/package-lock.json
       - run: npm ci
       - run: npm run check
+      - run: npm test
       - run: npm run build
 
   addon-image:

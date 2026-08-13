@@ -15,6 +15,7 @@ import { createOperationsRouter } from './operations.js';
 import { createGeocoder } from './geocoder.js';
 import { createBackupRouter } from './backup.js';
 import { createAiRouter } from './ai.js';
+import { createProductivityRouter, executeAutomations, startAutomationScheduler } from './productivity.js';
 
 const { Pool, Client } = pg;
 const DATA_DIR = process.env.PROJECTS_DATA_DIR || '/data';
@@ -445,9 +446,32 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
     `INSERT INTO projects(${columns.join(', ')}) VALUES(${values.map((_, index) => `$${index + 1}`).join(', ')}) RETURNING *`,
     values,
     );
+    if (request.body.templateId) {
+      const template = await db.query('SELECT * FROM project_templates WHERE id=$1 AND active=TRUE', [request.body.templateId]);
+      if (!template.rowCount) throw Object.assign(new Error('התבנית שנבחרה אינה זמינה'), { status: 400 });
+      const templateTasks = await db.query('SELECT * FROM project_template_tasks WHERE template_id=$1 ORDER BY position,id', [request.body.templateId]);
+      const startDate = request.body.startDate || new Date().toISOString().slice(0, 10);
+      const taskIds = [];
+      for (const item of templateTasks.rows) {
+        const inserted = await db.query(`INSERT INTO tasks(project_id,title,description,status,priority,start_date,due_date,task_type,critical,created_by)
+          VALUES($1,$2,$3,'open',$4,$5::date+$6::int,$5::date+$6::int+$7::int-1,$8,$9,$10) RETURNING id`,
+        [project.id,item.title,item.description,item.priority,startDate,item.start_offset_days,item.duration_days,item.task_type,item.critical,request.user.id]);
+        taskIds.push(inserted.rows[0].id);
+      }
+      for (let index=0; index<templateTasks.rows.length; index++) {
+        const dependency=Number(templateTasks.rows[index].dependency_position);
+        if (dependency>0 && taskIds[dependency-1]) await db.query('UPDATE tasks SET dependency_task_id=$1 WHERE id=$2',[taskIds[dependency-1],taskIds[index]]);
+      }
+      await db.query(`UPDATE projects SET template_id=$1,
+        installation_hours_target=CASE WHEN installation_hours_target=0 THEN $2 ELSE installation_hours_target END,
+        programming_hours_target=CASE WHEN programming_hours_target=0 THEN $3 ELSE programming_hours_target END
+        WHERE id=$4`, [request.body.templateId,template.rows[0].installation_hours_target,template.rows[0].programming_hours_target,project.id]);
+    }
     await db.query('COMMIT');
     await audit(request, 'create', 'project', project.id, { clientId: selectedClient.id });
-    response.status(201).json({ project: projectFromRow(result.rows[0]) });
+    await executeAutomations({ pool,triggerType:'project_created',entityType:'project',entityId:project.id,context:{ projectId:project.id,stage:project.stage },userId:request.user.id });
+    const createdProject = await pool.query('SELECT * FROM projects WHERE id=$1',[project.id]);
+    response.status(201).json({ project: projectFromRow(createdProject.rows[0]) });
   } catch (error) {
     await db.query('ROLLBACK');
     if (error.status) return response.status(error.status).json({ error: error.message });
@@ -502,6 +526,7 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
     const result = await db.query(`UPDATE projects SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`, values);
     await db.query('COMMIT');
     await audit(request, 'update', 'project', request.params.id, Object.fromEntries(entries));
+    if(request.body.stage && request.body.stage!==current.rows[0].stage) await executeAutomations({ pool,triggerType:'project_stage_changed',entityType:'project',entityId:request.params.id,context:{ projectId:request.params.id,stage:request.body.stage,fromStage:current.rows[0].stage },userId:request.user.id });
     response.json({ project: projectFromRow(result.rows[0]) });
   } catch (error) {
     await db.query('ROLLBACK');
@@ -775,7 +800,10 @@ app.use('/api', await createAiRouter({ pool, authenticate, requireRoles, audit, 
 app.use('/api', createFormsRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
 app.use('/api', createOperationsRouter({ pool, authenticate, requireRoles, audit }));
+app.use('/api', createProductivityRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createBackupRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR, appVersion:APP_VERSION }));
+
+startAutomationScheduler({ pool });
 
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Not found' }));
 app.use((error, _request, response, _next) => {
