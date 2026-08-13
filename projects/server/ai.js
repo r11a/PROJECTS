@@ -271,7 +271,19 @@ function chatPrompt({ question, history, context }) {
 export async function createAiRouter({ pool, authenticate, requireRoles, audit, dataDir }) {
   const router = express.Router();
   const encryptionKey = await getEncryptionKey(dataDir);
+  const chatJobs = new Map();
   router.use(authenticate);
+
+  const cleanChatJobs = () => {
+    const expiry=Date.now()-10*60*1000;
+    for (const [id,job] of chatJobs) if (job.createdAt<expiry) chatJobs.delete(id);
+  };
+
+  const chatError = (error) => ({
+    error:error.name === 'TimeoutError'
+      ? 'הסוכן לא השיב בזמן. נסו שוב; אם התקלה חוזרת, בדקו את חיבור האינטרנט של Home Assistant.'
+      : error.publicMessage || 'לא ניתן להכין כרגע את נתוני השיחה. נסו שוב; אם התקלה חוזרת, בדקו את יומן ה־Add-on.',
+  });
 
   const usageRecorder = (request,provider,model,feature) => async (usage) => {
     try {
@@ -350,24 +362,41 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     if (!definition || !selected?.enabled || !selected.api_key_encrypted) {
       return response.status(409).json({ error:'הסוכן אינו מוכן. יש להפעיל ספק ולשמור מפתח API תחת הגדרות ומערכת > סוכן AI.' });
     }
-    try {
-      const context = await buildChatContext(pool,question);
-      const answer = (await generateProviderText(
-        global.activeProvider,
-        selected.model,
-        decrypt(selected.api_key_encrypted,encryptionKey),
-        chatPrompt({ question, history:request.body?.history, context }),
-        { onUsage:usageRecorder(request,global.activeProvider,selected.model,'chat') },
-      )).trim();
-      if (!answer) throw new Error('AI provider returned an empty answer');
-      response.json({ answer:answer.slice(0,6000), provider:global.activeProvider, providerName:definition.name, model:selected.model, generatedAt:new Date().toISOString() });
-    } catch (error) {
-      console.error('AI chat failed', global.activeProvider, error.message);
-      const message = error.name === 'TimeoutError'
-        ? 'הסוכן לא השיב בתוך 35 שניות. נסו שוב; אם התקלה חוזרת, בדקו את חיבור האינטרנט של Home Assistant.'
-        : error.publicMessage || 'לא ניתן להכין כרגע את נתוני השיחה. נסו שוב; אם התקלה חוזרת, בדקו את יומן ה־Add-on.';
-      response.status(error.statusCode || 502).json({ error:message, provider:global.activeProvider, model:selected.model });
-    }
+    cleanChatJobs();
+    const jobId=randomBytes(18).toString('base64url');
+    const job={ id:jobId,userId:String(request.user.id),status:'working',createdAt:Date.now() };
+    chatJobs.set(jobId,job);
+    response.status(202).json({ jobId,status:'working' });
+
+    const user={ ...request.user };
+    const history=Array.isArray(request.body?.history) ? request.body.history : [];
+    void (async ()=>{
+      try {
+        const context = await buildChatContext(pool,question);
+        const answer = (await generateProviderText(
+          global.activeProvider,
+          selected.model,
+          decrypt(selected.api_key_encrypted,encryptionKey),
+          chatPrompt({ question, history, context }),
+          { onUsage:usageRecorder({ user },global.activeProvider,selected.model,'chat') },
+        )).trim();
+        if (!answer) throw new Error('AI provider returned an empty answer');
+        Object.assign(job,{ status:'complete',answer:answer.slice(0,6000),provider:global.activeProvider,providerName:definition.name,model:selected.model,generatedAt:new Date().toISOString() });
+      } catch (error) {
+        console.error('AI chat failed',global.activeProvider,error.message);
+        Object.assign(job,{ status:'error',...chatError(error) });
+      }
+    })();
+  });
+
+  router.get('/ai/chat/:jobId', async (request,response) => {
+    cleanChatJobs();
+    const job=chatJobs.get(request.params.jobId);
+    if (!job || job.userId!==String(request.user.id)) return response.status(404).json({ error:'בקשת השיחה אינה זמינה עוד' });
+    if (job.status==='working') return response.status(202).json({ status:'working' });
+    chatJobs.delete(job.id);
+    if (job.status==='error') return response.status(422).json({ error:job.error });
+    response.json({ answer:job.answer,provider:job.provider,providerName:job.providerName,model:job.model,generatedAt:job.generatedAt });
   });
 
   router.get('/ai/settings', requireRoles('admin'), async (_request, response) => response.json(await getSettings()));

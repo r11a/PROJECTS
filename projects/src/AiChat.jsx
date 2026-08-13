@@ -32,7 +32,16 @@ export function AiChat({ api, onClose }) {
     setHelpOpen(false);
     setBusy(true);
     try {
-      const result = await api("/ai/chat",{ method:"POST",body:JSON.stringify({ question:text,history }) });
+      let result = await api("/ai/chat",{ method:"POST",body:JSON.stringify({ question:text,history }) });
+      if (result.jobId) {
+        const deadline=Date.now()+90_000;
+        while (Date.now()<deadline) {
+          await new Promise((resolve)=>setTimeout(resolve,750));
+          result=await api(`/ai/chat/${encodeURIComponent(result.jobId)}`);
+          if (result.answer) break;
+        }
+        if (!result.answer) throw new Error("הסוכן עדיין מעבד את השאלה. נסו שוב בעוד רגע.");
+      }
       setMessages((current)=>[...current,{ role:"assistant",text:result.answer,meta:`${result.providerName} · ${result.model}` }]);
     } catch (error) {
       setMessages((current)=>[...current,{ role:"error",text:error.message,meta:"אפשר לבדוק את החיבור תחת הגדרות ומערכת › סוכן AI" }]);

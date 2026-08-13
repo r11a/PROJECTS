@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.10
+
+- Moved AI chat generation to short-lived asynchronous jobs so slow provider calls no longer keep a Cloudflare, Home Assistant or Ingress request open.
+- Added authenticated polling for chat completion with per-user isolation and automatic cleanup.
+- Kept the chat thinking state active until the background answer or a precise provider error is ready.
+
 ## 0.11.9
 
 - Added one safe retry for temporary AI-provider network, rate-limit and upstream failures.
