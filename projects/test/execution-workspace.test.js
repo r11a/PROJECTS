@@ -76,9 +76,11 @@ test('project time reporting keeps targets in project setup and actual hours in 
     assert.match(server,new RegExp(token));
   }
   assert.match(projectWorkspace,/דיווח שעות עבודה/);
+  assert.doesNotMatch(projectWorkspace,/ProjectModal/);
   assert.match(projectWorkspace,/openRequest/);
   assert.doesNotMatch(projectWorkspace,/setTargetsOpen/);
   assert.match(operations,/project_time_entries/);
+  assert.match(operations,/operations\/tasks\/count/);
   assert.match(migration,/installation_hours_target/);
   assert.match(migration,/programming_hours_target/);
 });

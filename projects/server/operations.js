@@ -17,6 +17,11 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
   const router = express.Router();
   router.use(authenticate);
 
+  router.get('/operations/tasks/count', async (_request, response) => {
+    const result = await pool.query("SELECT COUNT(*)::int count FROM tasks WHERE status NOT IN ('done','cancelled')");
+    response.json({ count: result.rows[0]?.count || 0 });
+  });
+
   router.get('/operations/tasks', async (request, response) => {
     const q = String(request.query.q || '').trim();
     const status = String(request.query.status || '');

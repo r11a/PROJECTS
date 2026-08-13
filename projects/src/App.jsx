@@ -266,6 +266,7 @@ function App() {
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [aiChatOpen, setAiChatOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [openTasksCount, setOpenTasksCount] = useState(0);
   const [configuration, setConfiguration] = useState({
     settings: {},
     catalogs: [],
@@ -316,6 +317,13 @@ function App() {
       );
       return result.projects;
     });
+  const loadTaskCount = () =>
+    api("/operations/tasks/count")
+      .then((result) => {
+        const count = Number(result.count || 0);
+        setOpenTasksCount(count);
+        return count;
+      });
   const loadInsights = async (force = false) => {
     setInsightsRefreshing(true);
     try {
@@ -334,7 +342,7 @@ function App() {
     api("/auth/me")
       .then(({ user: currentUser }) => {
         setUser(currentUser);
-        return Promise.all([api("/projects"), loadReferenceData()]).then(
+        return Promise.all([api("/projects"), loadReferenceData(), loadTaskCount()]).then(
           ([result]) => setProjects(result.projects),
         );
       })
@@ -364,6 +372,7 @@ function App() {
           table = JSON.parse(event.data).table || "";
         } catch {}
         loadProjects().catch(() => {});
+        if (!table || table === "tasks") loadTaskCount().catch(() => {});
         if (["clients", "client_contacts", "projects"].includes(table))
           loadReferenceData().catch(() => {});
         window.dispatchEvent(
@@ -867,6 +876,15 @@ function App() {
             >
               <Bell size={20} />
               {insights?.alerts?.length > 0 && <i />}
+            </button>
+            <button
+              className="icon-button task-shortcut-button"
+              onClick={() => { setSelectedProject(null); setPage("tasks"); }}
+              title="משימות פתוחות"
+              aria-label={`${openTasksCount} משימות פתוחות`}
+            >
+              <ClipboardCheck size={20} />
+              <em>{openTasksCount > 99 ? "99+" : openTasksCount}</em>
             </button>
             <button className="icon-button ai-chat-button" onClick={() => setAiChatOpen(true)} title="הסוכן החכם">
               <Sparkles size={20} />
