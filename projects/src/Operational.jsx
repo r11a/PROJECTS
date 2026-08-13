@@ -1187,7 +1187,7 @@ export function ClientsWorkspace({
           <b>{clients.length} לקוחות</b>
         </div>
       </div>
-      {!loading && clients.length > 0 && (
+      {!loading && clients.length > 0 && viewMode === "table" && (
         <div className="panel clients-compact-table">
           <header>
             <span>שם</span>
@@ -1231,7 +1231,7 @@ export function ClientsWorkspace({
             <div key={item} />
           ))}
         </div>
-      ) : clients.length ? (
+      ) : clients.length && viewMode === "board" ? (
         <div className="operational-client-grid">
           {sortedClients.map((client) => (
             <button
@@ -1284,7 +1284,7 @@ export function ClientsWorkspace({
             </button>
           ))}
         </div>
-      ) : (
+      ) : !clients.length ? (
         <div className="ops-empty panel">
           <div>
             <Search size={28} />
@@ -1292,7 +1292,7 @@ export function ClientsWorkspace({
           <h3>לא נמצאו לקוחות</h3>
           <p>נסו מונח אחר או צרו כרטיס לקוח חדש.</p>
         </div>
-      )}
+      ) : null}
       {newOpen && (
         <ClientFormModal
           api={api}
@@ -1322,6 +1322,7 @@ function ClientFormModal({
     email: "",
     city: "",
     priorityCustomerNumber: "",
+    referralSource: "",
     primaryContactName: "",
     clientType: "private",
     notes: "",
@@ -1338,7 +1339,7 @@ function ClientFormModal({
   });
   const [saving, setSaving] = useState(false);
   const customFields = configuration.customFields.filter(
-    (field) => field.entityType === "client" && field.active,
+    (field) => field.entityType === "client" && field.active && !["priorityCustomerNumber","priority_customer_number"].includes(field.fieldKey),
   );
   const labels = configuration.catalogs.filter(
     (item) => ["tag", "flag"].includes(item.category) && item.active,
@@ -1435,6 +1436,10 @@ function ClientFormModal({
                   })
                 }
               />
+            </label>
+            <label>
+              גורם מפנה
+              <input value={form.referralSource || ""} onChange={(event)=>setForm({...form,referralSource:event.target.value})} placeholder="אדריכל, מפקח, לקוח קיים או מקור אחר"/>
             </label>
             <label>
               טלפון <b>חובה</b>
@@ -3373,12 +3378,14 @@ function DocumentStorageSettings({ api, setNotice }) {
   });
   const [directories, setDirectories] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [recycle,setRecycle]=useState([]);
   const load = () =>
     api("/document-storage")
       .then((result) => setStorage(result.storage))
       .catch((error) => setNotice(error.message));
+  const loadRecycle=()=>api('/documents-recycle-bin').then(result=>setRecycle(result.documents||[])).catch(()=>setRecycle([]));
   useEffect(() => {
-    load();
+    load();loadRecycle();
   }, []);
   const browse = async (
     mode = storage.mode,
@@ -3431,6 +3438,7 @@ function DocumentStorageSettings({ api, setNotice }) {
         .join("/"),
     });
   return (
+    <>
     <section className="panel storage-settings">
       <header>
         <span>
@@ -3468,6 +3476,11 @@ function DocumentStorageSettings({ api, setNotice }) {
           </button>
         ))}
       </div>
+      <ol className="nas-guide">
+        <li>ב־Home Assistant פתחו הגדרות ← מערכת ← אחסון והוסיפו את שיתוף ה־SMB של Synology כאחסון רשת.</li>
+        <li>בחרו כאן Share / Synology או Media בהתאם לסוג האחסון שהוגדר ב־HA.</li>
+        <li>בחרו תיקייה ולחצו בדיקה ושמירה; לכל פרויקט תיווצר תיקיית משנה לפי השם שהוגדר בכרטיס הפרויקט.</li>
+      </ol>
       {storage.mode !== "internal" && (
         <div className="folder-browser">
           <label>
@@ -3519,6 +3532,11 @@ function DocumentStorageSettings({ api, setNotice }) {
         </button>
       </footer>
     </section>
+    <section className="panel storage-settings document-recycle">
+      <header><span><Trash2 size={22}/></span><div><h3>סל מחזור מסמכים</h3><p>מסמכים שנמחקו נשמרים 14 יום לפני מחיקה סופית.</p></div><em>{recycle.length}</em></header>
+      <div className="document-recycle-list">{recycle.map(item=><div key={item.id}><FileText size={17}/><span><b>{item.title||item.original_name}</b><small>נמחק ב־{new Date(item.deleted_at).toLocaleString('he-IL')}</small></span><button className="ops-secondary" onClick={async()=>{try{await api(`/documents/${item.id}/restore`,{method:'POST'});setNotice('המסמך שוחזר');loadRecycle()}catch(error){setNotice(error.message)}}}><RotateCcw size={15}/>שחזור</button></div>)}{!recycle.length&&<small>סל המחזור ריק.</small>}</div>
+    </section>
+    </>
   );
 }
 

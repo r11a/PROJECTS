@@ -33,11 +33,11 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
 
   router.post('/operations/tasks', requireRoles('admin', 'manager', 'technician'), async (request, response) => {
     const title = String(request.body.title || '').trim();
-    if (!title || !request.body.dueDate || (!request.body.projectId && !request.body.clientId)) return response.status(400).json({ error: 'כותרת, תאריך יעד ופרויקט או לקוח הם שדות חובה' });
+    if (!title || !request.body.dueDate || (!request.body.projectId && !request.body.clientId)) return response.status(400).json({ error: 'כותרת, תאריך סיום ופרויקט או לקוח הם שדות חובה' });
     if (request.body.startDate && request.body.startDate > request.body.dueDate) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
     if (request.body.dependencyTaskId) { const dependency=await pool.query("SELECT project_id,status FROM tasks WHERE id=$1",[request.body.dependencyTaskId]); if(!dependency.rowCount||dependency.rows[0].project_id!==request.body.projectId||!['open','in_progress'].includes(dependency.rows[0].status))return response.status(400).json({error:'משימת התלות חייבת להיות פתוחה או בביצוע ובאותו פרויקט'}); }
-    const result = await pool.query(`INSERT INTO tasks(client_id,project_id,title,description,status,priority,assignee_professional_id,start_date,due_date,estimated_hours,task_type,dependency_task_id,created_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null, request.body.startDate || request.body.dueDate, request.body.dueDate, Number(request.body.estimatedHours) || 0, request.body.taskType || 'task', request.body.dependencyTaskId || null, request.user.id]);
+    const result = await pool.query(`INSERT INTO tasks(client_id,project_id,title,description,status,priority,assignee_professional_id,start_date,due_date,estimated_hours,task_type,dependency_task_id,critical,created_by)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null, request.body.startDate || request.body.dueDate, request.body.dueDate, Number(request.body.estimatedHours) || 0, request.body.taskType || 'task', request.body.dependencyTaskId || null,Boolean(request.body.critical), request.user.id]);
     await syncProjectMetrics(pool, request.body.projectId);
     await audit(request, 'create', 'task', String(result.rows[0].id), { title, projectId: request.body.projectId });
     response.status(201).json({ task: result.rows[0] });
@@ -48,12 +48,13 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     if (!current.rowCount) return response.status(404).json({ error: 'המשימה לא נמצאה' });
     const row = current.rows[0];
     const status = TASK_STATUSES.includes(request.body.status) ? request.body.status : row.status;
+    const dependencyId=Object.prototype.hasOwnProperty.call(request.body,'dependencyTaskId')?(request.body.dependencyTaskId||null):row.dependency_task_id;
     const nextStart = request.body.startDate ?? row.start_date; const nextDue = request.body.dueDate ?? row.due_date;
     if(String(request.body.dependencyTaskId||'')===String(request.params.id))return response.status(400).json({error:'משימה אינה יכולה להיות תלויה בעצמה'});
-    if(request.body.dependencyTaskId){const dependency=await pool.query("SELECT project_id,status FROM tasks WHERE id=$1",[request.body.dependencyTaskId]);if(!dependency.rowCount||dependency.rows[0].project_id!==row.project_id||!['open','in_progress'].includes(dependency.rows[0].status))return response.status(400).json({error:'משימת התלות חייבת להיות פתוחה או בביצוע ובאותו פרויקט'});}
+    if(dependencyId){const dependency=await pool.query("SELECT project_id,status FROM tasks WHERE id=$1",[dependencyId]);if(!dependency.rowCount||dependency.rows[0].project_id!==row.project_id||!['open','in_progress'].includes(dependency.rows[0].status))return response.status(400).json({error:'משימת התלות חייבת להיות פתוחה או בביצוע ובאותו פרויקט'});}
     if (nextStart && nextDue && String(nextStart).slice(0,10) > String(nextDue).slice(0,10)) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
-    const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,start_date=$6,due_date=$7,estimated_hours=$8,task_type=$9,dependency_task_id=$10,
-      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$11 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, request.body.estimatedHours ?? row.estimated_hours, request.body.taskType ?? row.task_type, request.body.dependencyTaskId ?? row.dependency_task_id, request.params.id]);
+    const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,start_date=$6,due_date=$7,estimated_hours=$8,task_type=$9,dependency_task_id=$10,critical=$11,
+      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$12 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, request.body.estimatedHours ?? row.estimated_hours, request.body.taskType ?? row.task_type, dependencyId,request.body.critical ?? row.critical, request.params.id]);
     await syncProjectMetrics(pool, row.project_id);
     await audit(request, 'update', 'task', request.params.id, request.body);
     response.json({ task: result.rows[0] });
@@ -129,18 +130,31 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
 
   router.get('/projects/:id/workspace', async (request, response) => {
     const id = request.params.id;
-    const [tasks, milestones, payments, team, equipment, forms, files, updates, activity] = await Promise.all([
+    const [tasks, milestones, payments, team, equipment, forms, files, updates, activity,reviews,meetings] = await Promise.all([
       pool.query(`SELECT t.*,pr.display_name assignee_name,pr.color assignee_color,dependency.title dependency_title FROM tasks t LEFT JOIN professionals pr ON pr.id=t.assignee_professional_id LEFT JOIN tasks dependency ON dependency.id=t.dependency_task_id WHERE t.project_id=$1 ORDER BY (t.status='done'),t.due_date`, [id]),
       pool.query(`SELECT m.*,pr.display_name owner_name FROM project_milestones m LEFT JOIN professionals pr ON pr.id=m.owner_professional_id WHERE m.project_id=$1 ORDER BY (m.status='completed'),m.due_date`, [id]),
       pool.query('SELECT * FROM project_payments WHERE project_id=$1 ORDER BY due_date NULLS LAST,created_at DESC', [id]),
       pool.query(`SELECT pp.*,p.display_name,p.phone,p.email,p.color,p.icon,r.name role_name,r.role_key FROM project_professionals pp JOIN professionals p ON p.id=pp.professional_id JOIN professional_role_types r ON r.id=pp.role_type_id WHERE pp.project_id=$1 ORDER BY pp.is_primary DESC,r.sort_order,p.display_name`, [id]),
       pool.query(`SELECT pe.*,e.name,e.item_type,e.manufacturer,e.model,e.unit,e.color,e.icon FROM project_equipment pe JOIN equipment_catalog e ON e.id=pe.catalog_item_id WHERE pe.project_id=$1 ORDER BY e.item_type,e.name`, [id]),
       pool.query(`SELECT fr.*,ft.name template_name FROM form_records fr JOIN form_templates ft ON ft.id=fr.template_id WHERE fr.project_id=$1 ORDER BY fr.updated_at DESC`, [id]),
-      pool.query('SELECT * FROM client_files WHERE project_id=$1 ORDER BY created_at DESC', [id]),
+      pool.query(`SELECT f.*,COALESCE(u.display_name,u.username,'מערכת') uploaded_by_name FROM client_files f LEFT JOIN users u ON u.id=f.uploaded_by WHERE f.project_id=$1 AND f.deleted_at IS NULL ORDER BY f.created_at DESC`, [id]),
       pool.query('SELECT pu.*,u.display_name created_by_name,u.avatar_color FROM project_updates pu LEFT JOIN users u ON u.id=pu.created_by WHERE pu.project_id=$1 ORDER BY pu.created_at DESC', [id]),
       pool.query(`SELECT a.*,u.display_name user_name FROM audit_log a LEFT JOIN users u ON u.id=a.user_id WHERE (a.entity_type='project' AND a.entity_id=$1) OR (a.details->>'projectId'=$1) ORDER BY a.created_at DESC LIMIT 100`, [id]),
+      pool.query(`SELECT r.*,p.display_name performed_by_name,u.display_name created_by_name FROM project_site_reviews r LEFT JOIN professionals p ON p.id=r.performed_by LEFT JOIN users u ON u.id=r.created_by WHERE r.project_id=$1 ORDER BY r.review_date DESC,r.created_at DESC`,[id]),
+      pool.query(`SELECT m.*,u.display_name created_by_name FROM project_meeting_summaries m LEFT JOIN users u ON u.id=m.created_by WHERE m.project_id=$1 ORDER BY m.meeting_at DESC`,[id]),
     ]);
-    response.json({ tasks: tasks.rows, milestones: milestones.rows, payments: payments.rows, team: team.rows, equipment: equipment.rows, forms: forms.rows, files: files.rows, updates: updates.rows, activity: activity.rows });
+    response.json({ tasks: tasks.rows, milestones: milestones.rows, payments: payments.rows, team: team.rows, equipment: equipment.rows, forms: forms.rows, files: files.rows, updates: updates.rows, activity: activity.rows,reviews:reviews.rows,meetings:meetings.rows });
+  });
+
+  router.post('/projects/:id/site-reviews',requireRoles('admin','manager','technician'),async(request,response)=>{
+    const summary=String(request.body.summary||'').trim();if(!request.body.reviewDate||!summary)return response.status(400).json({error:'תאריך פיקוח וסיכום הם שדות חובה'});
+    const result=await pool.query(`INSERT INTO project_site_reviews(project_id,review_date,performed_by,supervision_type,summary,follow_up,plan_update_required,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,[request.params.id,request.body.reviewDate,request.body.performedBy||null,request.body.supervisionType||'',summary,request.body.followUp||'',Boolean(request.body.planUpdateRequired),request.user.id]);
+    await audit(request,'create','site_review',String(result.rows[0].id),{projectId:request.params.id});response.status(201).json({review:result.rows[0]});
+  });
+  router.post('/projects/:id/meetings',requireRoles('admin','manager','technician'),async(request,response)=>{
+    const summary=String(request.body.summary||'').trim();if(!request.body.meetingAt||!summary)return response.status(400).json({error:'תאריך פגישה וסיכום הם שדות חובה'});
+    const result=await pool.query(`INSERT INTO project_meeting_summaries(project_id,meeting_at,attendees,summary,follow_up,created_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[request.params.id,request.body.meetingAt,request.body.attendees||'',summary,request.body.followUp||'',request.user.id]);
+    await audit(request,'create','meeting_summary',String(result.rows[0].id),{projectId:request.params.id});response.status(201).json({meeting:result.rows[0]});
   });
 
   router.post('/projects/:id/updates', requireRoles('admin', 'manager', 'technician'), async (request, response) => {

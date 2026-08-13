@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { buildOperationalInsights } from './insights.js';
 
 const CLIENT_FIELDS = {
-  name: 'name', firstName:'first_name', lastName:'last_name', apartmentNumber:'apartment_number', clientType: 'client_type', companyNumber: 'company_number', priorityCustomerNumber: 'priority_customer_number', primaryContactName: 'primary_contact_name',
+  name: 'name', firstName:'first_name', lastName:'last_name', apartmentNumber:'apartment_number', clientType: 'client_type', companyNumber: 'company_number', priorityCustomerNumber: 'priority_customer_number', primaryContactName: 'primary_contact_name', referralSource:'referral_source',
   phone: 'phone', additionalPhones: 'additional_phones', email: 'email', additionalEmails: 'additional_emails',
   address: 'address', city: 'city', notes: 'notes', status: 'status', customValues: 'custom_values',
 };
@@ -28,7 +28,7 @@ function valuesFor(input, fields) {
 function clientFromRow(row) {
   return {
     id: row.id, code: row.code, name: row.name, firstName:row.first_name || row.name, lastName:row.last_name || '', apartmentNumber:row.apartment_number || '', clientType: row.client_type, companyNumber: row.company_number, priorityCustomerNumber: row.priority_customer_number,
-    primaryContactName: row.primary_contact_name, phone: row.phone, additionalPhones: row.additional_phones || [],
+    primaryContactName: row.primary_contact_name, referralSource:row.referral_source || '', phone: row.phone, additionalPhones: row.additional_phones || [],
     email: row.email, additionalEmails: row.additional_emails || [], address: withoutArabic(row.address), city: withoutArabic(row.city),
     notes: row.notes, status: row.status, customValues: row.custom_values || {}, createdAt: row.created_at,
     updatedAt: row.updated_at, projectCount: Number(row.project_count || 0), openTaskCount: Number(row.open_task_count || 0),
@@ -122,7 +122,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
 
   router.get('/address-search', async (request,response) => {
     const query=String(request.query.q||'').trim();if(query.length<3)return response.json({addresses:[]});
-    try{response.json({addresses:await geocoder.search(query,6),provider:'photon'});}catch(error){console.error('Photon address search failed',error.message);response.status(502).json({error:'שירות הכתובות של Photon אינו זמין כעת'});}
+    try{response.json({addresses:await geocoder.search(query,6),provider:'photon'});}catch(error){console.error('Photon address search failed',error.message);response.json({addresses:[],provider:'photon',unavailable:true});}
   });
 
   router.get('/audit', requireRoles('admin'), async (request, response) => {
@@ -331,7 +331,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
       pool.query('SELECT * FROM client_contacts WHERE client_id=$1 ORDER BY is_referrer DESC, name', [request.params.id]),
       pool.query('SELECT t.*,u.display_name assignee_name FROM tasks t LEFT JOIN users u ON u.id=t.assignee_id WHERE t.client_id=$1 ORDER BY (t.status=\'done\'), t.due_date NULLS LAST, t.created_at DESC', [request.params.id]),
       pool.query('SELECT * FROM site_inspections WHERE client_id=$1 ORDER BY inspection_date DESC, created_at DESC', [request.params.id]),
-      pool.query('SELECT * FROM client_files WHERE client_id=$1 ORDER BY created_at DESC', [request.params.id]),
+      pool.query('SELECT * FROM client_files WHERE client_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC', [request.params.id]),
       pool.query('SELECT * FROM projects WHERE client_id=$1 ORDER BY created_at DESC', [request.params.id]),
       pool.query(`SELECT ce.*,e.name,e.code,e.unit,e.color,e.icon,e.icon_image_stored_name,e.item_type,parent.name category_name
         FROM client_equipment ce JOIN equipment_catalog e ON e.id=ce.catalog_item_id LEFT JOIN equipment_catalog parent ON parent.id=e.parent_id
@@ -465,16 +465,15 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
 
   router.get('/files/:id/download', async (request, response) => {
-    const result = await pool.query('SELECT * FROM client_files WHERE id=$1', [request.params.id]);
+    const result = await pool.query('SELECT * FROM client_files WHERE id=$1 AND deleted_at IS NULL', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'File not found' });
     response.download(path.join(uploadDir, result.rows[0].stored_name), result.rows[0].original_name);
   });
 
   router.delete('/files/:id', requireRoles('admin'), async (request, response) => {
-    const result = await pool.query('DELETE FROM client_files WHERE id=$1 RETURNING id,stored_name', [request.params.id]);
+    const result = await pool.query('UPDATE client_files SET deleted_at=NOW(),deleted_by=$2 WHERE id=$1 AND deleted_at IS NULL RETURNING id,stored_name,original_name', [request.params.id,request.user.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'File not found' });
-    await unlink(path.join(uploadDir, result.rows[0].stored_name)).catch(() => {});
-    await audit(request, 'delete', 'client_file', request.params.id);
+    await audit(request, 'archive', 'client_file', request.params.id,{originalName:result.rows[0].original_name,purgeAt:new Date(Date.now()+14*86400000).toISOString()});
     response.status(204).end();
   });
 

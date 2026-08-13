@@ -10,6 +10,8 @@ import {
   Link2,
   Pencil,
   Plus,
+  LayoutGrid,
+  Rows3,
   Search,
   Trash2,
   Upload,
@@ -70,6 +72,9 @@ export function MasterDataWorkspace({
   const [priorityScan, setPriorityScan] = useState(null);
   const [priorityProjectId, setPriorityProjectId] = useState("");
   const [scanBusy, setScanBusy] = useState(false);
+  const [professionalView,setProfessionalView]=useState(()=>localStorage.getItem('projects-professional-view')||'grid');
+  const [professionalRole,setProfessionalRole]=useState('');
+  const [professionalSort,setProfessionalSort]=useState('az');
 
   const load = async () => {
     try {
@@ -100,8 +105,8 @@ export function MasterDataWorkspace({
         `${item.displayName} ${item.companyName} ${item.jobTitle} ${item.phone} ${item.email} ${item.roles.map((role) => role.name).join(" ")}`
           .toLowerCase()
           .includes(query.toLowerCase()),
-      ),
-    [professionals, query],
+      ).filter(item=>!professionalRole||item.roles.some(role=>String(role.id)===professionalRole)).sort((a,b)=>professionalSort==='za'?b.displayName.localeCompare(a.displayName,'he'):professionalSort==='new'?Number(b.id)-Number(a.id):professionalSort==='old'?Number(a.id)-Number(b.id):a.displayName.localeCompare(b.displayName,'he')),
+    [professionals, query,professionalRole,professionalSort],
   );
   const tabs = initialTab === "equipment" ? [["equipment", "מערכות ורכיבים", Boxes]] : [["professionals", "אנשי מקצוע", Users]];
 
@@ -149,6 +154,7 @@ export function MasterDataWorkspace({
           />
         </label>
         <div className="master-toolbar-actions">
+          {tab==='professionals'&&<><select value={professionalRole} onChange={e=>setProfessionalRole(e.target.value)}><option value="">כל התפקידים</option>{roles.filter(x=>x.active).map(x=><option key={x.id} value={String(x.id)}>{x.name}</option>)}</select><select value={professionalSort} onChange={e=>setProfessionalSort(e.target.value)}><option value="az">א׳–ת׳</option><option value="za">ת׳–א׳</option><option value="new">חדש–ישן</option><option value="old">ישן–חדש</option></select><div className="professional-view-switch"><button className={professionalView==='grid'?'active':''} onClick={()=>{setProfessionalView('grid');localStorage.setItem('projects-professional-view','grid')}}><LayoutGrid size={16}/></button><button className={professionalView==='table'?'active':''} onClick={()=>{setProfessionalView('table');localStorage.setItem('projects-professional-view','table')}}><Rows3 size={16}/></button></div></>}
           {tab === "professionals" && user.role === "admin" && (
             <button className="ops-secondary" onClick={() => setRoleForm(true)}>
               <Plus size={16} />
@@ -176,6 +182,7 @@ export function MasterDataWorkspace({
       {tab === "professionals" && (
         <ProfessionalsGrid
           items={filteredProfessionals}
+          view={professionalView}
           user={user}
           onEdit={(item) =>
             setProfessionalForm({
@@ -239,13 +246,20 @@ export function MasterDataWorkspace({
                   .filter(Boolean),
               };
               delete body.additionalPhonesText;
-              await api(
+              const save=body=>api(
                 value.id ? `/professionals/${value.id}` : "/professionals",
                 {
                   method: value.id ? "PATCH" : "POST",
                   body: JSON.stringify(body),
                 },
               );
+              try{await save(body)}catch(error){
+                if(error.status!==409||error.body?.code!=='SIMILAR_PROFESSIONAL')throw error;
+                const match=error.body.matches?.[0];
+                if(match&&confirm(`${error.message}.\nאישור — איחוד עם ${match.display_name}.\nביטול — מעבר לאפשרות יצירת כרטיס נפרד.`))await api(`/professionals/${match.id}/merge`,{method:'POST',body:JSON.stringify(body)});
+                else if(confirm('ליצור בכל זאת כרטיס נפרד?'))await save({...body,allowDuplicate:true});
+                else return;
+              }
               setProfessionalForm(null);
               setNotice(
                 value.id ? "כרטיס איש המקצוע עודכן" : "איש המקצוע נוסף למאגר",
@@ -338,7 +352,7 @@ export function MasterDataWorkspace({
   );
 }
 
-function ProfessionalsGrid({ items, user, onEdit, onDelete }) {
+function ProfessionalsGrid({ items, user, onEdit, onDelete,view='grid' }) {
   if (!items.length)
     return (
       <EmptyState
@@ -348,7 +362,7 @@ function ProfessionalsGrid({ items, user, onEdit, onDelete }) {
       />
     );
   return (
-    <div className="professional-grid">
+    <div className={`professional-grid ${view==='table'?'professional-table':''}`}>
       {items.map((item) => (
         <article
           className={`professional-card ${!item.active ? "inactive" : ""}`}
@@ -383,7 +397,7 @@ function ProfessionalsGrid({ items, user, onEdit, onDelete }) {
             </div>
             <div>
               <dt>דוא״ל</dt>
-              <dd>{item.email || "—"}</dd>
+              <dd>{item.email ? <a href={`mailto:${item.email}`}>{item.email}</a> : "—"}</dd>
             </div>
             <div>
               <dt>חברה</dt>
@@ -408,8 +422,9 @@ function ProfessionalsGrid({ items, user, onEdit, onDelete }) {
             </div>
           </dl>
           <footer>
-            <span>
-              {item.projectCount} פרויקטים · {item.clientCount} לקוחות
+            <span className="professional-project-load" title={`${item.projectCount} פרויקטים משויכים`}>
+              <i style={{width:`${Math.min(100,Number(item.projectCount||0)*14)}%`}}/>
+              <b>{item.projectCount} פרויקטים</b> · {item.clientCount} לקוחות
             </span>
             {["admin", "manager"].includes(user.role) && (
               <button onClick={() => onEdit(item)}>

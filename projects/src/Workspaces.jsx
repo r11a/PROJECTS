@@ -130,6 +130,7 @@ export function TaskEditor({
   initial,
   onClose,
   onSave,
+  fixedProjectId = "",
 }) {
   const isMilestone = kind === "milestone";
   const [form, setForm] = useState(
@@ -174,7 +175,7 @@ export function TaskEditor({
       onClose={onClose}
     >
       <form className="work-form" onSubmit={submit}>
-        {!initial?.id && (
+        {!initial?.id && !fixedProjectId && (
           <label>
             פרויקט
             <select
@@ -220,7 +221,7 @@ export function TaskEditor({
           </label>
         )}
         <label>
-          תאריך יעד
+          {isMilestone ? "תאריך יעד" : "תאריך סיום"}
           <input
             required
             type="date"
@@ -304,6 +305,10 @@ export function TaskEditor({
                 <option value="high">גבוהה</option>
                 <option value="urgent">דחופה</option>
               </select>
+            </label>
+            <label className="check-label critical-task-toggle">
+              <input type="checkbox" checked={Boolean(form.critical)} onChange={(e)=>setForm({...form,critical:e.target.checked})}/>
+              משימה קריטית
             </label>
             <label>
               סוג
@@ -561,7 +566,7 @@ export function TasksWorkspace({
         ) : (
           items.map((item) => (
             <article
-              className={`work-row ${item.status}`}
+              className={`work-row ${item.status} ${item.critical ? "critical" : ""}`}
               key={item.id}
               onClick={() =>
                 canEdit &&
@@ -580,6 +585,7 @@ export function TasksWorkspace({
               </span>
               <div className="work-main">
                 <strong>{item.title}</strong>
+                {item.critical && <b className="critical-task-label">משימה קריטית</b>}
                 <span>
                   {item.project_name ||
                     projects.find((p) => p.id === item.project_id)?.name}{" "}
@@ -602,7 +608,7 @@ export function TasksWorkspace({
                 className={`work-date ${new Date(item.due_date) < new Date() && !["done", "completed"].includes(item.status) ? "late" : ""}`}
               >
                 <CalendarDays size={15} />
-                <span>{dateText(item.due_date)}<small>{dueText(item.due_date)}</small></span>
+                <span>{dateText(item.due_date)}{!["done","completed","cancelled"].includes(item.status)&&<small>{dueText(item.due_date)}</small>}</span>
               </span>
               {user.role === "admin" && (
                 <button
@@ -655,6 +661,7 @@ export function TasksWorkspace({
           }
           onClose={() => setEditor(null)}
           onSave={save}
+          fixedProjectId={projectId}
         />
       )}
     </div>
@@ -948,7 +955,7 @@ export function FinanceWorkspace({
   );
 }
 
-export function ReportsWorkspace({ api, setNotice }) {
+export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "", user = {} }) {
   const [data, setData] = useState(null);
   const [reportError, setReportError] = useState("");
   const [projects, setProjects] = useState([]);
@@ -1008,6 +1015,7 @@ export function ReportsWorkspace({ api, setNotice }) {
     setGenerating(true);
     try {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await Promise.all([...reportRef.current.querySelectorAll('img')].map(image=>image.complete?Promise.resolve():new Promise(resolve=>{image.onload=resolve;image.onerror=resolve})));
       const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
         import("html2canvas"),
         import("jspdf"),
@@ -1257,9 +1265,10 @@ export function ReportsWorkspace({ api, setNotice }) {
               {reportType === "project" && <label className="report-save-check"><input type="checkbox" checked={saveToProject} onChange={(event) => setSaveToProject(event.target.checked)}/><span>לשמור עותק במסמכי הפרויקט / NAS</span></label>}
             </div>
             <div className="pdf-report-sheet" ref={reportRef} dir="rtl">
-              <header><div><b>PRO</b>JECTS</div><span>דוח שהופק בתאריך {new Date().toLocaleDateString("he-IL")}</span></header>
+              <header><div className="pdf-company-brand">{companyLogo&&<img src={companyLogo} alt=""/>}<div><strong>{company.name||<><b>PRO</b>JECTS</>}</strong><small>{company.name?'מופק באמצעות PROJECTS':'Manage Smarter. Deliver Better.'}</small></div></div><span>דוח שהופק בתאריך {new Date().toLocaleDateString("he-IL")}</span></header>
               <h1>{reportType === "project" ? projectReport?.project?.name || "דוח פרויקט" : reportType === "finance" ? "דוח כספים וגבייה" : reportType === "professionals" ? "דוח מנהלים ואנשי מקצוע" : "תמונת מצב ניהולית"}</h1>
-              {reportType === "project" && projectReport ? <><div className="pdf-kpis"><span><small>שלב</small><b>{projectReport.project.stage}</b></span><span><small>התקדמות</small><b>{projectReport.project.progress}%</b></span><span><small>משימות</small><b>{projectReport.tasks.length}</b></span><span><small>מסמכים</small><b>{projectReport.files.length}</b></span></div><h2>פרטי פרויקט</h2><p>{projectReport.project.client} · {projectReport.project.address}</p><h2>משימות ואבני דרך</h2><table><tbody>{projectReport.tasks.slice(0,20).map((item)=><tr key={item.id}><td>{item.title}</td><td>{taskStatus[item.status] || item.status}</td><td>{dateText(item.due_date)}</td></tr>)}</tbody></table></> : <><div className="pdf-kpis"><span><small>היקף</small><b>{money.format(Number(data.finance.total))}</b></span><span><small>נגבה</small><b>{money.format(Number(data.finance.paid))}</b></span><span><small>יתרה</small><b>{money.format(Number(data.finance.open))}</b></span><span><small>פרויקטים</small><b>{projects.length}</b></span></div><h2>{reportType === "professionals" ? "ביצועים לפי מנהל" : "נתונים מרכזיים"}</h2><table><tbody>{data.managers.map((item)=><tr key={item.name}><td>{item.name}</td><td>{item.projects} פרויקטים</td><td>{item.progress || 0}%</td></tr>)}</tbody></table></>}
+              {reportType === "project" && projectReport ? <><div className="pdf-kpis"><span><small>שלב</small><b>{projectReport.project.stage}</b></span><span><small>התקדמות</small><b>{projectReport.project.progress}%</b></span><span><small>משימות</small><b>{projectReport.tasks.length}</b></span><span><small>מסמכים</small><b>{projectReport.files.length}</b></span></div><h2>פרטי פרויקט</h2><p>{projectReport.project.client} · {projectReport.project.address}</p><p>מנהל: {projectReport.project.manager||'לא הוקצה'} · היקף: {money.format(Number(projectReport.project.value||0))} · יתרה: {money.format(Math.max(0,Number(projectReport.project.value||0)-Number(projectReport.project.paid||0)))}</p><h2>משימות ואבני דרך</h2><table><thead><tr><th>משימה</th><th>סטטוס</th><th>אחראי</th><th>תאריך סיום</th></tr></thead><tbody>{projectReport.tasks.slice(0,30).map((item)=><tr key={item.id}><td>{item.title}{item.critical?' · קריטית':''}</td><td>{taskStatus[item.status] || item.status}</td><td>{item.assignee_name||'—'}</td><td>{dateText(item.due_date)}</td></tr>)}</tbody></table><h2>צוות, מערכות ותיעוד</h2><p>צוות: {projectReport.team.map(item=>`${item.display_name} (${item.role_name})`).join(' · ')||'טרם שויך'}</p><p>מערכות ורכיבים: {projectReport.equipment.slice(0,18).map(item=>`${item.name} × ${Number(item.quantity)}`).join(' · ')||'טרם שויכו'}</p><p>ביקורות אתר: {projectReport.reviews?.length||0} · סיכומי פגישות: {projectReport.meetings?.length||0} · עדכונים: {projectReport.updates?.length||0}</p></> : <><div className="pdf-kpis"><span><small>היקף</small><b>{money.format(Number(data.finance.total))}</b></span><span><small>נגבה</small><b>{money.format(Number(data.finance.paid))}</b></span><span><small>יתרה</small><b>{money.format(Number(data.finance.open))}</b></span><span><small>פרויקטים</small><b>{projects.length}</b></span></div><h2>{reportType === "professionals" ? "ביצועים לפי מנהל" : "נתונים מרכזיים"}</h2><table><thead><tr><th>מנהל</th><th>פרויקטים</th><th>התקדמות</th></tr></thead><tbody>{data.managers.map((item)=><tr key={item.name}><td>{item.name}</td><td>{item.projects} פרויקטים</td><td>{item.progress || 0}%</td></tr>)}</tbody></table></>}
+              <footer className="pdf-signature"><div><b>הופק על ידי</b><span>{user.displayName||user.username||'משתמש מערכת'}</span><small>{user.roleName||user.role||''}</small></div><div><b>מועד הפקה</b><span>{new Date().toLocaleString('he-IL')}</span><small>מסמך מערכת PROJECTS</small></div></footer>
             </div>
             <div className="form-actions"><button type="button" className="ops-secondary" onClick={() => setWizardOpen(false)}>ביטול</button><button type="button" className="ops-primary" disabled={generating || (reportType === "project" && !projectReport)} onClick={generatePdf}>{generating ? "מפיק PDF..." : "הפקת והורדת PDF"}</button></div>
           </div>

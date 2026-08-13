@@ -54,7 +54,10 @@ export function createGeocoder(pool) {
 
     const url = new URL(`${baseUrl}/api`);
     url.searchParams.set('q', normalized);
-    url.searchParams.set('lang', language);
+    // Photon does not consistently support `he` as a response language. Hebrew
+    // queries still resolve against OSM's local names, so omit the unsupported
+    // parameter and filter/format the returned labels locally.
+    if (language === 'en') url.searchParams.set('lang', 'en');
     url.searchParams.set('limit', String(Math.min(Math.max(Number(limit) || 6, 1), 10)));
     url.searchParams.set('bbox', ISRAEL_BBOX);
     url.searchParams.set('lat', '31.7683');

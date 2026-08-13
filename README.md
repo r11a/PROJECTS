@@ -1,12 +1,16 @@
 # PROJECTS
 
+> **Proprietary software — All Rights Reserved.** Viewing or downloading this
+> repository does not grant permission to use, copy, modify, or distribute it.
+> See [LICENSE](LICENSE).
+
 ![PROJECTS logo](brand/projects-logo.svg)
 
 PROJECTS is a premium project-management application for smart-home and low-voltage installation teams. This repository contains the full application and its Home Assistant App packaging.
 
 ## Current status
 
-Version `0.5.0` is a single full-stack Home Assistant App containing the React frontend, Node API, PostgreSQL, database migrations, role-based users, audit logging, health checks and backup/restore tooling. It includes operational customer cards, a reusable professional directory independent of login access, hierarchical systems/components, a central versioned document repository, tasks, site inspections, configurable catalogs and custom fields, automatic insights, a live calendar with project filtering, editable form templates and records, persistent company branding and responsive desktop/phone layouts. Project changes are shared between users and persisted under the App's `/data` volume.
+Version `0.14.0` is a single full-stack Home Assistant App containing the React frontend, Node API, PostgreSQL, database migrations, role-based users, audit logging, health checks and backup/restore tooling. It includes operational customer cards, a reusable professional directory independent of login access, hierarchical systems/components, a central versioned document repository, tasks, site inspections, configurable catalogs and custom fields, automatic insights, live calendar and Gantt views, editable form templates and records, persistent company branding and responsive desktop/phone layouts. Project changes are shared between users and persisted under the App's `/data` volume.
 
 ## Local development
 

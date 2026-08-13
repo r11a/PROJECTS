@@ -83,9 +83,14 @@ export function ProjectWorkspace({
     files: [],
     updates: [],
     activity: [],
+    reviews: [],
+    meetings: [],
   });
   const [note, setNote] = useState("");
   const [modal, setModal] = useState("");
+  const [previewFile,setPreviewFile]=useState(null);
+  const [teamRoleId,setTeamRoleId]=useState("");
+  const [teamQuery,setTeamQuery]=useState("");
   const [reference, setReference] = useState({ roles: [], equipment: [] });
   const [editClientMode, setEditClientMode] = useState("existing");
   const [editClientId, setEditClientId] = useState(project.clientId || "");
@@ -147,7 +152,15 @@ export function ProjectWorkspace({
       setNotice(err.message);
     }
   };
-  const createProfessionalAndAssign=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{const roleTypeId=Number(f.get("roleTypeId"));const result=await api('/professionals',{method:'POST',body:JSON.stringify({displayName:f.get('displayName'),affiliation:f.get('affiliation'),companyName:f.get('companyName'),jobTitle:f.get('jobTitle'),phone:f.get('phone'),email:f.get('email'),roleIds:[roleTypeId]})});await api(`/projects/${project.id}/team`,{method:'POST',body:JSON.stringify({professionalId:result.professional.id,roleTypeId})});setModal('');setNotice('איש המקצוע נוצר במאגר ושויך לפרויקט');load()}catch(error){setNotice(error.message)}};
+  const createProfessionalAndAssign=async(e)=>{
+    e.preventDefault();const f=new FormData(e.currentTarget);const roleTypeId=Number(f.get('roleTypeId'));const body={displayName:f.get('displayName'),affiliation:f.get('affiliation'),companyName:f.get('companyName'),jobTitle:f.get('jobTitle'),phone:f.get('phone'),email:f.get('email'),roleIds:[roleTypeId]};
+    try{
+      let professionalId;
+      try{const result=await api('/professionals',{method:'POST',body:JSON.stringify(body)});professionalId=result.professional.id;}
+      catch(error){if(error.status!==409||error.body?.code!=='SIMILAR_PROFESSIONAL')throw error;const match=error.body.matches?.[0];if(match&&confirm(`${error.message}.\nאישור — איחוד ושיוך האדם הקיים.\nביטול — אפשרות ליצירת כרטיס נפרד.`)){await api(`/professionals/${match.id}/merge`,{method:'POST',body:JSON.stringify(body)});professionalId=match.id;}else if(confirm('ליצור בכל זאת כרטיס נפרד?')){const result=await api('/professionals',{method:'POST',body:JSON.stringify({...body,allowDuplicate:true})});professionalId=result.professional.id;}else return;}
+      await api(`/projects/${project.id}/team`,{method:'POST',body:JSON.stringify({professionalId,roleTypeId})});setModal('');setNotice('איש המקצוע נשמר במאגר ושויך לפרויקט');load();
+    }catch(error){setNotice(error.message)}
+  };
   const addEquipment = async (e) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
@@ -183,6 +196,10 @@ export function ProjectWorkspace({
       setNotice(err.message);
     }
   };
+  const uploadRecordFiles=async(files,title,category)=>{for(const file of files.filter(file=>file instanceof File&&file.size)){const body=new FormData();body.set('projectId',project.id);body.set('title',`${title} · ${file.name}`);body.set('category',category);body.set('file',file);await api('/documents',{method:'POST',body});}};
+  const addReview=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/projects/${project.id}/site-reviews`,{method:'POST',body:JSON.stringify({reviewDate:f.get('reviewDate'),performedBy:f.get('performedBy'),supervisionType:f.get('supervisionType'),summary:f.get('summary'),followUp:f.get('followUp'),planUpdateRequired:f.get('planUpdateRequired')==='on'})});await uploadRecordFiles(f.getAll('attachments'),`ביקורת אתר ${f.get('reviewDate')}`,'ביקורת אתר');setModal('');setNotice('ביקורת האתר והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
+  const addMeeting=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/projects/${project.id}/meetings`,{method:'POST',body:JSON.stringify({meetingAt:f.get('meetingAt'),attendees:f.get('attendees'),summary:f.get('summary'),followUp:f.get('followUp')})});await uploadRecordFiles(f.getAll('attachments'),`סיכום פגישה ${String(f.get('meetingAt')).slice(0,10)}`,'סיכום פגישה');setModal('');setNotice('סיכום הפגישה והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
+  const archiveDocument=async(file)=>{if(user.role!=='admin'||!confirm(`להעביר את „${file.title||file.original_name}” לסל המחזור ל־14 יום?`))return;try{await api(`/documents/${file.id}`,{method:'DELETE'});setNotice('המסמך הועבר לסל המחזור ל־14 יום');load()}catch(error){setNotice(error.message)}};
   const deleteTeam = async (x) => {
     if (!confirm(`להסיר את ${x.display_name} מהפרויקט?`)) return;
     try {
@@ -257,6 +274,7 @@ export function ProjectWorkspace({
     ["overview", "סקירה"],
     ["tasks", "משימות ואבני דרך"],
     ["gantt", "גאנט"],
+    ["reviews", "ביקורות ופגישות"],
     ["systems", "מערכות וצוות"],
     ["forms", "טפסים וקבצים"],
     ["finance", "כספים"],
@@ -405,7 +423,7 @@ export function ProjectWorkspace({
           </button>
         ))}
       </div>
-      {canManage && (
+      {tab === "overview" && canManage && (
         <div className="project-management-bar panel">
           <div>
             {project.archived ? (
@@ -447,7 +465,7 @@ export function ProjectWorkspace({
           </div>
         </div>
       )}
-      {canManage && (
+      {tab === "overview" && canManage && (
         <ProjectAttributesPanel
           project={project}
           updateProject={updateProject}
@@ -455,7 +473,7 @@ export function ProjectWorkspace({
           setNotice={setNotice}
         />
       )}
-      {canManage && (
+      {tab === "overview" && canManage && (
         <GoogleAddressField
           project={project}
           api={api}
@@ -463,7 +481,7 @@ export function ProjectWorkspace({
           setNotice={setNotice}
         />
       )}
-      {canEdit && (
+      {tab === "overview" && canEdit && (
         <ProjectPhotoUpdate
           project={project}
           api={api}
@@ -750,8 +768,8 @@ export function ProjectWorkspace({
             {workspace.forms.length ? (
               workspace.forms.map((x) => (
                 <div className="resource-row" key={x.id}>
-                  <span className="resource-avatar equipment">
-                    <FileText size={17} />
+                  <span className="resource-avatar equipment file-thumb">
+                    {x.mime_type?.startsWith('image/')?<img src={`${apiRoot}/documents/${x.id}/preview`} alt=""/>:<FileText size={17} />}
                   </span>
                   <div>
                     <strong>{x.title}</strong>
@@ -787,24 +805,20 @@ export function ProjectWorkspace({
             {workspace.files.length ? (
               workspace.files.map((x) => (
                 <div className="resource-row" key={x.id}>
-                  <span className="resource-avatar equipment">
-                    <FileText size={17} />
+                  <span className="resource-avatar equipment file-thumb">
+                    {x.mime_type?.startsWith('image/')?<img src={`${apiRoot}/documents/${x.id}/preview`} alt="" loading="lazy"/>:x.mime_type?.startsWith('video/')?<Film size={17}/>:<FileText size={17} />}
                   </span>
                   <div>
                     <strong>{x.title || x.original_name}</strong>
                     <small>
-                      {x.category} ·{" "}
+                      {x.category} · {dateText(x.created_at)} · {x.uploaded_by_name || 'מערכת'} ·{" "}
                       {(Number(x.size_bytes) / 1024 / 1024).toFixed(1)} MB
                     </small>
                   </div>
-                  <a
-                    href={`${apiRoot}/documents/${x.id}/preview`}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="פתיחה / תצוגה"
-                  >
+                  <button onClick={()=>setPreviewFile(x)} title="פתיחה / תצוגה">
                     <Eye size={16} />
-                  </a>
+                  </button>
+                  {user.role==='admin'&&<button className="danger-icon" onClick={()=>archiveDocument(x)} title="העברה לסל המחזור"><Trash2 size={16}/></button>}
                   <a
                     href={`${apiRoot}/documents/${x.id}/download`}
                     title="הורדה"
@@ -819,6 +833,10 @@ export function ProjectWorkspace({
           </section>
         </div>
       )}
+      {tab === "reviews"&&<div className="project-two-columns execution-records">
+        <section className="panel project-resource"><div className="panel-head"><div><h3>ביקורות אתר</h3><span>פיקוח, ממצאים ועדכון תוכניות</span></div>{canEdit&&<button onClick={()=>setModal('review')}><Plus size={15}/>ביקורת</button>}</div>{workspace.reviews.length?workspace.reviews.map(x=><article className="execution-card" key={x.id}><header><strong>{dateText(x.review_date)} · {x.supervision_type||'פיקוח אתר'}</strong><small>{x.performed_by_name||x.created_by_name||'לא צוין'}</small></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}{x.plan_update_required&&<b>נדרש עדכון תכנית</b>}</article>):<div className="inline-empty">טרם תועדו ביקורות אתר.</div>}</section>
+        <section className="panel project-resource"><div className="panel-head"><div><h3>סיכומי פגישות</h3><span>נוכחים, החלטות והמשך טיפול</span></div>{canEdit&&<button onClick={()=>setModal('meeting')}><Plus size={15}/>פגישה</button>}</div>{workspace.meetings.length?workspace.meetings.map(x=><article className="execution-card" key={x.id}><header><strong>{new Date(x.meeting_at).toLocaleString('he-IL')}</strong><small>{x.attendees||'לא צוינו נוכחים'}</small></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}</article>):<div className="inline-empty">טרם נשמרו סיכומי פגישות.</div>}</section>
+      </div>}
       {tab === "activity" && (
         <div className="project-two-columns activity-layout">
           <form className="panel project-update-form" onSubmit={addUpdate}>
@@ -878,32 +896,32 @@ export function ProjectWorkspace({
           </section>
         </div>
       )}
+      {modal==='review'&&<Modal title="ביקורת אתר חדשה" onClose={()=>setModal('')}><form className="work-form" onSubmit={addReview}><label>תאריך פיקוח<input type="date" name="reviewDate" required defaultValue={new Date().toISOString().slice(0,10)}/></label><label>סוג פיקוח<input name="supervisionType" placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label className="wide">מי ביצע<select name="performedBy"><option value="">בחירה מהמאגר</option>{professionals.filter(x=>x.active).map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label className="wide">ממצאים וסיכום<textarea name="summary" required rows="5"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired"/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת ביקורת</button></div></form></Modal>}
+      {modal==='meeting'&&<Modal title="סיכום פגישה חדש" onClose={()=>setModal('')}><form className="work-form" onSubmit={addMeeting}><label>תאריך ושעה<input type="datetime-local" name="meetingAt" required defaultValue={new Date().toISOString().slice(0,16)}/></label><label>נוכחים<input name="attendees" placeholder="שמות מופרדים בפסיק"/></label><label className="wide">סיכום והחלטות<textarea name="summary" required rows="6"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><label className="wide">תמונות ומסמכי הפגישה<input type="file" name="attachments" accept="image/*,application/pdf,.doc,.docx,.xlsx" multiple/></label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת סיכום</button></div></form></Modal>}
       {modal === "team" && (
         <Modal title="שיוך איש צוות" onClose={() => setModal("")}>
           <form className="work-form" onSubmit={addTeam}>
-            <div className="wide form-inline-note"><span>לא מצאתם את האדם במאגר?</span><button type="button" className="ops-secondary" onClick={()=>setModal('new-professional')}><Plus size={15}/>איש מקצוע חדש</button></div>
+            <div className="wide form-inline-note"><button type="button" className="ops-secondary" onClick={()=>setModal('new-professional')}><Plus size={15}/>איש מקצוע חדש</button></div>
             <label>
-              איש מקצוע
-              <select name="professionalId" required>
-                <option value="">בחירה מהמאגר</option>
-                {professionals
-                  .filter((p) => p.active)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.displayName} · {p.companyName || "עובד חברה"}
-                    </option>
-                  ))}
+              תפקיד בפרויקט
+              <select name="roleTypeId" required value={teamRoleId} onChange={(event)=>setTeamRoleId(event.target.value)}>
+                <option value="">בחירת תפקיד</option>
+                {reference.roles.filter((r)=>r.active).map((r)=><option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
             </label>
             <label>
-              תפקיד בפרויקט
-              <select name="roleTypeId" required>
-                <option value="">בחירת תפקיד</option>
-                {reference.roles
-                  .filter((r) => r.active)
-                  .map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
+              חיפוש במאגר
+              <input value={teamQuery} onChange={(event)=>setTeamQuery(event.target.value)} placeholder="שם, חברה או טלפון" />
+            </label>
+            <label>
+              איש מקצוע מתאים
+              <select name="professionalId" required>
+                <option value="">בחירה מהמאגר</option>
+                {professionals
+                  .filter((p) => p.active && (!teamRoleId || p.roles?.some((role)=>String(role.id)===String(teamRoleId))) && (!teamQuery || `${p.displayName} ${p.companyName||''} ${p.phone||''}`.toLowerCase().includes(teamQuery.toLowerCase())))
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.displayName} · {p.companyName || "עובד חברה"}
                     </option>
                   ))}
               </select>
@@ -1058,6 +1076,12 @@ export function ProjectWorkspace({
           onClose={() => setModal("")}
         />
       )}
+      {previewFile&&<Modal title={previewFile.title||previewFile.original_name} onClose={()=>setPreviewFile(null)}>
+        <div className="project-media-viewer">
+          {previewFile.mime_type?.startsWith('image/')?<img src={`${apiRoot}/documents/${previewFile.id}/preview`} alt={previewFile.title||previewFile.original_name}/>:previewFile.mime_type?.startsWith('video/')?<video src={`${apiRoot}/documents/${previewFile.id}/preview`} controls playsInline/>:previewFile.mime_type==='application/pdf'?<iframe src={`${apiRoot}/documents/${previewFile.id}/preview`} title={previewFile.title||previewFile.original_name}/>:<div className="media-unsupported"><FileText size={52}/><h3>המסמך זמין לפתיחה או להורדה</h3><p>תצוגה מקדימה מלאה של קובצי Word ו־Excel תלויה ביישום המותקן במכשיר.</p></div>}
+          <footer><span>{previewFile.category} · {dateText(previewFile.created_at)} · {previewFile.uploaded_by_name||'מערכת'}</span><a className="ops-primary" href={`${apiRoot}/documents/${previewFile.id}/download`}><Download size={16}/>הורדת הקובץ</a></footer>
+        </div>
+      </Modal>}
     </div>
   );
 }
@@ -1553,14 +1577,14 @@ function ProjectGantt({ tasks, milestones }) {
               </div>
               <div className="gantt-track">
                 <i
-                  className={item.kind}
+                  className={`${item.kind} ${item.critical ? "critical" : ""}`}
                   style={{
                     "--start": `${(start / span) * 100}%`,
                     "--width": `${(duration / span) * 100}%`,
                     "--bar": item.color,
                   }}
                 >
-                  <span>{item.kind === "milestone" ? "◆" : ""}</span>
+                  <span>{item.kind === "milestone" ? "◆" : item.critical ? "משימה קריטית" : ""}</span>
                 </i>
               </div>
             </article>

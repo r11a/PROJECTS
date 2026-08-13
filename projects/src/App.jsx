@@ -88,6 +88,7 @@ import {
   TasksWorkspace,
 } from "./Workspaces";
 import { ProjectWorkspace } from "./ProjectWorkspace";
+import { GanttWorkspace } from "./GanttWorkspace";
 import { MessageCenter } from "./Messages";
 import { AiChat, AiChatBoundary } from "./AiChat";
 import "./operational.css";
@@ -151,6 +152,7 @@ export async function api(path, options = {}) {
       body?.error || `הבקשה נכשלה (HTTP ${response.status})`,
     );
     error.status = response.status;
+    error.body = body;
     throw error;
   }
   if (
@@ -231,6 +233,12 @@ function App() {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [stageFilter, setStageFilter] = useState("all");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const navigationSwipe=useRef(null);
+  useEffect(()=>{
+    const start=(event)=>{const touch=event.touches?.[0];if(touch)navigationSwipe.current={x:touch.clientX,y:touch.clientY};};
+    const end=(event)=>{const startPoint=navigationSwipe.current;const touch=event.changedTouches?.[0];navigationSwipe.current=null;if(!startPoint||!touch||Math.abs(touch.clientY-startPoint.y)>70)return;const delta=touch.clientX-startPoint.x;if(delta<-85&&!sidebarOpen)setSidebarOpen(true);if(delta>85&&sidebarOpen)setSidebarOpen(false);};
+    window.addEventListener('touchstart',start,{passive:true});window.addEventListener('touchend',end,{passive:true});return()=>{window.removeEventListener('touchstart',start);window.removeEventListener('touchend',end);};
+  },[sidebarOpen]);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [insights, setInsights] = useState(null);
@@ -695,6 +703,7 @@ function App() {
             <span>משימות ואבני דרך</span>
             {insights?.stats?.overdue > 0 && <em>{insights.stats.overdue}</em>}
           </button>
+          <button className={page === "gantt" ? "active" : ""} onClick={()=>{setPage('gantt');setSidebarOpen(false)}}><Activity size={19}/><span>לוח גאנט</span></button>
           <button
             className={page === "reports" ? "active" : ""}
             onClick={() => {
@@ -922,8 +931,9 @@ function App() {
               setNotice={setNotice}
             />
           )}
+          {page==='gantt'&&<GanttWorkspace api={api} setNotice={setNotice}/>}
           {page === "reports" && (
-            <ReportsWorkspace api={api} setNotice={setNotice} />
+            <ReportsWorkspace api={api} setNotice={setNotice} company={company} companyLogo={companyLogo} user={user} />
           )}
           {page === "settings" && (
             <OperationalSettings
@@ -1530,6 +1540,7 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
           label="פרויקטים פעילים"
           value={active.length}
           change={`${projects.length - active.length} פרויקטים הושלמו`}
+          onClick={() => setPage("projects")}
         />
         <KpiCard
           icon={TrendingUp}
@@ -1537,6 +1548,7 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
           label="היקף פרויקטים פעילים"
           value={compactMoney(value)}
           change="לפי שווי החוזים המעודכן"
+          onClick={() => setPage("projects")}
         />
         <KpiCard
           icon={Gauge}
@@ -1544,6 +1556,7 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
           label="התקדמות ממוצעת"
           value={`${avg}%`}
           change={`ממוצע של ${active.length} פרויקטים פעילים`}
+          onClick={() => setPage("projects")}
         />
         <KpiCard
           icon={CircleDollarSign}
@@ -1552,6 +1565,7 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
           value={compactMoney(unpaid)}
           change={`${active.filter((p) => Number(p.paid) < Number(p.value)).length} פרויקטים עם יתרה`}
           alert
+          onClick={() => setPage("finance")}
         />
       </section>
       <InsightsTile insights={insights} onNavigate={setPage} refreshing={insightsRefreshing} onRefresh={onRefreshInsights} />
@@ -1767,9 +1781,9 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
   );
 }
 
-function KpiCard({ icon: Icon, tone, label, value, change, trend, alert }) {
+function KpiCard({ icon: Icon, tone, label, value, change, trend, alert, onClick }) {
   return (
-    <div className="kpi-card">
+    <div className={`kpi-card ${onClick?'clickable':''}`} role={onClick?'button':undefined} tabIndex={onClick?0:undefined} onClick={onClick} onKeyDown={event=>{if(onClick&&(event.key==='Enter'||event.key===' '))onClick()}}>
       <div className={`kpi-icon ${tone}`}>
         <Icon size={22} />
       </div>

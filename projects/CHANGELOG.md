@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.14.0
+
+- Added a portfolio Gantt workspace grouped by project, with zoom levels, critical tasks, milestones, assignees, live updates and mobile horizontal navigation.
+- Added site inspections and meeting summaries, including project-linked photos, sketches, plans and supporting documents.
+- Added critical-task support and dependency visualization in project Gantt views.
+- Added a premium in-app media viewer for images, video and PDF, with thumbnails, uploader/date metadata and downloads.
+- Added admin-only document recycling, 14-day retention, automatic permanent purge and restore controls.
+- Improved professional management with grid/table modes, role filters, sorting, email actions, project-load indicators and duplicate merge workflow.
+- Fixed Photon Hebrew address completion and graceful upstream failure handling.
+- Improved project task forms, team assignment flow, dashboard navigation, mobile sidebar gestures and crash recovery.
+- Expanded PDF reports with company branding, operational detail and issuer/date stamp.
+- Replaced permissive licensing with a proprietary All Rights Reserved license.
+
 ## 0.13.0
 
 - Rebuilt AI chat transport as one authenticated Server-Sent Events request with five-second heartbeats, removing browser polling and expiring job identifiers from the active chat path.

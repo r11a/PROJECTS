@@ -42,7 +42,7 @@ export function createFormsRouter({ pool, authenticate, requireRoles, audit }) {
         ORDER BY r.updated_at DESC LIMIT 250`, [query, `%${query}%`, status]),
       pool.query('SELECT id,name,code FROM clients ORDER BY name'),
       pool.query('SELECT id,name,client_id FROM projects ORDER BY name'),
-      pool.query(`SELECT f.id,f.original_name,f.mime_type,f.size_bytes,f.created_at,c.name client_name FROM client_files f JOIN clients c ON c.id=f.client_id ORDER BY f.created_at DESC LIMIT 20`),
+      pool.query(`SELECT f.id,f.original_name,f.mime_type,f.size_bytes,f.created_at,c.name client_name FROM client_files f JOIN clients c ON c.id=f.client_id WHERE f.deleted_at IS NULL ORDER BY f.created_at DESC LIMIT 20`),
     ]);
     response.json({ templates: templates.rows.map(templateFromRow), records: records.rows.map(recordFromRow), clients: clients.rows, projects: projects.rows, files: files.rows });
   });

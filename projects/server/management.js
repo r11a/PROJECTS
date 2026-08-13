@@ -169,6 +169,8 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
   router.post('/professionals', requireRoles('admin', 'manager'), async (request, response) => {
     const displayName = String(request.body.displayName || '').trim();
     if (!displayName) return response.status(400).json({ error: 'שם איש המקצוע הוא שדה חובה' });
+    const similar=await pool.query(`SELECT id,display_name,phone,email FROM professionals WHERE active=TRUE AND (lower(display_name)=lower($1) OR similarity(lower(display_name),lower($1))>.72) ORDER BY similarity(lower(display_name),lower($1)) DESC LIMIT 3`,[displayName]).catch(()=>pool.query('SELECT id,display_name,phone,email FROM professionals WHERE active=TRUE AND lower(display_name)=lower($1) LIMIT 3',[displayName]));
+    if(similar.rowCount&&!request.body.allowDuplicate)return response.status(409).json({error:`קיים איש מקצוע בשם דומה: ${similar.rows.map(item=>item.display_name).join(', ')}`,code:'SIMILAR_PROFESSIONAL',matches:similar.rows});
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -254,6 +256,27 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
     response.status(204).end();
   });
 
+  router.post('/professionals/:id/merge', requireRoles('admin', 'manager'), async (request, response) => {
+    const client=await pool.connect();
+    try{
+      await client.query('BEGIN');
+      const current=(await client.query('SELECT * FROM professionals WHERE id=$1 FOR UPDATE',[request.params.id])).rows[0];
+      if(!current){await client.query('ROLLBACK');return response.status(404).json({error:'איש המקצוע לא נמצא'});}
+      const updates={};
+      for(const [key,column] of Object.entries(PROFESSIONAL_FIELDS)){
+        if(key==='displayName')continue;
+        const incoming=request.body[key];
+        if(incoming!==undefined&&incoming!==null&&incoming!==''&&(!current[column]||request.body.preferIncoming))updates[column]=JSON_INPUTS.has(key)?JSON.stringify(incoming):incoming;
+      }
+      if(Object.keys(updates).length){const values=Object.values(updates);values.push(request.params.id);await client.query(`UPDATE professionals SET ${Object.keys(updates).map((column,index)=>`${column}=$${index+1}`).join(',')},updated_at=NOW() WHERE id=$${values.length}`,values);}
+      const roleIds=[...(request.body.roleIds||[])];
+      for(const roleId of [...new Set(roleIds.map(Number).filter(Boolean))])await client.query('INSERT INTO professional_role_assignments(professional_id,role_type_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[request.params.id,roleId]);
+      await client.query('COMMIT');
+      await audit(request,'merge','professional',request.params.id,{incomingName:request.body.displayName||''});
+      response.json({professionalId:Number(request.params.id)});
+    }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+  });
+
   router.post('/equipment-catalog/:id/icon', requireRoles('admin', 'manager'), iconUpload.single('icon'), async (request, response) => {
     if (!request.file) return response.status(400).json({ error: 'יש לבחור תמונת PNG, JPG או WebP עד 5MB' });
     const current = await pool.query('SELECT icon_image_stored_name FROM equipment_catalog WHERE id=$1', [request.params.id]);
@@ -306,7 +329,7 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
     const result = await pool.query(
       `SELECT f.*,c.name client_name,p.name project_name,COALESCE(u.display_name,u.username,'מערכת') uploaded_by_name
        FROM client_files f LEFT JOIN clients c ON c.id=f.client_id LEFT JOIN projects p ON p.id=f.project_id LEFT JOIN users u ON u.id=f.uploaded_by
-       WHERE ($1='' OR concat_ws(' ',f.title,f.original_name,f.category,f.description,c.name,p.name,f.tags::text) ILIKE $2)
+       WHERE f.deleted_at IS NULL AND ($1='' OR concat_ws(' ',f.title,f.original_name,f.category,f.description,c.name,p.name,f.tags::text) ILIKE $2)
          AND ($3='' OR f.client_id::text=$3) AND ($4='' OR f.project_id=$4)
        ORDER BY f.created_at DESC`, [String(request.query.q || ''), `%${String(request.query.q || '')}%`, String(request.query.clientId || ''), String(request.query.projectId || '')],
     );
@@ -343,7 +366,7 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
   });
 
   router.get('/documents/:id/download', async (request, response) => {
-    const result = await pool.query('SELECT * FROM client_files WHERE id=$1', [request.params.id]);
+    const result = await pool.query('SELECT * FROM client_files WHERE id=$1 AND deleted_at IS NULL', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'המסמך לא נמצא' });
     const row = result.rows[0];
     const directory = row.storage_area === 'clients' ? path.join(dataDir, 'uploads', 'clients') : safeStoragePath(row.storage_area, row.storage_path);
@@ -351,7 +374,7 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
   });
 
   router.get('/documents/:id/preview', async (request, response) => {
-    const result = await pool.query('SELECT * FROM client_files WHERE id=$1', [request.params.id]);
+    const result = await pool.query('SELECT * FROM client_files WHERE id=$1 AND deleted_at IS NULL', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'המסמך לא נמצא' });
     const row = result.rows[0];
     const directory = row.storage_area === 'clients' ? path.join(dataDir, 'uploads', 'clients') : safeStoragePath(row.storage_area, row.storage_path);
@@ -361,13 +384,26 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
   });
 
   router.delete('/documents/:id', requireRoles('admin'), async (request, response) => {
-    const result = await pool.query('DELETE FROM client_files WHERE id=$1 RETURNING *', [request.params.id]);
+    const result = await pool.query('UPDATE client_files SET deleted_at=NOW(),deleted_by=$2 WHERE id=$1 AND deleted_at IS NULL RETURNING *', [request.params.id,request.user.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'המסמך לא נמצא' });
     const row = result.rows[0];
-    const directory = row.storage_area === 'clients' ? path.join(dataDir, 'uploads', 'clients') : safeStoragePath(row.storage_area, row.storage_path);
-    await unlink(path.join(directory, row.stored_name)).catch(() => {});
-    await audit(request, 'delete', 'document', request.params.id, { originalName: row.original_name });
+    await audit(request, 'archive', 'document', request.params.id, { originalName: row.original_name,purgeAt:new Date(Date.now()+14*86400000).toISOString() });
     response.status(204).end();
+  });
+
+  router.get('/documents-recycle-bin',requireRoles('admin'),async(_request,response)=>{
+    const expired=await pool.query(`SELECT * FROM client_files WHERE deleted_at<NOW()-INTERVAL '14 days'`);
+    for(const row of expired.rows){
+      const directory=row.storage_area==='clients'?path.join(dataDir,'uploads','clients'):safeStoragePath(row.storage_area,row.storage_path);
+      try{await unlink(path.join(directory,row.stored_name));}catch(error){if(error.code!=='ENOENT')throw error;}
+    }
+    if(expired.rowCount)await pool.query(`DELETE FROM client_files WHERE id=ANY($1::bigint[])`,[expired.rows.map(row=>row.id)]);
+    const result=await pool.query(`SELECT id,title,original_name,mime_type,deleted_at FROM client_files WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC`);
+    response.json({documents:result.rows});
+  });
+  router.post('/documents/:id/restore',requireRoles('admin'),async(request,response)=>{
+    const result=await pool.query('UPDATE client_files SET deleted_at=NULL,deleted_by=NULL WHERE id=$1 AND deleted_at IS NOT NULL RETURNING id',[request.params.id]);
+    if(!result.rowCount)return response.status(404).json({error:'המסמך אינו נמצא בסל המחזור'});await audit(request,'restore','document',request.params.id);response.status(204).end();
   });
 
   return router;
