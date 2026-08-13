@@ -310,6 +310,74 @@ export function chatPrompt({ question, history, context }) {
 החזר תשובה בלבד, ללא JSON. כאשר מתאים השתמש ברשימה קצרה.`;
 }
 
+const STAGE_LABELS = {
+  waiting:'בהמתנה',mobilization:'בהנעה',infrastructure:'תשתיות',threading:'השחלות',
+  threading_done:'בוצעו השחלות',installation_a:'התקנות שלב א׳',installation_b:'התקנות שלב ב׳',
+  installation_c:'התקנות שלב ג׳',activation_programming:'הפעלות ותכנות',finishes:'פינישים',post_delivery:'מוכן למסירה',
+};
+
+const money = (value) => `${Number(value || 0).toLocaleString('he-IL',{ minimumFractionDigits:2,maximumFractionDigits:2 })} ש״ח`;
+
+export async function buildLocalChatAnswer(pool, question) {
+  const normalized=String(question || '').toLowerCase();
+  if (/(איך|כיצד).*(יוצר|פותח|מקים).*פרויקט/.test(normalized)) return [
+    'ליצירת פרויקט חדש:',
+    '1. לחצו על „פרויקט חדש” בכותרת הראשית.',
+    '2. בחרו לקוח קיים או צרו לקוח חדש והשלימו שם, טלפון וכתובת.',
+    '3. בחרו מנהל, שלב התחלתי, תאריכי התחלה ומסירה ושווי משוער.',
+    '4. בחרו מערכות ורכיבים וכמויות ולחצו „יצירת פרויקט”.',
+  ].join('\n');
+  if (/(איך|איפה|כיצד).*(outlook|אאוטלוק|שיתוף.*לוח|לוח.*שיתוף)/.test(normalized)) return 'פתחו הגדרות ומערכת > Outlook, צרו קישור לקריאה בלבד והעתיקו אותו. ב‑Outlook בחרו Add calendar > Subscribe from web והדביקו את הקישור.';
+  if (/(איך|איפה|כיצד).*(דוח|pdf)/.test(normalized)) return 'פתחו דוחות וניתוחים > אשף דוח PDF, בחרו סוג דוח ופרויקט, בחרו אם לשמור עותק במסמכי הפרויקט ולחצו „הפקת והורדת PDF”.';
+  if (/יתרה.*גבייה|גבייה.*כוללת|כמה.*לגבות/.test(normalized)) {
+    const result=await pool.query(`SELECT COALESCE(SUM(value-paid),0)::numeric outstanding FROM projects WHERE archived_at IS NULL`);
+    return `היתרה הכוללת לגבייה בפרויקטים הפעילים היא ${money(result.rows[0]?.outstanding)}.`;
+  }
+  if (/תמונת מצב.*פרויקט|מצב.*פרויקט.*פעיל|סיכום.*פרויקט/.test(normalized)) {
+    const [summary,stages,tasks]=await Promise.all([
+      pool.query(`SELECT COUNT(*)::int active,COALESCE(ROUND(AVG(progress)),0)::int progress,
+        COALESCE(SUM(value-paid),0)::numeric outstanding FROM projects WHERE archived_at IS NULL`),
+      pool.query(`SELECT stage,COUNT(*)::int count FROM projects WHERE archived_at IS NULL GROUP BY stage ORDER BY count DESC,stage LIMIT 5`),
+      pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled'))::int open,
+        COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND due_date<CURRENT_DATE)::int overdue FROM tasks`),
+    ]);
+    const item=summary.rows[0] || {};
+    const stageText=stages.rows.map((row)=>`${STAGE_LABELS[row.stage] || row.stage}: ${row.count}`).join(', ') || 'אין חלוקת שלבים';
+    return `תמונת מצב: ${item.active || 0} פרויקטים פעילים, התקדמות ממוצעת ${item.progress || 0}%, יתרה לגבייה ${money(item.outstanding)}. משימות פתוחות: ${tasks.rows[0]?.open || 0}, מתוכן באיחור: ${tasks.rows[0]?.overdue || 0}. חלוקת שלבים: ${stageText}.`;
+  }
+  if (/תשומת לב|בסיכון|דורש.*טיפול|דורשים.*טיפול/.test(normalized)) {
+    const result=await pool.query(`SELECT p.name,p.stage,p.progress,p.health,p.flag,
+      COUNT(t.id) FILTER (WHERE t.status NOT IN ('done','cancelled') AND t.due_date<CURRENT_DATE)::int overdue
+      FROM projects p LEFT JOIN tasks t ON t.project_id=p.id WHERE p.archived_at IS NULL
+      GROUP BY p.id HAVING p.health<75 OR COUNT(t.id) FILTER (WHERE t.status NOT IN ('done','cancelled') AND t.due_date<CURRENT_DATE)>0 OR btrim(COALESCE(p.flag,''))<>''
+      ORDER BY overdue DESC,p.health,p.progress LIMIT 8`);
+    if (!result.rows.length) return 'לא נמצאו כרגע פרויקטים פעילים עם משימות באיחור, מדד בריאות נמוך או דגל פעיל.';
+    return `הפרויקטים שדורשים תשומת לב:\n${result.rows.map((row,index)=>`${index+1}. ${row.name} — ${STAGE_LABELS[row.stage] || row.stage}, ${row.progress}% התקדמות${row.overdue ? `, ${row.overdue} משימות באיחור` : ''}${row.health<75 ? `, בריאות ${row.health}` : ''}${row.flag ? `, דגל: ${row.flag}` : ''}`).join('\n')}`;
+  }
+  if (/שלב.*התקנ|נמצאים.*התקנ|בהתקנות/.test(normalized)) {
+    const result=await pool.query(`SELECT name,stage,progress,manager FROM projects
+      WHERE archived_at IS NULL AND stage IN ('installation_a','installation_b','installation_c') ORDER BY stage,progress DESC`);
+    if (!result.rows.length) return 'אין כרגע פרויקטים פעילים בשלבי ההתקנות.';
+    return `פרויקטים בשלבי התקנות:\n${result.rows.map((row,index)=>`${index+1}. ${row.name} — ${STAGE_LABELS[row.stage]}, ${row.progress}%${row.manager ? `, מנהל: ${row.manager}` : ''}`).join('\n')}`;
+  }
+  if (/משימ.*איחור|משימות.*באיחור/.test(normalized)) {
+    const result=await pool.query(`SELECT t.title,t.due_date,p.name project_name FROM tasks t LEFT JOIN projects p ON p.id=t.project_id
+      WHERE t.status NOT IN ('done','cancelled') AND t.due_date<CURRENT_DATE ORDER BY t.due_date LIMIT 20`);
+    if (!result.rows.length) return 'אין כרגע משימות פעילות באיחור.';
+    return `משימות באיחור:\n${result.rows.map((row,index)=>`${index+1}. ${row.title}${row.project_name ? ` — ${row.project_name}` : ''}, יעד ${new Date(row.due_date).toLocaleDateString('he-IL')}`).join('\n')}`;
+  }
+  if (/כמה.*פרויקט.*מצלמ|פרויקט.*כולל.*מצלמ/.test(normalized)) {
+    const result=await pool.query(`SELECT DISTINCT p.name FROM projects p WHERE p.archived_at IS NULL AND (
+      EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(p.systems,'[]'::jsonb)) system WHERE system ILIKE ANY(ARRAY['%מצלמ%','%cctv%','%nvr%','%frigate%','%scrypted%']))
+      OR EXISTS (SELECT 1 FROM project_equipment pe JOIN equipment_catalog ec ON ec.id=pe.catalog_item_id
+        LEFT JOIN equipment_catalog parent ON parent.id=ec.parent_id WHERE pe.project_id=p.id
+        AND (ec.name ILIKE ANY(ARRAY['%מצלמ%','%cctv%','%nvr%','%frigate%','%scrypted%']) OR parent.name ILIKE '%מצלמ%')))
+      ORDER BY p.name`);
+    return result.rows.length ? `${result.rows.length} פרויקטים פעילים כוללים מערכות מצלמות: ${result.rows.map((row)=>row.name).join(', ')}.` : 'לא נמצאו מערכות מצלמות המשויכות לפרויקטים הפעילים.';
+  }
+  return '';
+}
+
 export async function createAiRouter({ pool, authenticate, requireRoles, audit, dataDir }) {
   const router = express.Router();
   const encryptionKey = await getEncryptionKey(dataDir);
@@ -443,6 +511,49 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     } catch (error) {
       console.error('AI insights generation failed', global.activeProvider, error.message);
       return response.json({ ...base, ai:{ status:'fallback', provider:global.activeProvider, providerName:definition.name, model:selected.model, generatedAt:new Date().toISOString(), error:error.publicMessage || 'לא ניתן היה לעדכן את ניתוח ה-AI. מוצגות תובנות מקומיות עד לניסיון הבא.' } });
+    }
+  });
+
+  router.post('/ai/chat/stream', async (request,response) => {
+    const question=String(request.body?.question || '').trim();
+    if (question.length<2 || question.length>1500) return response.status(400).json({ error:'יש להזין שאלה באורך 2–1,500 תווים' });
+    response.status(200).set({
+      'Content-Type':'text/event-stream; charset=utf-8',
+      'Cache-Control':'no-cache, no-transform',
+      'X-Accel-Buffering':'no',
+      Connection:'keep-alive',
+    });
+    response.flushHeaders();
+    const send=(payload)=>{ if (!response.writableEnded && !response.destroyed) response.write(`data: ${JSON.stringify(payload)}\n\n`); };
+    send({ type:'status',status:'working' });
+    const heartbeat=setInterval(()=>{ if (!response.writableEnded && !response.destroyed) response.write(`: heartbeat ${Date.now()}\n\n`); },5000);
+    try {
+      const localAnswer=await buildLocalChatAnswer(pool,question);
+      if (localAnswer) {
+        send({ type:'answer',answer:localAnswer,provider:'local',providerName:'PROJECTS',model:'מנוע נתונים מקומי',generatedAt:new Date().toISOString() });
+        return;
+      }
+      const [globalResult,providerResult]=await Promise.all([
+        pool.query("SELECT value FROM app_settings WHERE key='ai'"),
+        pool.query('SELECT provider,enabled,model,api_key_encrypted FROM ai_provider_settings'),
+      ]);
+      const global={ activeProvider:'gemini',...(globalResult.rows[0]?.value || {}) };
+      const selected=providerResult.rows.find((row)=>row.provider===global.activeProvider);
+      const definition=PROVIDERS[global.activeProvider];
+      if (!definition || !selected?.enabled || !selected.api_key_encrypted) throw Object.assign(new Error('הסוכן אינו מוכן'),{ publicMessage:'הסוכן אינו מוכן. יש להפעיל ספק ולשמור מפתח API תחת הגדרות ומערכת > סוכן AI.' });
+      await enforceBudget(global);
+      const context=await buildChatContext(pool,question);
+      const history=Array.isArray(request.body?.history) ? request.body.history : [];
+      const answer=(await generateProviderText(global.activeProvider,selected.model,decrypt(selected.api_key_encrypted,encryptionKey),chatPrompt({ question,history,context }),{
+        onUsage:usageRecorder(request,global.activeProvider,selected.model,'chat'),
+      })).trim();
+      send({ type:'answer',answer:answer.slice(0,6000),provider:global.activeProvider,providerName:definition.name,model:selected.model,generatedAt:new Date().toISOString() });
+    } catch (error) {
+      console.error('AI streaming chat failed',error.message);
+      send({ type:'error',...chatError(error) });
+    } finally {
+      clearInterval(heartbeat);
+      if (!response.writableEnded) response.end();
     }
   });
 

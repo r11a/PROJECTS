@@ -9,7 +9,7 @@ const helpGroups = [
   { title:"עזרה בתוכנה", examples:["איך יוצרים פרויקט חדש?","איפה מגדירים שיתוף לוח שנה?","איך מפיקים דוח PDF?"] },
 ];
 
-export function AiChat({ api, onClose }) {
+export function AiChat({ apiRoot, onClose }) {
   const [messages,setMessages] = useState([{ role:"assistant", text:"שלום, אני הסוכן החכם של PROJECTS. אפשר לשאול אותי על פרויקטים, משימות, גבייה, מערכות או על השימוש בתוכנה." }]);
   const [question,setQuestion] = useState("");
   const [busy,setBusy] = useState(false);
@@ -22,6 +22,43 @@ export function AiChat({ api, onClose }) {
     return ()=>cancelAnimationFrame(frame);
   },[messages,busy]);
 
+  const streamAnswer = async (text,history) => {
+    const response=await fetch(`${apiRoot}/ai/chat/stream`,{
+      method:"POST",credentials:"same-origin",cache:"no-store",
+      headers:{ "Content-Type":"application/json","Accept":"text/event-stream" },
+      body:JSON.stringify({ question:text,history }),
+    });
+    if (!response.ok) {
+      const raw=await response.text();
+      let message=`הבקשה נכשלה (HTTP ${response.status})`;
+      try { message=JSON.parse(raw)?.error || message; } catch { if (raw) message=raw.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim().slice(0,260); }
+      const error=new Error(message);error.status=response.status;throw error;
+    }
+    if (!response.body) throw new Error("הדפדפן אינו תומך בקבלת תשובה זורמת");
+    const reader=response.body.getReader();
+    const decoder=new TextDecoder();
+    let buffer="";
+    let completed=null;
+    const consume=(block)=>{
+      const data=block.split("\n").find((line)=>line.startsWith("data:"));
+      if (!data) return;
+      const event=JSON.parse(data.slice(5).trim());
+      if (event.type==="answer") completed=event;
+      if (event.type==="error") throw new Error(event.error || "לא ניתן לקבל תשובה מהסוכן");
+    };
+    while (true) {
+      const { value,done }=await reader.read();
+      buffer+=decoder.decode(value || new Uint8Array(),{ stream:!done });
+      const blocks=buffer.split("\n\n");
+      buffer=blocks.pop() || "";
+      for (const block of blocks) consume(block);
+      if (done) break;
+    }
+    if (buffer.trim()) consume(buffer);
+    if (!completed?.answer) throw new Error("החיבור הסתיים לפני שהתקבלה תשובה מלאה");
+    return completed;
+  };
+
   const ask = async (event) => {
     event?.preventDefault();
     const text = question.trim();
@@ -32,26 +69,7 @@ export function AiChat({ api, onClose }) {
     setHelpOpen(false);
     setBusy(true);
     try {
-      let result = await api("/ai/chat",{ method:"POST",body:JSON.stringify({ question:text,history }) });
-      if (result.jobId) {
-        const deadline=Date.now()+90_000;
-        let transientFailures=0;
-        while (Date.now()<deadline) {
-          await new Promise((resolve)=>setTimeout(resolve,750));
-          try {
-            result=await api(`/ai/chat/${encodeURIComponent(result.jobId)}`);
-            transientFailures=0;
-          } catch (error) {
-            if ([502,503,504].includes(Number(error.status)) && transientFailures<3) {
-              transientFailures+=1;
-              continue;
-            }
-            throw error;
-          }
-          if (result.answer) break;
-        }
-        if (!result.answer) throw new Error("הסוכן עדיין מעבד את השאלה. נסו שוב בעוד רגע.");
-      }
+      const result=await streamAnswer(text,history);
       setMessages((current)=>[...current,{ role:"assistant",text:result.answer,meta:`${result.providerName} · ${result.model}` }]);
     } catch (error) {
       setMessages((current)=>[...current,{ role:"error",text:error.message,meta:"אפשר לבדוק את החיבור תחת הגדרות ומערכת › סוכן AI" }]);

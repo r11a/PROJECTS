@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   MODEL_RATES,
   buildChatContext,
+  buildLocalChatAnswer,
   chatPrompt,
   generateProviderText,
   parseInsightResponse,
@@ -29,6 +30,34 @@ test('software help uses the product guide without loading unrelated project rec
   assert.equal(queries.length,1);
   assert.match(context.help.createProject.join(' '),/שלב 1/);
   assert.match(chatPrompt({ question:'איך יוצרים פרויקט חדש?',history:[],context }),/פרויקט חדש/);
+});
+
+test('local chat answers common help and live management questions without a provider', async () => {
+  const pool={ query:async (sql)=>{
+    const text=String(sql);
+    if (text.includes('SUM(value-paid)')) return { rows:[{ outstanding:'484600' }] };
+    throw new Error(`unexpected query: ${text}`);
+  } };
+  assert.match(await buildLocalChatAnswer(pool,'איך יוצרים פרויקט חדש?'),/פרויקט חדש/);
+  assert.match(await buildLocalChatAnswer(pool,'מה היתרה הכוללת לגבייה?'),/484,600/);
+  assert.equal(await buildLocalChatAnswer(pool,'כתוב לי ניתוח חופשי'),'');
+});
+
+test('local chat covers the operational questions that previously lost their jobs', async () => {
+  const pool={ query:async (sql)=>{
+    const text=String(sql).replace(/\s+/g,' ');
+    if (text.includes('GROUP BY p.id HAVING')) return { rows:[{ name:'בית כהן',stage:'installation_b',progress:65,health:60,flag:'דחוף',overdue:2 }] };
+    if (text.includes("stage IN ('installation_a'")) return { rows:[{ name:'בית כהן',stage:'installation_b',progress:65,manager:'רונן' }] };
+    if (text.includes('COUNT(*)::int active')) return { rows:[{ active:7,progress:54,outstanding:'484600' }] };
+    if (text.includes('GROUP BY stage')) return { rows:[{ stage:'installation_b',count:2 }] };
+    if (text.includes("COUNT(*) FILTER (WHERE status NOT IN")) return { rows:[{ open:5,overdue:2 }] };
+    throw new Error(`unexpected query: ${text}`);
+  } };
+  assert.match(await buildLocalChatAnswer(pool,'אלו פרויקטים דורשים תשומת לב?'),/בית כהן.*2 משימות באיחור/s);
+  assert.match(await buildLocalChatAnswer(pool,'אילו פרויקטים נמצאים בשלב התקנות?'),/התקנות שלב ב׳/);
+  const snapshot=await buildLocalChatAnswer(pool,'תן לי תמונת מצב של הפרויקטים הפעילים');
+  assert.match(snapshot,/7 פרויקטים פעילים/);
+  assert.match(snapshot,/484,600/);
 });
 
 test('context routing only loads the requested domain plus overview', async () => {

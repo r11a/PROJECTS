@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13.0
+
+- Rebuilt AI chat transport as one authenticated Server-Sent Events request with five-second heartbeats, removing browser polling and expiring job identifiers from the active chat path.
+- Added direct PostgreSQL answers for project status, attention risks, installation stages, overdue tasks, collection balance, camera coverage and core product help.
+- Kept Gemini/OpenAI as a fallback for open-ended analysis while common operational answers now remain available without provider latency or cost.
+- Disabled Nginx response buffering and extended upstream timeouts for reliable Home Assistant Ingress, remote access and Cloudflare delivery.
+- Added streaming and local-answer regression tests while retaining the durable job API for backward compatibility.
+
 ## 0.12.2
 
 - Replaced volatile in-memory AI chat jobs with durable PostgreSQL-backed jobs.

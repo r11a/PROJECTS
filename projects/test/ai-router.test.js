@@ -121,6 +121,13 @@ test('AI router completes settings, provider test, async chat polling and usage 
   assert.equal(repeatedPoll.status,200);
   assert.equal((await repeatedPoll.json()).answer,'מצב הגבייה תקין');
 
+  const streamResponse=await originalFetch(`${base}/ai/chat/stream`,{ method:'POST',headers:{ 'content-type':'application/json' },body:JSON.stringify({ question:'מה היתרה הכוללת לגבייה?',history:[] }) });
+  assert.equal(streamResponse.status,200);
+  const streamEvents=(await streamResponse.text()).trim().split('\n\n').map((block)=>JSON.parse(block.replace(/^data:\s*/,'')));
+  const streamAnswer=streamEvents.find((item)=>item.type==='answer');
+  assert.equal(streamAnswer.provider,'local');
+  assert.match(streamAnswer.answer,/0\.00/);
+
   const recoveredJobId='persisted-after-restart';
   pool.jobs.set(recoveredJobId,{ id:recoveredJobId,user_id:7,status:'working',question:'סכם פרויקטים',history:[],provider:'gemini',model:'gemini-3.5-flash-lite',answer:'',error:'',generated_at:null,updated_at:new Date(Date.now()-60_000) });
   let recovered;

@@ -1005,7 +1005,7 @@ function App() {
           onUnread={setUnreadMessages}
         />
       )}
-      {aiChatOpen && <AiChatBoundary onClose={() => setAiChatOpen(false)}><AiChat api={api} onClose={() => setAiChatOpen(false)} /></AiChatBoundary>}
+      {aiChatOpen && <AiChatBoundary onClose={() => setAiChatOpen(false)}><AiChat apiRoot={apiRoot} onClose={() => setAiChatOpen(false)} /></AiChatBoundary>}
       {notice && (
         <div className="toast">
           <CheckCircle2 size={19} />
