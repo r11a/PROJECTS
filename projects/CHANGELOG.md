@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.3
+
+- Removed the two obsolete dialog-layout layers that competed with the viewport portal system.
+- Rebuilt dialog sizing around natural content height and a single shrinkable scroll region, fixing desktop forms that collapsed to header height.
+- Kept the native-feeling mobile sheet layout while guaranteeing touch scrolling for long forms and natural height for short confirmations.
+- Added regression coverage that rejects zero-basis dialog content and duplicate modal geometry rules.
+
 ## 0.17.2
 
 - Moved every legacy dialog, Gantt editor, calendar panel, message center and AI panel into a viewport-level portal so page containers can no longer clip them.

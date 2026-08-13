@@ -1,14 +1,15 @@
-/* Final modal layer. Imported after every feature stylesheet so legacy page
-   rules cannot clip dialogs or disable touch scrolling. */
+/* PROJECTS dialog system. This is the only stylesheet allowed to control
+   viewport placement, dialog sizing and internal scrolling. */
 :root {
-  --dialog-edge: clamp(10px, 2vw, 22px);
-  --dialog-width: 1040px;
+  --dialog-edge: clamp(12px, 2vw, 24px);
+  --dialog-max-width: 1040px;
 }
 
 body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop, .alert-backdrop) {
   position: fixed !important;
   inset: 0 !important;
   z-index: 5000 !important;
+  box-sizing: border-box;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -26,11 +27,12 @@ body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop, .alert-bac
   > :is(.modal, .ops-modal, .cg-schedule-dialog, .alert-center) {
   position: relative !important;
   inset: auto !important;
-  width: min(var(--dialog-width), calc(100vw - var(--dialog-edge) * 2)) !important;
+  width: min(var(--dialog-max-width), calc(100vw - var(--dialog-edge) * 2)) !important;
   max-width: calc(100vw - var(--dialog-edge) * 2) !important;
+  height: auto !important;
   max-height: calc(100dvh - var(--dialog-edge) * 2) !important;
   min-height: 0 !important;
-  margin: auto !important;
+  margin: 0 !important;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
@@ -45,13 +47,15 @@ body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop)
   position: relative !important;
   min-height: 68px !important;
   flex: 0 0 auto !important;
+  box-sizing: border-box;
   padding: 16px 70px 13px 22px !important;
+  border-bottom: 1px solid var(--line, #e8eaf0) !important;
   direction: rtl !important;
+  background: var(--surface, #fff) !important;
 }
 
 body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop)
-  :is(.modal-head, .ops-modal-title, .cg-schedule-dialog > header)
-  > button {
+  :is(.modal-head, .ops-modal-title, .cg-schedule-dialog > header) > button {
   position: absolute !important;
   top: 14px !important;
   right: 16px !important;
@@ -68,20 +72,33 @@ body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop)
   z-index: 20 !important;
 }
 
-/* The shell stays fixed. Only the content region scrolls. */
+/* Natural size first. These regions only shrink and scroll when their content
+   would exceed the available viewport height. Never use a zero flex basis. */
 body > .modal-backdrop .modal > form,
 body > .ops-modal-backdrop .ops-modal > form,
 body > .ops-modal-backdrop .form-builder-body,
 body > .ops-modal-backdrop .form-fill-body,
 body > .cg-dialog-backdrop .cg-schedule-dialog > div,
-body > .alert-backdrop .alert-list {
-  flex: 1 1 0 !important;
+body > .alert-backdrop .alert-list,
+body > .modal-backdrop .app-modal-content {
+  flex: 0 1 auto !important;
   min-height: 0 !important;
+  max-width: 100%;
   overflow-x: hidden !important;
   overflow-y: auto !important;
   overscroll-behavior: contain;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
+}
+
+body > .modal-backdrop .app-modal-content {
+  display: flex;
+  flex-direction: column;
+}
+
+body > .modal-backdrop .app-modal-content > :only-child {
+  min-height: 0;
+  max-width: 100%;
 }
 
 body > :is(.modal-backdrop, .ops-modal-backdrop)
@@ -93,12 +110,18 @@ body > .alert-backdrop .alert-center > footer {
   z-index: 25 !important;
   flex: 0 0 auto !important;
   padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+  border-top: 1px solid var(--line, #e8eaf0) !important;
   background: var(--surface, #fff) !important;
 }
 
 body > .modal-backdrop .modal.compact,
-body > .ops-modal-backdrop .ops-modal.compact {
-  --dialog-width: 560px;
+body > .ops-modal-backdrop .ops-modal.compact { --dialog-max-width: 560px; }
+body > .modal-backdrop .task-editor-modal { --dialog-max-width: 820px; }
+body > .modal-backdrop .report-modal { --dialog-max-width: 1180px; }
+body > .modal-backdrop .master-modal { --dialog-max-width: 920px; }
+
+.task-editor-modal .form-actions {
+  grid-column: 1 / -1;
 }
 
 @media (max-width: 680px) {
@@ -107,9 +130,8 @@ body > .ops-modal-backdrop .ops-modal.compact {
   body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop, .alert-backdrop) {
     padding: 0 !important;
     align-items: flex-end !important;
-    justify-content: center !important;
     background: #1014238f !important;
-    animation: mobile-backdrop-in 180ms ease-out both;
+    animation: dialog-backdrop-in 180ms ease-out both;
   }
 
   body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop, .alert-backdrop)
@@ -118,10 +140,9 @@ body > .ops-modal-backdrop .ops-modal.compact {
     max-width: 100vw !important;
     height: calc(100dvh - max(10px, env(safe-area-inset-top))) !important;
     max-height: calc(100dvh - max(10px, env(safe-area-inset-top))) !important;
-    margin: 0 !important;
     border-radius: 23px 23px 0 0 !important;
     box-shadow: 0 -18px 55px #090c1c52 !important;
-    animation: mobile-sheet-in 260ms cubic-bezier(.22,.82,.26,1) both;
+    animation: dialog-sheet-in 260ms cubic-bezier(.22,.82,.26,1) both;
   }
 
   body > :is(.modal-backdrop, .ops-modal-backdrop)
@@ -135,7 +156,6 @@ body > .ops-modal-backdrop .ops-modal.compact {
     min-height: 70px !important;
     padding: 20px 62px 11px 16px !important;
     border-radius: 23px 23px 0 0 !important;
-    background: var(--surface, #fff) !important;
   }
 
   body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop)
@@ -152,11 +172,9 @@ body > .ops-modal-backdrop .ops-modal.compact {
   }
 
   body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop)
-    :is(.modal-head, .ops-modal-title, .cg-schedule-dialog > header)
-    > button {
+    :is(.modal-head, .ops-modal-title, .cg-schedule-dialog > header) > button {
     top: 18px !important;
     right: 11px !important;
-    left: auto !important;
   }
 
   body > .modal-backdrop .modal > form,
@@ -164,14 +182,15 @@ body > .ops-modal-backdrop .ops-modal.compact {
   body > .ops-modal-backdrop .form-builder-body,
   body > .ops-modal-backdrop .form-fill-body,
   body > .cg-dialog-backdrop .cg-schedule-dialog > div,
-  body > .alert-backdrop .alert-list {
-    padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important;
+  body > .alert-backdrop .alert-list,
+  body > .modal-backdrop .app-modal-content {
+    flex: 1 1 auto !important;
+    padding-bottom: calc(78px + env(safe-area-inset-bottom)) !important;
     scrollbar-width: thin;
   }
 
   body > :is(.modal-backdrop, .ops-modal-backdrop)
-    > :is(.modal.compact, .ops-modal.compact)
-    > form {
+    > :is(.modal.compact, .ops-modal.compact) > form {
     flex: 0 1 auto !important;
     max-height: calc(88dvh - 70px) !important;
   }
@@ -187,14 +206,24 @@ body > .ops-modal-backdrop .ops-modal.compact {
     :is(.modal-actions, .ops-modal-actions, .form-actions) > button {
     min-height: 46px;
   }
+
+  .task-editor-modal .work-form {
+    grid-template-columns: 1fr !important;
+    padding: 14px !important;
+  }
+
+  .task-editor-modal .work-form .wide,
+  .task-editor-modal .form-actions {
+    grid-column: auto !important;
+  }
 }
 
-@keyframes mobile-backdrop-in {
+@keyframes dialog-backdrop-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-@keyframes mobile-sheet-in {
+@keyframes dialog-sheet-in {
   from { opacity: .75; transform: translateY(28px); }
   to { opacity: 1; transform: translateY(0); }
 }

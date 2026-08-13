@@ -41,7 +41,11 @@ test('every legacy overlay is portaled above page containers', async () => {
     }
   }
   const modalCss = await readFile(new URL('../src/modal-system.css', import.meta.url), 'utf8');
+  const globalCss = await readFile(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.match(modalCss, /body > :is\(\.modal-backdrop/);
   assert.match(modalCss, /overflow-y: auto !important/);
   assert.match(modalCss, /-webkit-overflow-scrolling: touch/);
+  assert.doesNotMatch(modalCss, /flex:\s*1\s+1\s+0\s*!important/);
+  assert.doesNotMatch(globalCss, /Unified commercial modal behavior/);
+  assert.doesNotMatch(globalCss, /One modal contract for the entire product/);
 });
