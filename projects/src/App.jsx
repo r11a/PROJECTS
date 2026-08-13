@@ -88,6 +88,17 @@ import {
   TasksWorkspace,
 } from "./Workspaces";
 import { ProjectWorkspace } from "./ProjectWorkspace";
+
+const projectClassificationOptions = [
+  ["private_house", "בית פרטי"],
+  ["villa", "וילה"],
+  ["cottage", "קוטג׳"],
+  ["penthouse", "פנטהאוז"],
+  ["apartment_building", "בניין משותף"],
+  ["studio", "סטודיו"],
+  ["duplex", "דופלקס"],
+];
+const projectClassificationLabels = Object.fromEntries(projectClassificationOptions);
 import { GanttWorkspace } from "./GanttWorkspace";
 import { MessageCenter } from "./Messages";
 import { AiChat, AiChatBoundary } from "./AiChat";
@@ -2068,7 +2079,7 @@ function ProjectsPage({
                       <div>
                         <strong>{project.name}</strong>
                         <span>
-                          {project.id} · {project.serialCode} · {project.location}
+                          {project.id} · {project.serialCode} · {project.location} · {projectClassificationLabels[project.projectClassification] || "בית פרטי"}
                         </span>
                         {showArchived && (
                           <small className="archived-date">
@@ -2193,6 +2204,7 @@ function BoardView({ projects, openProject }) {
                     {project.location}
                   </small>
                   <div className="systems-mini">
+                    <em>{projectClassificationLabels[project.projectClassification] || "בית פרטי"}</em>
                     {project.systems.slice(0, 2).map((s) => (
                       <em key={s}>{s}</em>
                     ))}
@@ -3026,6 +3038,7 @@ function NewProjectModal({
     clientAddress: "",
     clientCity: "",
     location: "",
+    projectClassification: "private_house",
     managerId: managers[0]?.id || "",
     stage: stageOptions[0]?.metadata?.key || "planning",
     value: "",
@@ -3065,6 +3078,7 @@ function NewProjectModal({
       clientId: client?.id || null,
       newClient,
       location: form.location || client?.city || form.clientCity || "",
+      projectClassification: form.projectClassification,
       address: client?.address || form.clientAddress || form.location,
       lat: 32.08,
       lng: 34.82,
@@ -3124,6 +3138,19 @@ function NewProjectModal({
                 }
                 placeholder="לדוגמה: וילה משפחת ישראלי"
               />
+            </label>
+            <label>
+              סיווג הפרויקט
+              <select
+                value={form.projectClassification}
+                onChange={(event) =>
+                  setForm({ ...form, projectClassification: event.target.value })
+                }
+              >
+                {projectClassificationOptions.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
             </label>
             <div className="client-mode-switch">
               <button
@@ -3289,6 +3316,19 @@ function NewProjectModal({
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="לדוגמה: וילה משפחת ישראלי"
                 />
+              </label>
+              <label>
+                סיווג הפרויקט
+                <select
+                  value={form.projectClassification}
+                  onChange={(event) =>
+                    setForm({ ...form, projectClassification: event.target.value })
+                  }
+                >
+                  {projectClassificationOptions.map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
               </label>
               <div className="client-mode-switch">
                 <button

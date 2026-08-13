@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.1
+
+- Rebuilt the in-project Gantt on a pixel-based timeline with day, week and month zoom, readable minimum task widths, full labels, dependency lines and mobile horizontal navigation.
+- Added persistent project classification across the database, project wizard, project editing, overview attributes, table view and board cards.
+- Added built-in classifications for private house, villa, cottage, penthouse, apartment building, studio and duplex.
+
 ## 0.14.0
 
 - Added a portfolio Gantt workspace grouped by project, with zoom levels, critical tasks, milestones, assignees, live updates and mobile horizontal navigation.

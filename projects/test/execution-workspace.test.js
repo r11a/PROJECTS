@@ -27,6 +27,19 @@ test('portfolio Gantt exposes critical tasks and dependency connectors', async (
   assert.match(gantt, /לוח גאנט לכל הפרויקטים/);
 });
 
+test('project Gantt keeps short tasks readable and projects persist classification', async () => {
+  const workspace = await read('../src/ProjectWorkspace.jsx');
+  const app = await read('../src/App.jsx');
+  const migration = await read('../migrations/018_project_classification.sql');
+  const server = await read('../server/index.js');
+  assert.match(workspace, /pixelsPerDay/);
+  assert.match(workspace, /Math\.max\(118, duration \* zoomConfig\.pixelsPerDay\)/);
+  assert.match(workspace, /project-gantt-actions/);
+  assert.match(app, /projectClassificationOptions/);
+  assert.match(migration, /project_classification/);
+  assert.match(server, /projectClassification: 'project_classification'/);
+});
+
 test('proprietary release is explicitly unlicensed for npm reuse', async () => {
   const packageJson = JSON.parse(await read('../package.json'));
   const license = await read('../../LICENSE');

@@ -92,7 +92,7 @@ const projectColumns = [
   'id', 'name', 'client', 'location', 'address', 'lat', 'lng', 'stage', 'progress', 'manager',
   'owner_initials', 'value', 'paid', 'due', 'priority', 'flag', 'systems', 'next_milestone',
   'phone', 'email', 'health', 'tasks_done', 'tasks_total', 'manager_professional_id', 'client_id',
-  'project_size', 'contractor_progress', 'document_folder',
+  'project_size', 'contractor_progress', 'document_folder', 'project_classification',
 ];
 const inputToColumn = {
   id: 'id', name: 'name', client: 'client', location: 'location', address: 'address', lat: 'lat', lng: 'lng',
@@ -103,6 +103,7 @@ const inputToColumn = {
   managerId: 'manager_professional_id',
   clientId: 'client_id',
   projectSize: 'project_size', contractorProgress: 'contractor_progress', documentFolder:'document_folder',
+  projectClassification: 'project_classification',
 };
 const STAGE_PROGRESS = { waiting:0,mobilization:9,infrastructure:18,threading:27,electrician_threading:36,threading_done:45,installation_a:55,installation_b:65,installation_c:75,activation_programming:85,finishes:93,post_delivery:100 };
 
@@ -120,6 +121,7 @@ function projectFromRow(row) {
     tasksDone: Number(row.tasks_done), tasksTotal: Number(row.tasks_total), managerId: row.manager_professional_id, clientId: row.client_id,
     archived: Boolean(row.archived_at), archivedAt: row.archived_at, archivedBy: row.archived_by,
     projectSize: row.project_size || 'medium', contractorProgress: row.contractor_progress || 'waiting', documentFolder:row.document_folder || '',
+    projectClassification: row.project_classification || 'private_house',
   };
 }
 
@@ -184,7 +186,7 @@ async function seedDatabase() {
   if (count.rows[0].count > 0) return;
   for (const project of seedProjects) {
     const legacyStages = { planning:'waiting',installation:'installation_b',programming:'activation_programming',handover:'finishes',completed:'post_delivery' };
-    const seededProject = { projectSize:'medium', contractorProgress:'waiting', ...project, stage:legacyStages[project.stage] || project.stage };
+    const seededProject = { projectSize:'medium', contractorProgress:'waiting', documentFolder:'', projectClassification:'private_house', ...project, stage:legacyStages[project.stage] || project.stage };
     seededProject.progress = STAGE_PROGRESS[seededProject.stage] ?? seededProject.progress;
     const values = projectColumns.map((column) => {
       const inputKey = Object.keys(inputToColumn).find((key) => inputToColumn[key] === column);
@@ -392,7 +394,8 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
     paid: request.body.paid ?? 0, due: request.body.due || '', priority: request.body.priority || 'normal', flag: request.body.flag || '',
     systems: request.body.systems || [], nextMilestone: request.body.nextMilestone || 'אפיון ראשוני', phone: request.body.phone || selectedClient.phone || '',
     email: request.body.email || selectedClient.email || '', health: request.body.health ?? 100, tasksDone: request.body.tasksDone ?? 0, tasksTotal: request.body.tasksTotal ?? 0,
-    managerId: request.body.managerId || null, clientId: selectedClient.id, projectSize: request.body.projectSize || 'medium', contractorProgress: request.body.contractorProgress || 'waiting',
+    managerId: request.body.managerId || null, clientId: selectedClient.id, projectSize: request.body.projectSize || 'medium', contractorProgress: request.body.contractorProgress || 'waiting', documentFolder: request.body.documentFolder || '',
+    projectClassification: request.body.projectClassification || 'private_house',
     };
     const values = Object.keys(inputToColumn).map((key) => key === 'systems' ? JSON.stringify(project[key]) : project[key]);
     const columns = Object.values(inputToColumn);

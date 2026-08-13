@@ -35,6 +35,15 @@ const money = new Intl.NumberFormat("he-IL", {
 });
 const dateText = (value) =>
   value ? new Date(value).toLocaleDateString("he-IL") : "ללא תאריך";
+const projectClassificationOptions = [
+  ["private_house", "בית פרטי"],
+  ["villa", "וילה"],
+  ["cottage", "קוטג׳"],
+  ["penthouse", "פנטהאוז"],
+  ["apartment_building", "בניין משותף"],
+  ["studio", "סטודיו"],
+  ["duplex", "דופלקס"],
+];
 
 function Modal({ title, onClose, children }) {
   return (
@@ -243,6 +252,7 @@ export function ProjectWorkspace({
       nextMilestone: f.get("nextMilestone"),
       priority: f.get("priority"),
       flag: f.get("flag"),
+      projectClassification: f.get("projectClassification"),
     };
     if (editClientMode === "new")
       patch.newClient = {
@@ -1194,6 +1204,14 @@ function ProjectEditModal({
           </>
         )}
         <label>
+          סיווג הפרויקט
+          <select name="projectClassification" defaultValue={project.projectClassification || "private_house"}>
+            {projectClassificationOptions.map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <label>
           מיקום / עיר הפרויקט
           <input name="location" defaultValue={project.location} />
         </label>
@@ -1266,6 +1284,19 @@ function ProjectAttributesPanel({ project, updateProject, api, setNotice }) {
   ];
   return (
     <section className="panel project-attributes">
+      <label>
+        סיווג הפרויקט
+        <select
+          value={project.projectClassification || "private_house"}
+          onChange={(event) =>
+            updateProject(project.id, { projectClassification: event.target.value })
+          }
+        >
+          {projectClassificationOptions.map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+      </label>
       <label>
         גודל הפרויקט
         <select
@@ -1497,6 +1528,7 @@ function GoogleAddressField({ project, api, updateProject, setNotice }) {
 }
 
 function ProjectGantt({ tasks, milestones }) {
+  const [zoom, setZoom] = useState("week");
   const items = [
     ...tasks.map((item) => ({
       ...item,
@@ -1528,7 +1560,33 @@ function ProjectGantt({ tasks, milestones }) {
   const min = Math.min(...starts);
   const max = Math.max(...ends, min + 86400000);
   const span = Math.max(1, (max - min) / 86400000 + 1);
-  const dependencyLines=items.flatMap((item,targetIndex)=>{if(item.kind!=="task"||!item.dependency_task_id)return[];const sourceIndex=items.findIndex(candidate=>candidate.kind==="task"&&String(candidate.id)===String(item.dependency_task_id));if(sourceIndex<0)return[];const source=items[sourceIndex];const sourceX=Math.max(0,Math.min(100,((new Date(source.end).setHours(0,0,0,0)-min)/86400000+1)/span*100));const targetX=Math.max(0,Math.min(100,((new Date(item.start).setHours(0,0,0,0)-min)/86400000)/span*100));const sourceY=(sourceIndex+.5)/items.length*100,targetY=(targetIndex+.5)/items.length*100,midX=(sourceX+targetX)/2;return[{id:`${source.id}-${item.id}`,d:`M ${sourceX} ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${targetX} ${targetY}`}];});
+  const zoomConfig = {
+    day: { pixelsPerDay: 92, tickDays: 1, label: "יום" },
+    week: { pixelsPerDay: 34, tickDays: 7, label: "שבוע" },
+    month: { pixelsPerDay: 13, tickDays: 30, label: "חודש" },
+  }[zoom];
+  const trackWidth = Math.max(820, Math.ceil(span * zoomConfig.pixelsPerDay));
+  const tickCount = Math.floor((span - 1) / zoomConfig.tickDays) + 1;
+  const ticks = Array.from({ length: tickCount }, (_, index) => {
+    const day = Math.min(span - 1, index * zoomConfig.tickDays);
+    return { day, date: new Date(min + day * 86400000) };
+  });
+  const dependencyLines = items.flatMap((item, targetIndex) => {
+    if (item.kind !== "task" || !item.dependency_task_id) return [];
+    const sourceIndex = items.findIndex(
+      (candidate) => candidate.kind === "task" && String(candidate.id) === String(item.dependency_task_id),
+    );
+    if (sourceIndex < 0) return [];
+    const source = items[sourceIndex];
+    const sourceDay = (new Date(source.end).setHours(0, 0, 0, 0) - min) / 86400000 + 1;
+    const targetDay = (new Date(item.start).setHours(0, 0, 0, 0) - min) / 86400000;
+    const sourceX = trackWidth - Math.min(trackWidth, sourceDay * zoomConfig.pixelsPerDay);
+    const targetX = trackWidth - Math.min(trackWidth, targetDay * zoomConfig.pixelsPerDay);
+    const sourceY = sourceIndex * 64 + 32;
+    const targetY = targetIndex * 64 + 32;
+    const midX = (sourceX + targetX) / 2;
+    return [{ id: `${source.id}-${item.id}`, d: `M ${sourceX} ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${targetX} ${targetY}` }];
+  });
   return (
     <section className="panel gantt-board">
       <header>
@@ -1539,22 +1597,24 @@ function ProjectGantt({ tasks, milestones }) {
             דרך
           </p>
         </div>
-        <span>מתעדכן מהמשימות</span>
+        <div className="project-gantt-actions" aria-label="רמת תצוגת הגאנט">
+          {[["day", "יום"], ["week", "שבוע"], ["month", "חודש"]].map(([value, label]) => (
+            <button key={value} type="button" className={zoom === value ? "active" : ""} onClick={() => setZoom(value)}>
+              {label}
+            </button>
+          ))}
+        </div>
       </header>
-      <div className="gantt-scale">
-        {Array.from({ length: Math.min(8, Math.ceil(span)) }, (_, index) => (
-          <span key={index}>
-            {new Date(
-              min +
-                (index / (Math.min(8, Math.ceil(span)) - 1 || 1)) *
-                  span *
-                  86400000,
-            ).toLocaleDateString("he-IL", { day: "numeric", month: "short" })}
-          </span>
-        ))}
-      </div>
-      <div className="gantt-rows">
-        {dependencyLines.length>0&&<svg className="gantt-dependencies" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="קווי תלות בין משימות"><defs><marker id="gantt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>{dependencyLines.map(line=><path key={line.id} d={line.d} markerEnd="url(#gantt-arrow)"/>)}</svg>}
+      <div className="project-gantt-viewport">
+        <div className="gantt-scale" style={{ width: trackWidth }}>
+          {ticks.map(({ day, date }) => (
+            <span key={day} style={{ right: day * zoomConfig.pixelsPerDay }}>
+              {date.toLocaleDateString("he-IL", { day: "numeric", month: "short" })}
+            </span>
+          ))}
+        </div>
+        <div className="gantt-rows" style={{ width: trackWidth + 240 }}>
+        {dependencyLines.length > 0 && <svg className="gantt-dependencies" width={trackWidth} height={items.length * 64} viewBox={`0 0 ${trackWidth} ${items.length * 64}`} preserveAspectRatio="none" aria-label="קווי תלות בין משימות"><defs><marker id="gantt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>{dependencyLines.map(line => <path key={line.id} d={line.d} markerEnd="url(#gantt-arrow)" />)}</svg>}
         {items.map((item) => {
           const start =
             (new Date(item.start).setHours(0, 0, 0, 0) - min) / 86400000;
@@ -1565,6 +1625,11 @@ function ProjectGantt({ tasks, milestones }) {
               86400000 +
               1,
           );
+          const startPixels = start * zoomConfig.pixelsPerDay;
+          const availableWidth = Math.max(22, trackWidth - startPixels);
+          const barWidth = item.kind === "milestone"
+            ? 20
+            : Math.min(availableWidth, Math.max(118, duration * zoomConfig.pixelsPerDay));
           return (
             <article key={`${item.kind}-${item.id}`}>
               <div>
@@ -1574,23 +1639,31 @@ function ProjectGantt({ tasks, milestones }) {
                     ? "אבן דרך"
                     : item.assignee_name || "ללא אחראי"}
                 </small>
+                <em>{dateText(item.start)} — {dateText(item.end)}</em>
               </div>
-              <div className="gantt-track">
+              <div className="gantt-track" style={{ width: trackWidth }}>
                 <i
                   className={`${item.kind} ${item.critical ? "critical" : ""}`}
                   style={{
-                    "--start": `${(start / span) * 100}%`,
-                    "--width": `${(duration / span) * 100}%`,
+                    "--start": `${startPixels}px`,
+                    "--width": `${barWidth}px`,
                     "--bar": item.color,
                   }}
                 >
-                  <span>{item.kind === "milestone" ? "◆" : item.critical ? "משימה קריטית" : ""}</span>
+                  <span>{item.kind === "milestone" ? "◆" : item.critical ? `משימה קריטית · ${item.title}` : item.title}</span>
                 </i>
               </div>
             </article>
           );
         })}
+        </div>
       </div>
+      <footer className="project-gantt-legend">
+        <span><i className="planned" />משימה פעילה</span>
+        <span><i className="done" />הושלמה</span>
+        <span><i className="critical" />משימה קריטית</span>
+        <small>תצוגת {zoomConfig.label} · ניתן לגלול אופקית</small>
+      </footer>
     </section>
   );
 }
