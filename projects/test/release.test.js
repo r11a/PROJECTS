@@ -49,3 +49,41 @@ test('every legacy overlay is portaled above page containers', async () => {
   assert.doesNotMatch(globalCss, /Unified commercial modal behavior/);
   assert.doesNotMatch(globalCss, /One modal contract for the entire product/);
 });
+
+test('message sound is personal, realtime and ignores the initial message load', async () => {
+  const [app, operational, server, migration] = await Promise.all([
+    readFile(new URL('../src/App.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/Operational.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../server/operational.js', import.meta.url), 'utf8'),
+    readFile(new URL('../migrations/026_message_sound_preference.sql', import.meta.url), 'utf8'),
+  ]);
+  assert.match(app, /messageListInitialized/);
+  assert.match(app, /table === "user_messages"/);
+  assert.match(app, /senderId.*user\.id/);
+  assert.match(app, /messageSoundEnabled === false/);
+  assert.match(operational, /preferences\/message-sound/);
+  assert.match(server, /router\.patch\('\/preferences\/message-sound'/);
+  assert.match(migration, /message_sound_enabled BOOLEAN NOT NULL DEFAULT TRUE/);
+});
+
+test('document library opens an in-app responsive viewer', async () => {
+  const [workspace, css] = await Promise.all([
+    readFile(new URL('../src/FormsWorkspace.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/forms-workspace.css', import.meta.url), 'utf8'),
+  ]);
+  assert.match(workspace, /function DocumentViewer/);
+  assert.match(workspace, /documents\/\$\{file\.id\}\/preview/);
+  assert.match(workspace, /application\/pdf/);
+  assert.match(css, /\.document-viewer-modal/);
+  assert.match(css, /height:100dvh/);
+});
+
+test('workspace failures are isolated and reported without replacing navigation', async () => {
+  const [app, server] = await Promise.all([
+    readFile(new URL('../src/App.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../server/operational.js', import.meta.url), 'utf8'),
+  ]);
+  assert.match(app, /class WorkspaceErrorBoundary extends Component/);
+  assert.match(app, /api\("\/ui-errors"/);
+  assert.match(server, /router\.post\('\/ui-errors'/);
+});

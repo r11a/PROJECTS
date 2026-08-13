@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -139,6 +139,42 @@ const actionNamesForDashboard = {
   snooze: "דחה התראה",
   backup: "יצר גיבוי",
 };
+
+class WorkspaceErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.error("PROJECTS workspace failure", error, info);
+    api("/ui-errors", {
+      method: "POST",
+      body: JSON.stringify({
+        message: String(error?.message || "Unknown UI error").slice(0, 500),
+        stack: String(error?.stack || "").slice(0, 6000),
+        componentStack: String(info?.componentStack || "").slice(0, 6000),
+        page: this.props.page,
+        path: window.location.href.slice(0, 1000),
+        userAgent: navigator.userAgent.slice(0, 500),
+      }),
+    }).catch(() => {});
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <section className="workspace-error" dir="rtl">
+        <AlertTriangle size={34} />
+        <h2>המסך נתקל בתקלה נקודתית</h2>
+        <p>שאר המערכת ממשיכה לפעול. אפשר לנסות לפתוח מחדש את המסך בלי לרענן את כל האפליקציה.</p>
+        <button type="button" className="primary-button" onClick={() => this.setState({ error: null })}>פתיחה מחדש</button>
+        <details><summary>פרטי תקלה</summary><code>{String(this.state.error?.message || "Unknown UI error")}</code></details>
+      </section>
+    );
+  }
+}
 // Vite loads this bundle from <application base>/assets/. Deriving the base
 // from the bundle URL works whether the Ingress page URL ends with a slash or
 // not, and also keeps the standalone interface rooted at /.
@@ -266,6 +302,9 @@ function App() {
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [aiChatOpen, setAiChatOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const messageAudioContext = useRef(null);
+  const newestIncomingMessageId = useRef(null);
+  const messageListInitialized = useRef(false);
   const [openTasksCount, setOpenTasksCount] = useState(0);
   const [configuration, setConfiguration] = useState({
     settings: {},
@@ -333,6 +372,28 @@ function App() {
         setOpenTasksCount(count);
         return count;
       });
+  const playIncomingMessageSound = () => {
+    if (user?.messageSoundEnabled === false) return;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const context = messageAudioContext.current || new AudioContext();
+    messageAudioContext.current = context;
+    if (context.state !== "running") return;
+    const now = context.currentTime;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.035, now + 0.018);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+    gain.connect(context.destination);
+    [660, 880].forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+      oscillator.connect(gain);
+      oscillator.start(now + index * 0.08);
+      oscillator.stop(now + 0.32 + index * 0.08);
+    });
+  };
   const uploadCurrentUserAvatar = async (file) => {
     if (!file) return;
     try {
@@ -416,17 +477,48 @@ function App() {
   }, [notice]);
   useEffect(() => {
     if (!user) return undefined;
+    const unlock = () => {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext || user.messageSoundEnabled === false) return;
+      const context = messageAudioContext.current || new AudioContext();
+      messageAudioContext.current = context;
+      context.resume().catch(() => {});
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [user?.id, user?.messageSoundEnabled]);
+  useEffect(() => {
+    if (!user) return undefined;
     const load = () =>
       api("/messages")
-        .then((result) => setUnreadMessages(result.unread))
+        .then((result) => {
+          setUnreadMessages(result.unread);
+          const incoming = result.messages.find(
+            (message) => String(message.recipientId) === String(user.id) && String(message.senderId) !== String(user.id),
+          );
+          const incomingId = incoming ? Number(incoming.id) : null;
+          if (messageListInitialized.current && incomingId && incomingId > Number(newestIncomingMessageId.current || 0)) {
+            playIncomingMessageSound();
+          }
+          newestIncomingMessageId.current = incomingId;
+          messageListInitialized.current = true;
+        })
         .catch(() => {});
     load();
     const live = (event) => {
       if (event.detail?.table === "user_messages") load();
     };
     window.addEventListener("projects:live-change", live);
-    return () => window.removeEventListener("projects:live-change", live);
-  }, [user?.id]);
+    return () => {
+      window.removeEventListener("projects:live-change", live);
+      messageListInitialized.current = false;
+      newestIncomingMessageId.current = null;
+    };
+  }, [user?.id, user?.messageSoundEnabled]);
   useEffect(() => {
     if (!user) return undefined;
     const refresh = () => loadInsights(false).catch(() => {});
@@ -934,6 +1026,7 @@ function App() {
           </div>
         </header>
 
+        <WorkspaceErrorBoundary key={`${page}:${selectedProject?.id || ""}`} page={page}>
         <div className="page-content">
           {page === "dashboard" && (
             <Dashboard
@@ -1052,6 +1145,7 @@ function App() {
             />
           )}
         </div>
+        </WorkspaceErrorBoundary>
       </main>
       {newProjectOpen && (
         <NewProjectModal

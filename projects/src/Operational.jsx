@@ -53,6 +53,8 @@ import {
   UserRound,
   Sun,
   Users,
+  Volume2,
+  VolumeX,
   X,
   Zap,
 } from "lucide-react";
@@ -3285,8 +3287,10 @@ function AppearanceSettings({
   setNotice,
 }) {
   const [theme, setTheme] = useState(initialTheme);
+  const [messageSound, setMessageSound] = useState(user.messageSoundEnabled !== false);
   const [saving, setSaving] = useState("");
   useEffect(() => setTheme(initialTheme), [initialTheme]);
+  useEffect(() => setMessageSound(user.messageSoundEnabled !== false), [user.messageSoundEnabled]);
   const choices = [
     ["light", "בהיר", "המראה הנוכחי של PROJECTS", Sun],
     ["dark", "כהה", "שחור, אפור וגרניט עם טקסט בהיר", Moon],
@@ -3303,6 +3307,24 @@ function AppearanceSettings({
       setTheme(result.appearanceTheme);
       onUserChanged({ ...user, appearanceTheme: result.appearanceTheme });
       setNotice("הגדרת המראה נשמרה והוחלה");
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setSaving("");
+    }
+  };
+  const toggleMessageSound = async () => {
+    if (saving) return;
+    const enabled = !messageSound;
+    setSaving("message-sound");
+    try {
+      const result = await api("/preferences/message-sound", {
+        method: "PATCH",
+        body: JSON.stringify({ enabled }),
+      });
+      setMessageSound(result.messageSoundEnabled);
+      onUserChanged({ ...user, messageSoundEnabled: result.messageSoundEnabled });
+      setNotice(result.messageSoundEnabled ? "צליל הודעות הופעל" : "צליל הודעות הושתק");
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -3355,6 +3377,14 @@ function AppearanceSettings({
             )}
           </button>
         ))}
+      </div>
+      <div className="personal-notification-setting">
+        <span>{messageSound ? <Volume2 size={21} /> : <VolumeX size={21} />}</span>
+        <div>
+          <strong>צליל עדין להודעה חדשה</strong>
+          <small>יופעל רק כשהודעה חדשה מתקבלת ממשתמש אחר. הבחירה אישית למשתמש זה.</small>
+        </div>
+        <button type="button" role="switch" aria-checked={messageSound} className={messageSound ? "active" : ""} onClick={toggleMessageSound} disabled={Boolean(saving)}><i /></button>
       </div>
       <footer>
         <Moon size={17} />

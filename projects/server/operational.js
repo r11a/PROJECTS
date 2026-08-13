@@ -132,6 +132,28 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     response.json({ appearanceTheme: result.rows[0].appearance_theme });
   });
 
+  router.patch('/preferences/message-sound', async (request, response) => {
+    if (typeof request.body?.enabled !== 'boolean') return response.status(400).json({ error: 'הגדרת הצליל אינה תקינה' });
+    const result = await pool.query('UPDATE users SET message_sound_enabled=$1,updated_at=NOW() WHERE id=$2 RETURNING message_sound_enabled', [request.body.enabled, request.user.id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'המשתמש אינו זמין' });
+    await audit(request, 'update', 'user_preference', String(request.user.id), { messageSoundEnabled: request.body.enabled });
+    response.json({ messageSoundEnabled: result.rows[0].message_sound_enabled });
+  });
+
+  router.post('/ui-errors', async (request, response) => {
+    const details = {
+      message: String(request.body?.message || 'Unknown UI error').slice(0, 500),
+      stack: String(request.body?.stack || '').slice(0, 6000),
+      componentStack: String(request.body?.componentStack || '').slice(0, 6000),
+      page: String(request.body?.page || '').slice(0, 80),
+      path: String(request.body?.path || '').slice(0, 1000),
+      userAgent: String(request.body?.userAgent || '').slice(0, 500),
+    };
+    console.error('PROJECTS UI error', { userId: request.user.id, ...details });
+    await audit(request, 'error', 'frontend', details.page || 'unknown', details);
+    response.status(204).end();
+  });
+
   router.get('/address-search', async (request,response) => {
     const query=String(request.query.q||'').trim();if(query.length<3)return response.json({addresses:[]});
     try{response.json({addresses:await geocoder.search(query,6),provider:'photon'});}catch(error){console.error('Photon address search failed',error.message);response.json({addresses:[],provider:'photon',unavailable:true});}
