@@ -333,6 +333,19 @@ function App() {
         setOpenTasksCount(count);
         return count;
       });
+  const uploadCurrentUserAvatar = async (file) => {
+    if (!file) return;
+    try {
+      const body = new FormData();
+      body.set("avatar", file);
+      const result = await api("/auth/avatar", { method: "POST", body });
+      setUser(result.user);
+      await loadReferenceData();
+      setNotice("תמונת המשתמש עודכנה בסרגל");
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
   const loadInsights = async (force = false) => {
     setInsightsRefreshing(true);
     try {
@@ -793,13 +806,15 @@ function App() {
             <b>v{packageJson.version}</b>
           </div>
           <div className="user-card">
-            <div
+            <label
               className={`avatar user-photo-avatar ${user.avatarImage ? "has-photo" : ""}`}
               style={{ background: user.avatarColor, color: "#fff", "--avatar-color": user.avatarColor }}
+              title="העלאה או החלפה של תמונת המשתמש"
             >
               {avatarGlyph(user)}
               <span />
-            </div>
+              <input type="file" accept="image/*" onChange={(event) => { uploadCurrentUserAvatar(event.target.files?.[0]); event.target.value = ""; }} />
+            </label>
             <div>
               <strong>{user.displayName}</strong>
               <span>{roleLabels[user.role]}</span>

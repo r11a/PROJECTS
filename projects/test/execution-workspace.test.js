@@ -71,6 +71,7 @@ test('project time reporting keeps targets in project setup and actual hours in 
   const server = await read('../server/index.js');
   const migration = await read('../migrations/021_task_avatars_project_hours.sql');
   const avatarLiveMigration = await read('../migrations/022_user_avatar_live_updates.sql');
+  const avatarRecoveryMigration = await read('../migrations/023_recover_merged_user_avatars.sql');
   for (const token of ['installationHoursTarget','programmingHoursTarget']) {
     assert.match(app,new RegExp(token));
     assert.match(projectWorkspace,new RegExp(token));
@@ -81,6 +82,10 @@ test('project time reporting keeps targets in project setup and actual hours in 
   assert.match(app,/onChanged=\{refreshCurrentUser\}/);
   assert.match(app,/onChanged\?\.\(result\.user\)/);
   assert.match(avatarLiveMigration,/CREATE TRIGGER projects_live_change[\s\S]*ON users/);
+  assert.match(app,/uploadCurrentUserAvatar/);
+  assert.match(server,/post\('\/api\/auth\/avatar'/);
+  assert.match(server,/avatar_image=COALESCE\(NULLIF\(avatar_image,''\),NULLIF\(\$7,''\),''\)/);
+  assert.match(avatarRecoveryMigration,/merged_into_user_id = primary_user\.id/);
   assert.match(projectWorkspace,/openRequest/);
   assert.doesNotMatch(projectWorkspace,/setTargetsOpen/);
   assert.match(operations,/project_time_entries/);

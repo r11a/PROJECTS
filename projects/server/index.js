@@ -547,8 +547,9 @@ app.post('/api/users/merge-identities', authenticate, requireRoles('admin'), asy
     await db.query('UPDATE users SET username=NULL,password_hash=NULL,ha_user_id=NULL,active=FALSE,merged_into_user_id=$1,updated_at=NOW() WHERE id=$2',[primaryUserId,secondaryUserId]);
     await db.query(`UPDATE users SET
       username=COALESCE(username,$2),password_hash=COALESCE(password_hash,$3),ha_user_id=COALESCE(ha_user_id,$4),
-      last_seen_at=GREATEST(last_seen_at,$5),last_login_at=GREATEST(last_login_at,$6),updated_at=NOW()
-      WHERE id=$1`,[primaryUserId,secondary.username,secondary.password_hash,secondary.ha_user_id,secondary.last_seen_at,secondary.last_login_at]);
+      last_seen_at=GREATEST(last_seen_at,$5),last_login_at=GREATEST(last_login_at,$6),
+      avatar_image=COALESCE(NULLIF(avatar_image,''),NULLIF($7,''),''),updated_at=NOW()
+      WHERE id=$1`,[primaryUserId,secondary.username,secondary.password_hash,secondary.ha_user_id,secondary.last_seen_at,secondary.last_login_at,secondary.avatar_image]);
     if (!primaryProfessional && secondaryProfessional) await db.query('UPDATE professionals SET linked_user_id=$1 WHERE id=$2',[primaryUserId,secondaryProfessional.id]);
     await db.query('UPDATE user_messages SET sender_id=$1 WHERE sender_id=$2',[primaryUserId,secondaryUserId]);
     await db.query('UPDATE user_messages SET recipient_id=$1 WHERE recipient_id=$2',[primaryUserId,secondaryUserId]);
@@ -608,14 +609,31 @@ const userAvatarUpload = multer({
   fileFilter: (_request, file, callback) => callback(file.mimetype.startsWith('image/') ? null : new Error('יש לבחור קובץ תמונה'), file.mimetype.startsWith('image/')),
 });
 
+async function storeUserAvatar(userId, file) {
+  const current = await pool.query('SELECT avatar_image FROM users WHERE id=$1 AND merged_into_user_id IS NULL', [userId]);
+  if (!current.rowCount) {
+    await unlink(file.path).catch(() => {});
+    return null;
+  }
+  const result = await pool.query('UPDATE users SET avatar_image=$1,updated_at=NOW() WHERE id=$2 RETURNING *', [file.filename, userId]);
+  if (current.rows[0].avatar_image) await unlink(path.join(userAvatarDir, current.rows[0].avatar_image)).catch(() => {});
+  return result.rows[0];
+}
+
+app.post('/api/auth/avatar', authenticate, userAvatarUpload.single('avatar'), async (request, response) => {
+  if (!request.file) return response.status(400).json({ error: 'יש לבחור תמונה' });
+  const row = await storeUserAvatar(request.user.id, request.file);
+  if (!row) return response.status(404).json({ error: 'המשתמש לא נמצא' });
+  await audit(request, 'update_avatar', 'user', String(request.user.id), { selfService:true });
+  response.json({ user:publicUser(row) });
+});
+
 app.post('/api/users/:id/avatar', authenticate, requireRoles('admin'), userAvatarUpload.single('avatar'), async (request, response) => {
   if (!request.file) return response.status(400).json({ error: 'יש לבחור תמונה' });
-  const current = await pool.query('SELECT avatar_image FROM users WHERE id=$1', [request.params.id]);
-  if (!current.rowCount) { await unlink(request.file.path).catch(() => {}); return response.status(404).json({ error: 'המשתמש לא נמצא' }); }
-  const result = await pool.query('UPDATE users SET avatar_image=$1,updated_at=NOW() WHERE id=$2 RETURNING *', [request.file.filename, request.params.id]);
-  if (current.rows[0].avatar_image) await unlink(path.join(userAvatarDir, current.rows[0].avatar_image)).catch(() => {});
+  const row = await storeUserAvatar(request.params.id, request.file);
+  if (!row) return response.status(404).json({ error: 'המשתמש לא נמצא' });
   await audit(request, 'update_avatar', 'user', request.params.id);
-  response.json({ user: publicUser(result.rows[0]) });
+  response.json({ user: publicUser(row) });
 });
 
 app.delete('/api/users/:id/avatar', authenticate, requireRoles('admin'), async (request, response) => {
@@ -627,7 +645,11 @@ app.delete('/api/users/:id/avatar', authenticate, requireRoles('admin'), async (
 });
 
 app.get('/api/users/:id/avatar', authenticate, async (request, response) => {
-  const result = await pool.query('SELECT avatar_image FROM users WHERE id=$1 AND merged_into_user_id IS NULL', [request.params.id]);
+  const result = await pool.query(`SELECT COALESCE(NULLIF(users.avatar_image,''),(
+    SELECT NULLIF(merged.avatar_image,'') FROM users merged
+    WHERE merged.merged_into_user_id=users.id AND merged.avatar_image<>''
+    ORDER BY merged.updated_at DESC LIMIT 1
+  ),'') avatar_image FROM users WHERE id=$1 AND merged_into_user_id IS NULL`, [request.params.id]);
   if (!result.rowCount || !result.rows[0].avatar_image) return response.status(404).end();
   response.sendFile(path.join(userAvatarDir, path.basename(result.rows[0].avatar_image)));
 });
