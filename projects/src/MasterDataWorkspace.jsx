@@ -19,8 +19,8 @@ import {
   Upload,
   UserRound,
   Users,
-  X,
 } from "lucide-react";
+import { AppModal } from "./AppModal";
 
 const emptyProfessional = {
   displayName: "",
@@ -1103,25 +1103,7 @@ function DocumentUpload({
 }
 
 function Modal({ title, subtitle, onClose, children }) {
-  return (
-    <div
-      className="ops-modal-backdrop"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <section className="ops-modal master-modal">
-        <header>
-          <div>
-            <h3>{title}</h3>
-            <p>{subtitle}</p>
-          </div>
-          <button onClick={onClose}>
-            <X size={20} />
-          </button>
-        </header>
-        {children}
-      </section>
-    </div>
-  );
+  return <AppModal title={title} subtitle={subtitle} onClose={onClose} className="master-modal">{children}</AppModal>;
 }
 function EmptyState({ icon: Icon, title, text }) {
   return (

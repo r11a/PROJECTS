@@ -17,7 +17,6 @@ import {
   Trash2,
   TrendingUp,
   UserRound,
-  X,
 } from "lucide-react";
 import {
   Area,
@@ -35,6 +34,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { AppModal } from "./AppModal";
 
 const money = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -103,23 +103,30 @@ function EmptyState({ icon: Icon, title, text, action, onAction }) {
 }
 
 function Modal({ title, subtitle, onClose, children, className = "" }) {
+  return <AppModal title={title} subtitle={subtitle} onClose={onClose} className={className}>{children}</AppModal>;
+}
+
+function AiReportContent({ text }) {
+  const normalized = String(text || "")
+    .replace(/\*\*([^*]+)\*\*/g, "\n$1:\n")
+    .replace(/(^|\s)#{1,4}\s*/g, "\n")
+    .replace(/(^|\s)\d+[.)]\s+/g, "\n")
+    .replace(/[•▪]/g, "\n")
+    .replace(/\*\*/g, "");
+  const lines = normalized
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^#{1,4}\s*/, "").replace(/^[-*•]\s*/, ""));
+  if (!lines.length) return null;
   return (
-    <div className={`modal-backdrop ${className ? `${className}-backdrop` : ""}`.trim()} onMouseDown={onClose}>
-      <div
-        className={`modal work-modal ${className}`.trim()}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="modal-head">
-          <div>
-            <span>{subtitle}</span>
-            <h2>{title}</h2>
-          </div>
-          <button onClick={onClose}>
-            <X />
-          </button>
-        </div>
-        {children}
-      </div>
+    <div className="ai-report-copy">
+      {lines.slice(0, 14).map((line, index) => {
+        const heading = /[:：]$/.test(line) || /^(תקציר|חריגים|חסמים|החלטות|פעולות|סיכונים|המלצות)/.test(line);
+        return heading
+          ? <h3 key={`${line}-${index}`}>{line.replace(/[:：]$/, "")}</h3>
+          : <p key={`${line}-${index}`}><i />{line}</p>;
+      })}
     </div>
   );
 }
@@ -972,6 +979,15 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
   const [aiReportOpen,setAiReportOpen]=useState(false);
   const [aiPrompt,setAiPrompt]=useState("הכן דוח לישיבת ניהול פרויקטים: חריגים, חסמים, משימות באיחור, גבייה והחלטות נדרשות");
   const [aiReportText,setAiReportText]=useState("");
+  const [presentationOpen,setPresentationOpen]=useState(false);
+  const [presentationStep,setPresentationStep]=useState(1);
+  const [presentationOptions,setPresentationOptions]=useState({
+    title:"ישיבת ניהול פרויקטים",
+    riskThreshold:50,
+    maxItems:7,
+    projectIds:[],
+    sections:{overview:true,risks:true,managers:true,systems:true,finance:true,decisions:true},
+  });
   const reportRef = useRef(null);
   const loadReports = (silent = false) => {
     setReportError("");
@@ -1088,20 +1104,21 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
   };
   const generateAiReport=async(event)=>{
     event.preventDefault();setGenerating(true);
-    try{const job=await api('/ai/chat',{method:'POST',body:JSON.stringify({question:`הכן דוח ניהולי מקצועי בעברית על סמך נתוני PROJECTS. כלול תקציר מנהלים, חריגים, חסמים, החלטות ופעולות. דרישת המשתמש: ${aiPrompt}`})});let result=job;for(let attempt=0;attempt<90&&result.status==='working';attempt++){await new Promise(resolve=>setTimeout(resolve,1000));result=await api(`/ai/chat/${job.jobId}`)}if(!result.answer)throw new Error('הסוכן לא החזיר דוח');setAiReportText(result.answer);setReportType('management');setAiReportOpen(false);setWizardOpen(true);setNotice('דוח AI הוכן ומוכן לעיון ולהפקה');}catch(error){setNotice(error.message)}finally{setGenerating(false)}
+    try{const job=await api('/ai/chat',{method:'POST',body:JSON.stringify({question:`הכן דוח ניהולי מקצועי בעברית וב-RTL על סמך נתוני PROJECTS. החזר טקסט תמציתי ומובנה בלבד: כותרת קצרה לכל סעיף ולאחריה עד 3 נקודות קצרות. הסעיפים הם תקציר מנהלים, חריגים וחסמים, החלטות נדרשות ופעולות לביצוע. אין להשתמש בטבלאות Markdown, אין פסקאות ארוכות ואין לחזור על אותו מידע. דרישת המשתמש: ${aiPrompt}`})});let result=job;for(let attempt=0;attempt<90&&result.status==='working';attempt++){await new Promise(resolve=>setTimeout(resolve,1000));result=await api(`/ai/chat/${job.jobId}`)}if(!result.answer)throw new Error('הסוכן לא החזיר דוח');setAiReportText(result.answer);setReportType('management');setAiReportOpen(false);setWizardOpen(true);setNotice('דוח AI הוכן ומוכן לעיון ולהפקה');}catch(error){setNotice(error.message)}finally{setGenerating(false)}
   };
-  const generatePresentation=()=>{
-    const escape=(value)=>String(value??'').replace(/[&<>]/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[char]));
-    const risks=projects.filter(item=>Number(item.progress||0)<50).slice(0,8);
-    const slides=[
-      `<section><h1>ישיבת ניהול פרויקטים</h1><h2>${escape(company.name||'PROJECTS')}</h2><p>${new Date().toLocaleString('he-IL')}</p></section>`,
-      `<section><h1>תמונת מצב</h1><div class="kpis"><b>${projects.length}<small>פרויקטים פעילים</small></b><b>${escape(money.format(Number(data.finance.open))) }<small>יתרה לגבייה</small></b><b>${data.tasks.filter(x=>x.status!=='done').reduce((s,x)=>s+Number(x.count),0)}<small>משימות פתוחות</small></b></div></section>`,
-      `<section><h1>מוקדי תשומת לב</h1><ul>${risks.map(item=>`<li><strong>${escape(item.name)}</strong> — ${item.progress||0}% · ${escape(stageNames[item.stage]||item.stage)}</li>`).join('')||'<li>לא נמצאו פרויקטים בסיכון לפי המדדים הנוכחיים</li>'}</ul></section>`,
-      `<section><h1>ביצוע לפי מנהל</h1><table>${data.managers.map(item=>`<tr><td>${escape(item.name)}</td><td>${item.projects} פרויקטים</td><td>${item.progress||0}%</td></tr>`).join('')}</table></section>`,
-      `<section><h1>החלטות ופעולות</h1><p class="ai">${escape(aiReportText||'יש לעבור על הפרויקטים החריגים, לאשר סדרי עדיפויות, להקצות אחראים למשימות פתוחות ולקבוע פעולות גבייה.')}</p></section>`
-    ];
-    const html=`<html dir="rtl"><head><meta charset="utf-8"><style>@page{size:13.333in 7.5in;margin:0}body{margin:0;font-family:Arial;color:#1f2230}section{box-sizing:border-box;width:13.333in;height:7.5in;padding:.7in;background:linear-gradient(135deg,#fff,#f5f2ff);page-break-after:always}h1{font-size:34pt;color:#5f49ce;border-bottom:4px solid #6957df;padding-bottom:14px}h2{font-size:24pt}p,li,td{font-size:18pt;line-height:1.55}.kpis{display:flex;gap:24px}.kpis b{flex:1;padding:30px;border-radius:20px;background:#fff;font-size:30pt;box-shadow:0 10px 30px #34296718}.kpis small{display:block;color:#777;font-size:15pt}table{width:100%;border-collapse:collapse}td{padding:14px;border-bottom:1px solid #ddd}.ai{white-space:pre-wrap}</style></head><body>${slides.join('')}</body></html>`;
-    const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([html],{type:'application/vnd.ms-powerpoint'}));link.download=`PROJECTS-management-${new Date().toISOString().slice(0,10)}.ppt`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);setNotice('המצגת הופקה בהצלחה');
+  const generatePresentation=async()=>{
+    if (!Object.values(presentationOptions.sections).some(Boolean)) return setNotice("יש לבחור לפחות פרק אחד למצגת");
+    setGenerating(true);
+    try {
+      const { exportManagementPresentation } = await import("./presentationExport");
+      await exportManagementPresentation({ projects, data, company, aiReportText, options:presentationOptions });
+      setNotice('מצגת PowerPoint תקנית הופקה בהצלחה');
+      setPresentationOpen(false);
+    } catch (error) {
+      setNotice(error.message || 'הפקת המצגת נכשלה');
+    } finally {
+      setGenerating(false);
+    }
   };
   if (!data && reportError) return <div className="work-error panel"><AlertTriangle size={28}/><h3>לא ניתן לטעון את הדוחות</h3><p>{reportError}</p><button className="ops-primary" onClick={loadReports}>ניסיון חוזר</button></div>;
   if (!data) return <div className="work-loading">מכין דוחות…</div>;
@@ -1140,7 +1157,7 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
         </div>
         <div className="report-hero-actions">
           <button className="ops-primary" onClick={() => setWizardOpen(true)}><Download size={16} />אשף דוח PDF</button>
-          <button className="ops-secondary" onClick={generatePresentation}><Presentation size={16}/>מצגת לישיבת ניהול</button>
+          <button className="ops-secondary" onClick={()=>{setPresentationStep(1);setPresentationOpen(true)}}><Presentation size={16}/>אשף מצגת</button>
           <button className="ops-secondary ai-report-button" onClick={()=>setAiReportOpen(true)}><Sparkles size={16}/>דוח באמצעות AI</button>
           <button className="ops-secondary" onClick={exportCsv}><Download size={16} />ייצוא CSV</button>
         </div>
@@ -1282,6 +1299,26 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
           </tbody>
         </table>
       </div>
+      {presentationOpen && (
+        <Modal title="אשף מצגת ניהולית" subtitle={`שלב ${presentationStep} מתוך 3 · בחירת תוכן ופרמטרים`} className="presentation-wizard-modal" onClose={()=>setPresentationOpen(false)}>
+          <div className="presentation-wizard">
+            <nav className="wizard-steps" aria-label="שלבי האשף">
+              {["תוכן","מיקוד","אישור"].map((label,index)=><span key={label} className={presentationStep===index+1?"active":presentationStep>index+1?"done":""}><b>{index+1}</b>{label}</span>)}
+            </nav>
+            {presentationStep===1&&<section className="presentation-step"><header><h3>אילו פרקים יופיעו?</h3><p>כל פרק שנבחר הופך לשקופית עצמאית. שקופית שער תמיד נכללת.</p></header><div className="presentation-section-grid">{[
+              ["overview","תמונת מצב","פרויקטים, משימות ויתרה לגבייה"],
+              ["risks","סיכונים וחסמים","פרויקטים מתחת לסף ההתקדמות"],
+              ["managers","מנהלי פרויקטים","עומס והתקדמות לפי מנהל"],
+              ["systems","מערכות ורכיבים","מערכות ורכיבים מובילים"],
+              ["finance","כספים וגבייה","היקף, נגבה ויתרה פתוחה"],
+              ["decisions","החלטות ופעולות","סיכום AI או המלצות מערכת"],
+            ].map(([key,title,description])=><label key={key} className={presentationOptions.sections[key]?"selected":""}><input type="checkbox" checked={presentationOptions.sections[key]} onChange={(event)=>setPresentationOptions((current)=>({...current,sections:{...current.sections,[key]:event.target.checked}}))}/><span><strong>{title}</strong><small>{description}</small></span><i>{presentationOptions.sections[key]?"נכלל":"לא נכלל"}</i></label>)}</div></section>}
+            {presentationStep===2&&<section className="presentation-step"><header><h3>מה חשוב להדגיש?</h3><p>הפרמטרים משפיעים על הסינון ועל כמות המידע בכל שקופית.</p></header><div className="presentation-parameters"><label className="wide">כותרת המצגת<input value={presentationOptions.title} onChange={(event)=>setPresentationOptions((current)=>({...current,title:event.target.value}))} maxLength="90"/></label><label>סף סיכון להתקדמות<input type="number" min="0" max="100" value={presentationOptions.riskThreshold} onChange={(event)=>setPresentationOptions((current)=>({...current,riskThreshold:event.target.value}))}/><small>פרויקט מתחת לאחוז זה יסומן לתשומת לב.</small></label><label>מספר פריטים מרבי בשקופית<select value={presentationOptions.maxItems} onChange={(event)=>setPresentationOptions((current)=>({...current,maxItems:Number(event.target.value)}))}>{[5,7,10].map((value)=><option key={value} value={value}>{value} פריטים</option>)}</select></label><fieldset className="wide"><legend>מיקוד בפרויקטים</legend><p>ללא בחירה המצגת תכלול את כל הפרויקטים הפעילים.</p><div className="presentation-project-list">{projects.map((project)=><label key={project.id}><input type="checkbox" checked={presentationOptions.projectIds.includes(String(project.id))} onChange={(event)=>setPresentationOptions((current)=>({...current,projectIds:event.target.checked?[...current.projectIds,String(project.id)]:current.projectIds.filter((id)=>id!==String(project.id))}))}/><span>{project.name}</span><small>{project.id} · {project.progress||0}%</small></label>)}</div></fieldset></div></section>}
+            {presentationStep===3&&<section className="presentation-step presentation-review"><header><h3>המצגת מוכנה להפקה</h3><p>בדקו את הבחירה. הקובץ יופק כ־PPTX תקני הניתן לעריכה ב־PowerPoint.</p></header><div className="presentation-summary"><article><small>כותרת</small><strong>{presentationOptions.title||"ישיבת ניהול פרויקטים"}</strong></article><article><small>שקופיות</small><strong>{1+Object.values(presentationOptions.sections).filter(Boolean).length}</strong></article><article><small>היקף</small><strong>{presentationOptions.projectIds.length?`${presentationOptions.projectIds.length} פרויקטים שנבחרו`:"כל הפרויקטים"}</strong></article><article><small>סף סיכון</small><strong>{presentationOptions.riskThreshold}%</strong></article></div><div className="presentation-selected-sections">{Object.entries(presentationOptions.sections).filter(([,enabled])=>enabled).map(([key])=><span key={key}>{({overview:"תמונת מצב",risks:"סיכונים",managers:"מנהלים",systems:"מערכות",finance:"כספים",decisions:"החלטות"})[key]}</span>)}</div></section>}
+            <footer className="presentation-wizard-actions"><button type="button" className="ops-secondary" onClick={()=>presentationStep===1?setPresentationOpen(false):setPresentationStep((step)=>step-1)}>{presentationStep===1?"ביטול":"חזרה"}</button>{presentationStep<3?<button type="button" className="ops-primary" onClick={()=>setPresentationStep((step)=>step+1)} disabled={presentationStep===1&&!Object.values(presentationOptions.sections).some(Boolean)}>המשך</button>:<button type="button" className="ops-primary" onClick={generatePresentation} disabled={generating}><Presentation size={16}/>{generating?"מפיק מצגת...":"הפקת PowerPoint"}</button>}</footer>
+          </div>
+        </Modal>
+      )}
       {wizardOpen && (
         <Modal title="אשף הפקת דוח PDF" subtitle="בחירת תוכן, פרויקט ויעד השמירה" className="report-modal" onClose={() => setWizardOpen(false)}>
           <div className="report-wizard">
@@ -1293,7 +1330,7 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
             <div className="pdf-report-sheet" ref={reportRef} dir="rtl">
               <header><div className="pdf-company-brand">{companyLogo&&<img src={companyLogo} alt=""/>}<div><strong>{company.name||<><b>PRO</b>JECTS</>}</strong><small>{company.name?'מופק באמצעות PROJECTS':'Manage Smarter. Deliver Better.'}</small></div></div><span>דוח שהופק בתאריך {new Date().toLocaleDateString("he-IL")}</span></header>
               <h1>{reportType === "project" ? projectReport?.project?.name || "דוח פרויקט" : reportType === "finance" ? "דוח כספים וגבייה" : reportType === "professionals" ? "דוח מנהלים ואנשי מקצוע" : reportType === "management" ? "דוח לישיבת ניהול פרויקטים" : "תמונת מצב ניהולית"}</h1>
-              {reportType==="management"&&<><h2>תקציר מנהלים</h2><p className="ai-report-copy">{aiReportText||`במערכת ${projects.length} פרויקטים פעילים. יתרת הגבייה היא ${money.format(Number(data.finance.open))}. יש לעבור בישיבה על משימות באיחור, פרויקטים בעלי התקדמות נמוכה והקצאת מנהלים.`}</p><h2>סדר יום מוצע</h2><ol><li>חסמים ופרויקטים הדורשים החלטה</li><li>משימות קריטיות ובאיחור</li><li>תחזית גבייה ותשלומים פתוחים</li><li>עומס מנהלים והקצאת משאבים</li><li>החלטות, אחראים ותאריכי יעד</li></ol></>}
+              {reportType==="management"&&<><h2>תקציר מנהלים</h2><AiReportContent text={aiReportText||`תמונת מצב:\nבמערכת ${projects.length} פרויקטים פעילים.\nיתרת הגבייה היא ${money.format(Number(data.finance.open))}.\nפעולות נדרשות:\nיש לעבור על משימות באיחור ועל פרויקטים בעלי התקדמות נמוכה.\nיש להגדיר אחראים ותאריכי יעד להחלטות.`}/><h2>סדר יום מוצע</h2><ol><li>חסמים ופרויקטים הדורשים החלטה</li><li>משימות קריטיות ובאיחור</li><li>תחזית גבייה ותשלומים פתוחים</li><li>עומס מנהלים והקצאת משאבים</li><li>החלטות, אחראים ותאריכי יעד</li></ol></>}
               {reportType === "project" && projectReport ? <><div className="pdf-kpis"><span><small>שלב</small><b>{projectReport.project.stage}</b></span><span><small>התקדמות</small><b>{projectReport.project.progress}%</b></span><span><small>משימות</small><b>{projectReport.tasks.length}</b></span><span><small>מסמכים</small><b>{projectReport.files.length}</b></span></div><h2>פרטי פרויקט</h2><p>{projectReport.project.client} · {projectReport.project.address}</p><p>מנהל: {projectReport.project.manager||'לא הוקצה'} · היקף: {money.format(Number(projectReport.project.value||0))} · יתרה: {money.format(Math.max(0,Number(projectReport.project.value||0)-Number(projectReport.project.paid||0)))}</p><h2>משימות ואבני דרך</h2><table><thead><tr><th>משימה</th><th>סטטוס</th><th>אחראי</th><th>תאריך סיום</th></tr></thead><tbody>{projectReport.tasks.slice(0,30).map((item)=><tr key={item.id}><td>{item.title}{item.critical?' · קריטית':''}</td><td>{taskStatus[item.status] || item.status}</td><td>{item.assignee_name||'—'}</td><td>{dateText(item.due_date)}</td></tr>)}</tbody></table><h2>צוות, מערכות ותיעוד</h2><p>צוות: {projectReport.team.map(item=>`${item.display_name} (${item.role_name})`).join(' · ')||'טרם שויך'}</p><p>מערכות ורכיבים: {projectReport.equipment.slice(0,18).map(item=>`${item.name} × ${Number(item.quantity)}`).join(' · ')||'טרם שויכו'}</p><p>ביקורות אתר: {projectReport.reviews?.length||0} · סיכומי פגישות: {projectReport.meetings?.length||0} · עדכונים: {projectReport.updates?.length||0}</p></> : <><div className="pdf-kpis"><span><small>היקף</small><b>{money.format(Number(data.finance.total))}</b></span><span><small>נגבה</small><b>{money.format(Number(data.finance.paid))}</b></span><span><small>יתרה</small><b>{money.format(Number(data.finance.open))}</b></span><span><small>פרויקטים</small><b>{projects.length}</b></span></div><h2>{reportType === "professionals" ? "ביצועים לפי מנהל" : "נתונים מרכזיים"}</h2><table><thead><tr><th>מנהל</th><th>פרויקטים</th><th>התקדמות</th></tr></thead><tbody>{data.managers.map((item)=><tr key={item.name}><td>{item.name}</td><td>{item.projects} פרויקטים</td><td>{item.progress || 0}%</td></tr>)}</tbody></table></>}
               <footer className="pdf-signature"><div><b>הופק על ידי</b><span>{user.displayName||user.username||'משתמש מערכת'}</span><small>{user.roleName||user.role||''}</small></div><div><b>מועד הפקה</b><span>{new Date().toLocaleString('he-IL')}</span><small>מסמך מערכת PROJECTS</small></div></footer>
             </div>

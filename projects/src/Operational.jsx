@@ -250,18 +250,19 @@ export function InsightsTile({ insights, onNavigate, refreshing, onRefresh }) {
 export function AlertCenter({ alerts, api, onSnoozed, onClose, setNotice, onOpenTask }) {
   const [duration, setDuration] = useState("hour");
   const [busy, setBusy] = useState(false);
+  const durationOptions=[['hour','שעה','בעוד שעה'],['day','יום','מחר'],['week','שבוע','בעוד שבוע'],['month','חודש','בעוד חודש']];
   const snooze = async () => {
     setBusy(true);
     try {
-      await api("/alerts/snooze", {
+      const result=await api("/alerts/snooze", {
         method: "POST",
         body: JSON.stringify({
           keys: alerts.map((alert) => alert.key),
           duration,
         }),
       });
-      setNotice("ההתראות נדחו");
-      onSnoozed();
+      setNotice(`ההתראות נדחו עד ${result?.snoozedUntil?new Date(result.snoozedUntil).toLocaleString('he-IL'):'המועד שנבחר'}`);
+      await onSnoozed?.(result);
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -277,7 +278,7 @@ export function AlertCenter({ alerts, api, onSnoozed, onClose, setNotice, onOpen
             <AlertTriangle size={22} />
           </span>
           <div>
-            <small>דורש תשומת לב</small>
+            <small>מרכז התראות משימות</small>
             <h2>
               {alerts.length === 1
                 ? "משימה שלא הושלמה בזמן"
@@ -288,6 +289,7 @@ export function AlertCenter({ alerts, api, onSnoozed, onClose, setNotice, onOpen
             <X size={18} />
           </button>
         </header>
+        <div className="alert-summary"><span><b>{alerts.length}</b> התראות פעילות</span><p>בחרו משימה לטיפול מיידי, או דחו את כל ההתראות למועד נוח.</p></div>
         <div className="alert-list">
           {alerts.map((alert) => (
             <article key={alert.key}>
@@ -315,31 +317,15 @@ export function AlertCenter({ alerts, api, onSnoozed, onClose, setNotice, onOpen
           ))}
         </div>
         <footer>
-          <label>
-            <Clock3 size={16} />
-            Snooze
-            <select
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-            >
-              <option value="hour">לשעה</option>
-              <option value="day">ליום</option>
-              <option value="week">לשבוע</option>
-              <option value="month">לחודש</option>
-            </select>
-          </label>
-          <button className="ops-secondary" onClick={onClose}>
-            הסתרה
-          </button>
-          <button className="ops-secondary" onClick={dismiss} disabled={busy}>ביטול התראה</button>
-          <button className="ops-primary" onClick={snooze} disabled={busy}>
+          <div className="alert-deferral"><span><Clock3 size={16}/>דחיית התראה</span><div>{durationOptions.map(([value,label,hint])=><button type="button" key={value} className={duration===value?'active':''} onClick={()=>setDuration(value)} title={hint}>{label}</button>)}</div></div>
+          <div className="alert-footer-actions"><button className="ops-ghost" onClick={onClose}>סגירה</button><button className="ops-secondary" onClick={dismiss} disabled={busy}>ביטול קבוע</button><button className="ops-primary" onClick={snooze} disabled={busy}>
             {busy ? (
               <RefreshCw className="spin" size={16} />
             ) : (
               <Clock3 size={16} />
             )}
-            דחייה מרוכזת
-          </button>
+            דחיית כל ההתראות
+          </button></div>
         </footer>
       </section>
     </div>

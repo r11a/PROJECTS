@@ -174,7 +174,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
 
   router.get('/team', async (_request, response) => {
-    const result = await pool.query('SELECT id,username,display_name,role,active,avatar_color,avatar_icon,last_seen_at,last_login_at FROM users ORDER BY active DESC,display_name');
+    const result = await pool.query('SELECT id,username,display_name,role,active,avatar_color,avatar_icon,last_seen_at,last_login_at FROM users WHERE merged_into_user_id IS NULL ORDER BY active DESC,display_name');
     response.json({ users: result.rows.map((row) => ({ id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, avatarColor: row.avatar_color, avatarIcon: row.avatar_icon, lastSeenAt:row.last_seen_at,lastLoginAt:row.last_login_at,online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) })) });
   });
 
@@ -183,10 +183,11 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     const duration = durations[request.body.duration];
     const keys = Array.isArray(request.body.keys) ? request.body.keys.filter((key) => /^task:\d+$/.test(key)) : [];
     if (!duration || !keys.length) return response.status(400).json({ error: 'Alert keys and a valid duration are required' });
-    await pool.query(`INSERT INTO user_alert_snoozes(user_id,alert_key,snoozed_until) SELECT $1,unnest($2::text[]),NOW()+$3::interval
-      ON CONFLICT(user_id,alert_key) DO UPDATE SET snoozed_until=EXCLUDED.snoozed_until`, [request.user.id, keys, duration]);
+    const result = await pool.query(`INSERT INTO user_alert_snoozes(user_id,alert_key,snoozed_until) SELECT $1,unnest($2::text[]),NOW()+$3::interval
+      ON CONFLICT(user_id,alert_key) DO UPDATE SET snoozed_until=EXCLUDED.snoozed_until
+      RETURNING alert_key,snoozed_until`, [request.user.id, keys, duration]);
     await audit(request, 'snooze', 'alerts', keys.join(','), { duration: request.body.duration });
-    response.status(204).end();
+    response.json({ snoozed:result.rowCount, snoozedUntil:result.rows[0]?.snoozed_until || null, keys:result.rows.map((item)=>item.alert_key) });
   });
   router.post('/alerts/dismiss', async (request,response) => {
     const keys=Array.isArray(request.body.keys)?request.body.keys.filter(key=>/^task:\d+$/.test(key)):[];

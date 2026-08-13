@@ -25,6 +25,7 @@ import {
   Gauge,
   Home,
   LayoutDashboard,
+  Link2,
   ListFilter,
   Database,
   LogOut,
@@ -1018,9 +1019,10 @@ function App() {
             }
             setAlertsOpen(false);
           }}
-          onSnoozed={() => {
+          onSnoozed={async () => {
             setAlertsOpen(false);
             setInsights((current) => ({ ...current, alerts: [] }));
+            await loadInsights(true);
           }}
         />
       )}
@@ -1137,6 +1139,8 @@ function LoginPage({ onLogin }) {
 
 function UsersPage({ setNotice, currentUser, onChanged }) {
   const [users, setUsers] = useState([]);
+  const [identityLink, setIdentityLink] = useState({ primaryUserId:"", secondaryUserId:"" });
+  const [linkingIdentity,setLinkingIdentity]=useState(false);
   const [form, setForm] = useState({
     username: "",
     displayName: "",
@@ -1197,6 +1201,21 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       setNotice(error.message);
     }
   };
+  const mergeIdentities = async (event) => {
+    event.preventDefault();
+    if (!identityLink.primaryUserId || !identityLink.secondaryUserId || identityLink.primaryUserId === identityLink.secondaryUserId) return setNotice("יש לבחור שתי זהויות שונות");
+    const primary = users.find((item)=>String(item.id)===String(identityLink.primaryUserId));
+    const secondary = users.find((item)=>String(item.id)===String(identityLink.secondaryUserId));
+    if (!window.confirm(`לאחד את “${secondary?.displayName}” אל הזהות הראשית “${primary?.displayName}”? מעכשיו תוצג זהות אחת וניתן יהיה להיכנס אליה גם דרך Web וגם דרך Home Assistant.`)) return;
+    setLinkingIdentity(true);
+    try {
+      await api('/users/merge-identities',{ method:'POST',body:JSON.stringify(identityLink) });
+      setIdentityLink({ primaryUserId:"",secondaryUserId:"" });
+      await loadUsers();
+      onChanged?.();
+      setNotice("הזהויות אוחדו בהצלחה לחשבון אחד");
+    } catch (error) { setNotice(error.message); } finally { setLinkingIdentity(false); }
+  };
   return (
     <div className="section-page users-page">
       <div className="page-intro">
@@ -1233,8 +1252,8 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
               <div>
                 <strong>{item.displayName}</strong>
                 <span>
-                  {item.username || "Home Assistant"}{" "}
-                  {item.haUserId && "· Ingress"}
+                  {item.identityTypes?.includes('web') ? `Web: ${item.username}` : "ללא כניסת Web"}{" "}
+                  {item.identityTypes?.includes('ingress') && "· Home Assistant Ingress"}
                 </span>
                 <small className={item.online?"user-online":"user-offline"}>{item.online?"מחובר כעת":item.lastSeenAt?`נראה לאחרונה ${new Date(item.lastSeenAt).toLocaleString("he-IL")}`:"טרם התחבר"}</small>
                 <small className="user-last-login">התחברות אחרונה: {item.lastLoginAt?new Date(item.lastLoginAt).toLocaleString("he-IL"):"טרם התחבר"}</small>
@@ -1374,6 +1393,13 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
           </button>
         </form>
       </div>
+      {users.length > 1 && <form className="panel identity-linker" onSubmit={mergeIdentities}>
+        <div className="identity-linker-copy"><span><Link2 size={19}/></span><div><h3>איחוד זהויות Web ו־Home Assistant</h3><p>בחרו את החשבון שיישאר מוצג, ואת החשבון הכפול שיוטמע בו. ההרשאות, המראה והשם של הזהות הראשית נשמרים.</p></div></div>
+        <label>הזהות הראשית שתוצג<select value={identityLink.primaryUserId} onChange={(event)=>setIdentityLink({...identityLink,primaryUserId:event.target.value})}><option value="">בחירת חשבון ראשי</option>{users.map((item)=><option key={item.id} value={item.id}>{item.displayName} · {item.identityTypes?.join(' + ')||'חשבון'}</option>)}</select></label>
+        <span className="identity-link-arrow">←</span>
+        <label>הזהות הכפולה לאיחוד<select value={identityLink.secondaryUserId} onChange={(event)=>setIdentityLink({...identityLink,secondaryUserId:event.target.value})}><option value="">בחירת חשבון כפול</option>{users.filter((item)=>String(item.id)!==String(identityLink.primaryUserId)&&String(item.id)!==String(currentUser.id)).map((item)=><option key={item.id} value={item.id}>{item.displayName} · {item.identityTypes?.join(' + ')||'חשבון'}</option>)}</select></label>
+        <button className="primary-button" disabled={linkingIdentity||!identityLink.primaryUserId||!identityLink.secondaryUserId}>{linkingIdentity?'מאחד זהויות...':'איחוד לחשבון אחד'}</button>
+      </form>}
     </div>
   );
 }

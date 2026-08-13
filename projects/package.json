@@ -2,7 +2,7 @@
   "name": "projects-home-assistant-app",
   "private": true,
   "license": "UNLICENSED",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -24,11 +24,11 @@
     "lucide-react": "latest",
     "multer": "latest",
     "pg": "latest",
+    "pptxgenjs": "^4.0.1",
     "react": "latest",
     "react-dom": "latest",
     "react-leaflet": "latest",
     "recharts": "latest",
     "vite": "latest"
-  },
-  "devDependencies": {}
+  }
 }

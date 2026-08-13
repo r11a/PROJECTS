@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.17.0
+
+- Added direct camera capture and device-file upload to the Forms & Files workspace, including project/client assignment, thumbnails and uploader metadata.
+- Added a three-step PowerPoint wizard for selecting slides, project scope, risk threshold, item limits and presentation title.
+- Replaced the legacy presentation download with a valid editable PPTX document and improved structured RTL AI report output.
+- Standardized application dialogs around one viewport-centered, responsive modal contract with consistent close placement and sticky actions.
+- Added logical merging of duplicate Home Assistant Ingress and standalone Web identities while preserving one canonical user profile.
+- Rebuilt task reminders with a modern grouped layout, reliable persisted deferral and fully Hebrew duration controls.
+
 ## 0.16.0
 
 - Added persisted drag-and-drop scheduling and edge resizing to both Gantt views, including live date previews and automatic database updates.

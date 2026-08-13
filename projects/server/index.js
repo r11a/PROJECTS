@@ -263,7 +263,7 @@ function cookieValue(request, name) {
 }
 
 function publicUser(row) {
-  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, haUserId: row.ha_user_id, avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', appearanceTheme: row.appearance_theme || 'light', lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
+  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, haUserId: row.ha_user_id, mergedIntoUserId:row.merged_into_user_id, identityTypes:[row.username?'web':null,row.ha_user_id?'ingress':null].filter(Boolean), avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', appearanceTheme: row.appearance_theme || 'light', lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
 }
 
 const presenceWrites=new Map();
@@ -280,7 +280,7 @@ async function authenticate(request, response, next) {
       const result = await pool.query(
         `INSERT INTO users(display_name, role, ha_user_id)
          VALUES($1, 'admin', $2)
-         ON CONFLICT(ha_user_id) DO UPDATE SET display_name = EXCLUDED.display_name, updated_at = NOW()
+         ON CONFLICT(ha_user_id) DO UPDATE SET display_name = CASE WHEN users.username IS NULL THEN EXCLUDED.display_name ELSE users.display_name END, updated_at = NOW()
          RETURNING *`,
         [displayName, haUserId],
       );
@@ -517,8 +517,44 @@ app.delete('/api/projects/:id/permanent', authenticate, requireRoles('admin'), a
 });
 
 app.get('/api/users', authenticate, requireRoles('admin'), async (_request, response) => {
-  const result = await pool.query('SELECT * FROM users ORDER BY created_at');
+  const result = await pool.query('SELECT * FROM users WHERE merged_into_user_id IS NULL ORDER BY created_at');
   response.json({ users: result.rows.map(publicUser) });
+});
+
+app.post('/api/users/merge-identities', authenticate, requireRoles('admin'), async (request, response) => {
+  const primaryUserId = String(request.body.primaryUserId || '');
+  const secondaryUserId = String(request.body.secondaryUserId || '');
+  if (!primaryUserId || !secondaryUserId || primaryUserId === secondaryUserId) return response.status(400).json({ error:'יש לבחור שתי זהויות שונות' });
+  if (secondaryUserId === String(request.user.id)) return response.status(409).json({ error:'לא ניתן למזג את המשתמש המחובר כזהות משנית. יש לבחור בו כזהות הראשית' });
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const result = await db.query('SELECT * FROM users WHERE id=ANY($1::bigint[]) AND merged_into_user_id IS NULL FOR UPDATE', [[primaryUserId,secondaryUserId]]);
+    if (result.rowCount !== 2) throw Object.assign(new Error('אחת הזהויות אינה זמינה לאיחוד'),{ statusCode:404 });
+    const primary = result.rows.find((item)=>String(item.id)===primaryUserId);
+    const secondary = result.rows.find((item)=>String(item.id)===secondaryUserId);
+    if (primary.username && secondary.username && primary.username !== secondary.username) throw Object.assign(new Error('לשתי הזהויות יש חשבון Web שונה. יש לבחור זוג של Web ו-Ingress'),{ statusCode:409 });
+    if (primary.ha_user_id && secondary.ha_user_id && primary.ha_user_id !== secondary.ha_user_id) throw Object.assign(new Error('לשתי הזהויות יש חשבון Home Assistant שונה ולא ניתן לאחד אותן'),{ statusCode:409 });
+    const linked = await db.query('SELECT id,linked_user_id FROM professionals WHERE linked_user_id=ANY($1::bigint[])', [[primaryUserId,secondaryUserId]]);
+    const primaryProfessional = linked.rows.find((item)=>String(item.linked_user_id)===primaryUserId);
+    const secondaryProfessional = linked.rows.find((item)=>String(item.linked_user_id)===secondaryUserId);
+    if (primaryProfessional && secondaryProfessional && String(primaryProfessional.id)!==String(secondaryProfessional.id)) throw Object.assign(new Error('כל זהות מקושרת לאיש מקצוע אחר. יש להסיר אחד מהקישורים לפני האיחוד'),{ statusCode:409 });
+    await db.query('UPDATE users SET username=NULL,password_hash=NULL,ha_user_id=NULL,active=FALSE,merged_into_user_id=$1,updated_at=NOW() WHERE id=$2',[primaryUserId,secondaryUserId]);
+    await db.query(`UPDATE users SET
+      username=COALESCE(username,$2),password_hash=COALESCE(password_hash,$3),ha_user_id=COALESCE(ha_user_id,$4),
+      last_seen_at=GREATEST(last_seen_at,$5),last_login_at=GREATEST(last_login_at,$6),updated_at=NOW()
+      WHERE id=$1`,[primaryUserId,secondary.username,secondary.password_hash,secondary.ha_user_id,secondary.last_seen_at,secondary.last_login_at]);
+    if (!primaryProfessional && secondaryProfessional) await db.query('UPDATE professionals SET linked_user_id=$1 WHERE id=$2',[primaryUserId,secondaryProfessional.id]);
+    await db.query('UPDATE user_messages SET sender_id=$1 WHERE sender_id=$2',[primaryUserId,secondaryUserId]);
+    await db.query('UPDATE user_messages SET recipient_id=$1 WHERE recipient_id=$2',[primaryUserId,secondaryUserId]);
+    await db.query('COMMIT');
+    await audit(request,'merge','user_identity',primaryUserId,{ secondaryUserId, primaryDisplayName:primary.display_name, secondaryDisplayName:secondary.display_name });
+    const canonical = await pool.query('SELECT * FROM users WHERE id=$1',[primaryUserId]);
+    response.json({ user:publicUser(canonical.rows[0]) });
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  } finally { db.release(); }
 });
 
 app.post('/api/users', authenticate, requireRoles('admin'), async (request, response) => {

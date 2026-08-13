@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, CheckCircle2, ClipboardCheck, Download, FileText, FormInput, Pencil, Plus, Save, Search, ShieldCheck, Trash2, X } from 'lucide-react';
+import { Camera, Check, CheckCircle2, ClipboardCheck, Download, FileText, FormInput, Pencil, Plus, Save, Search, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
 
 const statusMeta = {
   draft: { label: 'טיוטה', tone: 'draft' },
@@ -18,6 +18,7 @@ export function FormsWorkspace({ api, apiRoot, user, setNotice }) {
   const [status, setStatus] = useState('');
   const [templateEditor, setTemplateEditor] = useState(null);
   const [recordEditor, setRecordEditor] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const canManage = ['admin', 'manager'].includes(user.role);
   const canFill = ['admin', 'manager', 'technician'].includes(user.role);
 
@@ -36,6 +37,18 @@ export function FormsWorkspace({ api, apiRoot, user, setNotice }) {
     if (!window.confirm(`למחוק את הטופס „${record.title}”?`)) return;
     try { await api(`/form-records/${record.id}`, { method: 'DELETE' }); setNotice('הטופס נמחק'); setRecordEditor(null); load(); } catch (error) { setNotice(error.message); }
   };
+  const uploadFile = async (file, target) => {
+    if (!file || !target) return setNotice('יש לבחור לקוח או פרויקט לשיוך הקובץ');
+    const [type,id]=target.split(':');
+    const body=new FormData();
+    body.set(type==='project'?'projectId':'clientId',id);
+    body.set('title',file.name || `צילום ${new Date().toLocaleString('he-IL')}`);
+    body.set('category',file.type?.startsWith('image/')?'תמונה':'מסמך');
+    body.set('file',file);
+    setUploading(true);
+    try{await api('/documents',{method:'POST',body});setNotice(file.type?.startsWith('image/')?'התמונה הועלתה בהצלחה':'הקובץ הועלה בהצלחה');await load();}
+    catch(error){setNotice(error.message);}finally{setUploading(false);}
+  };
 
   const activeTemplates = data.templates.filter((template) => template.active);
   const visibleTemplates = useMemo(() => {
@@ -45,8 +58,8 @@ export function FormsWorkspace({ api, apiRoot, user, setNotice }) {
   return <div className="forms-workspace">
     <div className="page-intro forms-intro"><div><h2>טפסים ומסמכים</h2><p>תבניות, מילויים ומסמכי לקוח הנשמרים במערכת המשותפת</p></div><div>{canFill && <button className="secondary-button" disabled={!activeTemplates.length} onClick={() => setRecordEditor({ template: activeTemplates[0] })}><FormInput size={17} />מילוי טופס</button>}{canManage && <button className="primary-button" onClick={() => setTemplateEditor({})}><Plus size={17} />תבנית חדשה</button>}</div></div>
     <div className="forms-summary"><Summary icon={ClipboardCheck} label="תבניות פעילות" value={activeTemplates.length} /><Summary icon={FileText} label="טפסים שנשמרו" value={data.records.length} /><Summary icon={CheckCircle2} label="הושלמו ואושרו" value={data.records.filter((record) => record.status !== 'draft').length} /></div>
-    <div className="forms-command panel"><nav><button className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>תבניות</button><button className={tab === 'records' ? 'active' : ''} onClick={() => setTab('records')}>טפסים שמולאו</button><button className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>מסמכי לקוחות</button></nav><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש בטפסים, לקוחות ופרויקטים..." /></label>{tab === 'records' && <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">כל הסטטוסים</option><option value="draft">טיוטה</option><option value="completed">הושלם</option><option value="approved">אושר</option></select>}</div>
-    {loading ? <div className="forms-loading panel">טוען נתונים...</div> : tab === 'templates' ? <TemplateGrid templates={visibleTemplates} canManage={canManage} canFill={canFill} onEdit={setTemplateEditor} onFill={(template) => setRecordEditor({ template })} onDelete={removeTemplate} api={api} reload={load} setNotice={setNotice} /> : tab === 'records' ? <RecordList records={data.records} onOpen={(record) => setRecordEditor({ record, template: data.templates.find((item) => item.id === record.templateId) })} /> : <FilesList files={data.files} apiRoot={apiRoot} />}
+    <div className="forms-command panel"><nav><button className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>תבניות</button><button className={tab === 'records' ? 'active' : ''} onClick={() => setTab('records')}>טפסים שמולאו</button><button className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>קבצים ותמונות</button></nav><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש בטפסים, לקוחות ופרויקטים..." /></label>{tab === 'records' && <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">כל הסטטוסים</option><option value="draft">טיוטה</option><option value="completed">הושלם</option><option value="approved">אושר</option></select>}</div>
+    {loading ? <div className="forms-loading panel">טוען נתונים...</div> : tab === 'templates' ? <TemplateGrid templates={visibleTemplates} canManage={canManage} canFill={canFill} onEdit={setTemplateEditor} onFill={(template) => setRecordEditor({ template })} onDelete={removeTemplate} api={api} reload={load} setNotice={setNotice} /> : tab === 'records' ? <RecordList records={data.records} onOpen={(record) => setRecordEditor({ record, template: data.templates.find((item) => item.id === record.templateId) })} /> : <FilesHub files={data.files} clients={data.clients} projects={data.projects} apiRoot={apiRoot} canUpload={canFill} uploading={uploading} onUpload={uploadFile} />}
     {templateEditor && <TemplateEditor initial={templateEditor.id ? templateEditor : null} api={api} onClose={() => setTemplateEditor(null)} onSaved={() => { setTemplateEditor(null); load(); }} setNotice={setNotice} user={user} onDelete={removeTemplate} />}
     {recordEditor && <RecordEditor initial={recordEditor.record || null} initialTemplate={recordEditor.template} templates={activeTemplates} clients={data.clients} projects={data.projects} api={api} user={user} onClose={() => setRecordEditor(null)} onSaved={() => { setRecordEditor(null); load(); }} onDelete={removeRecord} setNotice={setNotice} />}
   </div>;
@@ -65,9 +78,9 @@ function RecordList({ records, onOpen }) {
   return <section className="panel form-records"><div className="form-record-head"><span>טופס</span><span>לקוח / פרויקט</span><span>סטטוס</span><span>עודכן</span><span /></div>{records.map((record) => <button className="form-record-row" key={record.id} onClick={() => onOpen(record)}><span><i><FileText size={18} /></i><b>{record.title}</b><small>{record.templateName}</small></span><span><b>{record.clientName || 'ללא לקוח'}</b><small>{record.projectName || 'ללא פרויקט'}</small></span><em className={statusMeta[record.status]?.tone}>{statusMeta[record.status]?.label}</em><time>{new Date(record.updatedAt).toLocaleString('he-IL')}</time><Pencil size={16} /></button>)}</section>;
 }
 
-function FilesList({ files, apiRoot }) {
-  if (!files.length) return <Empty text="עדיין לא הועלו מסמכים לכרטיסי לקוח." />;
-  return <section className="panel operational-files-list">{files.map((file) => <a key={file.id} href={`${apiRoot}/files/${file.id}/download`}><span><FileText size={19} /></span><div><strong>{file.original_name}</strong><small>{file.client_name} · {new Date(file.created_at).toLocaleDateString('he-IL')}</small></div><em>{formatSize(file.size_bytes)}</em><Download size={17} /></a>)}</section>;
+function FilesHub({ files, clients, projects, apiRoot, canUpload, uploading, onUpload }) {
+  const [target,setTarget]=useState(projects[0]?.id?`project:${projects[0].id}`:clients[0]?.id?`client:${clients[0].id}`:'');
+  return <div className="forms-files-hub">{canUpload&&<section className="panel forms-capture-bar"><div><span><Camera size={21}/></span><div><h3>צילום והעלאת קבצים</h3><p>צלמו מהטלפון או בחרו תמונה, PDF ומסמך מהמכשיר.</p></div></div><label>שיוך<select value={target} onChange={(event)=>setTarget(event.target.value)}><option value="">בחירת לקוח או פרויקט</option><optgroup label="פרויקטים">{projects.map((item)=><option key={item.id} value={`project:${item.id}`}>{item.name}</option>)}</optgroup><optgroup label="לקוחות">{clients.map((item)=><option key={item.id} value={`client:${item.id}`}>{item.name}</option>)}</optgroup></select></label><div className="capture-actions"><label className={uploading?'disabled':''}><Camera size={17}/>צילום עכשיו<input type="file" accept="image/*" capture="environment" disabled={uploading} onChange={(event)=>{const file=event.target.files?.[0];if(file)onUpload(file,target);event.target.value='';}}/></label><label className={uploading?'disabled':''}><Upload size={17}/>{uploading?'מעלה...':'בחירה מהמכשיר'}<input type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx" disabled={uploading} onChange={(event)=>{const file=event.target.files?.[0];if(file)onUpload(file,target);event.target.value='';}}/></label></div></section>}{files.length?<section className="panel operational-files-list">{files.map((file) => <a key={file.id} href={`${apiRoot}/documents/${file.id}/download`}><span className={file.mime_type?.startsWith('image/')?'file-thumbnail':''}>{file.mime_type?.startsWith('image/')?<img src={`${apiRoot}/documents/${file.id}/preview`} alt="" loading="lazy"/>:<FileText size={19} />}</span><div><strong>{file.title||file.original_name}</strong><small>{file.project_name||file.client_name||'ללא שיוך'} · {new Date(file.created_at).toLocaleDateString('he-IL')} · {file.uploaded_by_name||'מערכת'}</small></div><em>{formatSize(file.size_bytes)}</em><Download size={17} /></a>)}</section>:<Empty text="עדיין לא הועלו קבצים או תמונות." />}</div>;
 }
 
 function TemplateEditor({ initial, api, onClose, onSaved, setNotice, user, onDelete }) {

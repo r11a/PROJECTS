@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { TasksWorkspace, FinanceWorkspace, TaskEditor } from "./Workspaces";
 import { GanttTimeline } from "./GanttTimeline";
+import { AppModal } from "./AppModal";
 
 const money = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -47,25 +48,7 @@ const projectClassificationOptions = [
 ];
 
 function Modal({ title, onClose, children }) {
-  return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
-      <div
-        className="modal work-modal"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="modal-head">
-          <div>
-            <span>כרטיס פרויקט</span>
-            <h2>{title}</h2>
-          </div>
-          <button onClick={onClose}>
-            <X />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
+  return <AppModal title={title} subtitle="כרטיס פרויקט" onClose={onClose}>{children}</AppModal>;
 }
 
 export function ProjectWorkspace({
