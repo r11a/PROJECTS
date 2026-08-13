@@ -189,11 +189,19 @@ async function seedDatabase() {
   if (count.rows[0].count > 0) return;
   for (const project of seedProjects) {
     const legacyStages = { planning:'waiting',installation:'installation_b',programming:'activation_programming',handover:'finishes',completed:'post_delivery' };
-    const seededProject = { projectSize:'medium', contractorProgress:'waiting', documentFolder:'', projectClassification:'private_house', ...project, stage:legacyStages[project.stage] || project.stage };
+    const seededProject = {
+      projectSize:'medium', contractorProgress:'waiting', documentFolder:'', projectClassification:'private_house',
+      installationHoursTarget:0, programmingHoursTarget:0,
+      ...project, stage:legacyStages[project.stage] || project.stage,
+    };
     seededProject.progress = STAGE_PROGRESS[seededProject.stage] ?? seededProject.progress;
     const values = projectColumns.map((column) => {
       const inputKey = Object.keys(inputToColumn).find((key) => inputToColumn[key] === column);
-      return column === 'systems' ? JSON.stringify(seededProject[inputKey] || []) : seededProject[inputKey];
+      if (column === 'systems') return JSON.stringify(seededProject[inputKey] || []);
+      if (column === 'installation_hours_target' || column === 'programming_hours_target') {
+        return Math.max(0, Number(seededProject[inputKey]) || 0);
+      }
+      return seededProject[inputKey];
     });
     const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
     await pool.query(`INSERT INTO projects(${projectColumns.join(', ')}) VALUES(${placeholders})`, values);

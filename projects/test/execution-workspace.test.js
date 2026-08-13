@@ -84,6 +84,8 @@ test('project time reporting keeps targets in project setup and actual hours in 
   assert.match(avatarLiveMigration,/CREATE TRIGGER projects_live_change[\s\S]*ON users/);
   assert.match(app,/uploadCurrentUserAvatar/);
   assert.match(server,/post\('\/api\/auth\/avatar'/);
+  assert.match(server,/installationHoursTarget:0, programmingHoursTarget:0/);
+  assert.match(server,/column === 'installation_hours_target' \|\| column === 'programming_hours_target'/);
   assert.match(server,/avatar_image=COALESCE\(NULLIF\(avatar_image,''\),NULLIF\(\$7,''\),''\)/);
   assert.match(avatarRecoveryMigration,/merged_into_user_id = primary_user\.id/);
   assert.match(projectWorkspace,/openRequest/);
