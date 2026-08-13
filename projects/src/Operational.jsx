@@ -58,6 +58,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { themeOptions } from "./features/appearance/themeOptions";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ModalPortal } from "./AppModal";
 import { ProductivitySettings } from "./ProductivityWorkspace";
@@ -3294,11 +3295,8 @@ function AppearanceSettings({
   const [saving, setSaving] = useState("");
   useEffect(() => setTheme(initialTheme), [initialTheme]);
   useEffect(() => setMessageSound(user.messageSoundEnabled !== false), [user.messageSoundEnabled]);
-  const choices = [
-    ["light", "בהיר", "המראה הנוכחי של PROJECTS", Sun],
-    ["dark", "כהה", "שחור, אפור וגרניט עם טקסט בהיר", Moon],
-    ["auto", "אוטומטי", "מותאם להגדרת המכשיר", Monitor],
-  ];
+  const themeIcons={sun:Sun,moon:Moon,monitor:Monitor};
+  const choices=themeOptions.map(item=>[item.id,item.title,item.description,themeIcons[item.icon]]);
   const choose = async (nextTheme) => {
     if (saving || nextTheme === theme) return;
     setSaving(nextTheme);

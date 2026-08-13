@@ -37,6 +37,7 @@ import {
   YAxis,
 } from "recharts";
 import { AppModal } from "./AppModal";
+import { createMilestoneDraft, createTaskDraft } from "./features/tasks/taskDefaults";
 
 const money = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -153,30 +154,7 @@ export function TaskEditor({
   const isMilestone = kind === "milestone";
   const [form, setForm] = useState(
     initial ||
-      (isMilestone
-        ? {
-            projectId: "",
-            title: "",
-            dueDate: "",
-            status: "planned",
-            progress: 0,
-            ownerProfessionalId: "",
-            description: "",
-          }
-        : {
-            projectId: "",
-            title: "",
-            startDate: new Date().toISOString().slice(0, 10),
-            dueDate: "",
-            status: "open",
-          priority: "normal",
-          assigneeProfessionalId: "",
-          ownerProfessionalId: "",
-          parentTaskId: "",
-            taskType: "task",
-            estimatedHours: "",
-            description: "",
-          }),
+      (isMilestone ? createMilestoneDraft() : createTaskDraft()),
   );
   const submit = (event) => {
     event.preventDefault();

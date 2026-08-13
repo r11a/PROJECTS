@@ -6,6 +6,7 @@ import { constants as fsConstants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { DOCUMENT_UPLOAD_LIMIT, documentFileFilter, imageFileFilter, pdfFileFilter, assertVideoSize } from './uploadPolicy.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -84,16 +85,17 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
       destination: (_request, _file, callback) => currentStorage().then(async (storage) => { await mkdir(storage.directory, { recursive: true }); callback(null, storage.directory); }).catch(callback),
       filename: (_request, file, callback) => callback(null, `${randomUUID()}${path.extname(file.originalname).slice(0, 12).toLowerCase()}`),
     }),
-    limits: { fileSize: 100 * 1024 * 1024, files: 1 },
+    fileFilter: documentFileFilter,
+    limits: { fileSize: DOCUMENT_UPLOAD_LIMIT, files: 1 },
   });
   const iconUpload = multer({
     storage: multer.diskStorage({ destination: equipmentIconsDir, filename: (_request, file, callback) => callback(null, `${randomUUID()}${path.extname(file.originalname).toLowerCase()}`) }),
-    fileFilter: (_request, file, callback) => callback(null, ['image/png','image/jpeg','image/webp'].includes(file.mimetype)),
+    fileFilter: imageFileFilter,
     limits: { fileSize: 5 * 1024 * 1024, files: 1 },
   });
   const priorityUpload = multer({
     storage: multer.memoryStorage(),
-    fileFilter: (_request, file, callback) => callback(null, file.mimetype === 'application/pdf'),
+    fileFilter: pdfFileFilter,
     limits: { fileSize: 25 * 1024 * 1024, files: 1 },
   });
 
@@ -375,6 +377,7 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
   });
 
   router.post('/documents', requireRoles('admin', 'manager', 'technician'), upload.single('file'), async (request, response) => {
+    assertVideoSize(request.file,request.user.role==='admin');
     if (!request.file) return response.status(400).json({ error: 'לא נבחר קובץ' });
     if(request.file.mimetype.startsWith('video/')&&request.file.size>30*1024*1024&&(!['admin','manager'].includes(request.user.role)||request.body.largeFileApproved!=='true')){await unlink(request.file.path).catch(()=>{});return response.status(413).json({error:'סרטון מוגבל ל־30MB. מנהל יכול לאשר העלאה חריגה במפורש.'});}
     const clientId = request.body.clientId || null;

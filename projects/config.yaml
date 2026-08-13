@@ -1,5 +1,5 @@
 name: "PROJECTS"
-version: "0.19.0"
+version: "0.20.0"
 slug: "projects"
 description: "Premium smart-home project management dashboard"
 url: "https://github.com/r11a/PROJECTS"
@@ -32,4 +32,4 @@ schema:
 webui: "http://[HOST]:[PORT:8686]"
 watchdog: "http://[HOST]:[PORT:8686]/health"
 backup: cold
-stage: experimental
+stage: stable

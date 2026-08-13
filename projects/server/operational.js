@@ -4,6 +4,7 @@ import path from 'node:path';
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { buildOperationalInsights } from './insights.js';
+import { CLIENT_UPLOAD_LIMIT, documentFileFilter, imageFileFilter, assertVideoSize } from './uploadPolicy.js';
 
 const CLIENT_FIELDS = {
   name: 'name', firstName:'first_name', lastName:'last_name', apartmentNumber:'apartment_number', clientType: 'client_type', companyNumber: 'company_number', priorityCustomerNumber: 'priority_customer_number', primaryContactName: 'primary_contact_name', referralSource:'referral_source',
@@ -53,9 +54,10 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
       destination: uploadDir,
       filename: (_request, file, callback) => callback(null, `${randomUUID()}${path.extname(file.originalname).slice(0, 12).toLowerCase()}`),
     }),
-    limits: { fileSize: 50 * 1024 * 1024, files: 1 },
+    fileFilter: documentFileFilter,
+    limits: { fileSize: CLIENT_UPLOAD_LIMIT, files: 1 },
   });
-  const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
+  const logoUpload = multer({ storage: multer.memoryStorage(), fileFilter:imageFileFilter, limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 
   const icsText = (value) => String(value || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
   const icsDate = (value) => new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
@@ -493,6 +495,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
 
   router.post('/clients/:id/files', requireRoles('admin', 'manager', 'technician'), upload.single('file'), async (request, response) => {
+    assertVideoSize(request.file,request.user.role==='admin');
     if (!request.file) return response.status(400).json({ error: 'File is required' });
     const result = await pool.query(`INSERT INTO client_files(client_id,original_name,stored_name,mime_type,size_bytes,category,description,uploaded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`, [request.params.id, request.file.originalname, request.file.filename, request.file.mimetype, request.file.size, request.body.category || 'other', request.body.description || '', request.user.id]);
     await audit(request, 'upload', 'client_file', String(result.rows[0].id), { clientId: request.params.id, name: request.file.originalname });

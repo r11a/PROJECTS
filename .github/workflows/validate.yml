@@ -23,6 +23,7 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      - run: npm run audit:production
       - run: npm run build
 
   addon-image:
@@ -49,9 +50,26 @@ jobs:
             sleep 2
           done
           curl --fail --silent http://127.0.0.1:8686/health | grep --quiet '"database":"ok"'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: projects/package-lock.json
+      - name: Install Playwright
+        working-directory: projects
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run critical browser paths
+        working-directory: projects
+        env:
+          PROJECTS_BASE_URL: http://127.0.0.1:8686
+        run: npm run test:e2e
+      - name: Smoke test authenticated APIs
+        run: |
           curl --fail --silent --cookie-jar /tmp/projects-cookies \
             --header 'Content-Type: application/json' \
-            --data '{"username":"admin","password":"change-me-now"}' \
+            --data '{"username":"admin","password":"Projects-CI-2026!"}' \
             http://127.0.0.1:8686/api/auth/login | grep --quiet '"role":"admin"'
           curl --fail --silent --cookie /tmp/projects-cookies \
             http://127.0.0.1:8686/api/projects | grep --quiet '"projects"'

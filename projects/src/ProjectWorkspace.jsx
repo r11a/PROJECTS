@@ -32,6 +32,7 @@ import { GanttTimeline } from "./GanttTimeline";
 import { AppModal } from "./AppModal";
 import { ProjectGovernancePanel } from "./ProductivityWorkspace";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { summarizeTimeEntries } from "./features/timeTracking/model";
 
 const money = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -1594,7 +1595,7 @@ const timeActivityLabels={planning:'תכנון',supervision:'פיקוח',technic
 function ProjectHoursPanel({project,entries,professionals,api,setNotice,onDone,canEdit,openRequest=0}){
   const [open,setOpen]=useState(false);
   useEffect(()=>{if(openRequest>0)setOpen(true)},[openRequest]);
-  const totals=Object.entries(timeActivityLabels).map(([key,label])=>({key,label,hours:entries.filter(item=>item.activity_type===key).reduce((sum,item)=>sum+Number(item.hours||0),0)}));
+  const totals=summarizeTimeEntries(entries);
   const totalHours=totals.reduce((sum,item)=>sum+item.hours,0);
   const submit=async(event)=>{event.preventDefault();const data=new FormData(event.currentTarget);try{await api(`/projects/${project.id}/time-entries`,{method:'POST',body:JSON.stringify({activityType:data.get('activityType'),workDate:data.get('workDate'),hours:data.get('hours'),professionalId:data.get('professionalId')||null,notes:data.get('notes')})});setOpen(false);setNotice('דיווח השעות נשמר');onDone()}catch(error){setNotice(error.message)}};
   const targetFor=(key)=>key==='installation'?Number(project.installationHoursTarget||0):key==='programming'?Number(project.programmingHoursTarget||0):0;

@@ -72,6 +72,7 @@ import {
   ZoomControl,
 } from "react-leaflet";
 import L from "leaflet";
+import { passwordsMatch } from "./features/auth/passwordPolicy";
 import { activity, clients, milestones, stageMeta } from "./data";
 import {
   AlertCenter,
@@ -672,6 +673,7 @@ function App() {
       body: JSON.stringify(credentials),
     });
     setUser(result.user);
+    if (result.user.mustChangePassword) return;
     const [projectResult] = await Promise.all([
       api("/projects"),
       loadReferenceData(),
@@ -699,6 +701,7 @@ function App() {
     );
   if (!user && startupError) return <StartupError message={startupError} />;
   if (!user) return <LoginPage onLogin={login} />;
+  if (user.mustChangePassword) return <InitialPasswordPage onChanged={()=>window.location.reload()} />;
 
   const filteredProjects = projects.filter((project) => {
     const haystack =
@@ -1323,6 +1326,13 @@ function LoginPage({ onLogin }) {
       </div>
     </div>
   );
+}
+
+function InitialPasswordPage({onChanged}) {
+  const [form,setForm]=useState({currentPassword:'',newPassword:'',confirmPassword:''});
+  const [error,setError]=useState(''); const [submitting,setSubmitting]=useState(false);
+  const submit=async(event)=>{event.preventDefault();setError('');if(!passwordsMatch(form.newPassword,form.confirmPassword))return setError('הסיסמאות אינן תואמות');setSubmitting(true);try{const result=await api('/auth/password',{method:'POST',body:JSON.stringify(form)});onChanged(result.user)}catch(changeError){setError(changeError.message)}finally{setSubmitting(false)}};
+  return <div className="login-shell" dir="rtl"><div className="login-card"><div className="login-brand"><div className="brand-mark"><img src={projectsMark} alt=""/></div><strong><b>PRO</b>JECTS</strong></div><div className="login-copy"><span>אבטחת החשבון</span><h1>החלפת סיסמה ראשונית</h1><p>לפני תחילת העבודה יש לבחור סיסמה אישית וחזקה.</p></div><form onSubmit={submit}><label>סיסמה נוכחית<input type="password" autoComplete="current-password" required value={form.currentPassword} onChange={event=>setForm({...form,currentPassword:event.target.value})}/></label><label>סיסמה חדשה<input type="password" autoComplete="new-password" minLength="12" required value={form.newPassword} onChange={event=>setForm({...form,newPassword:event.target.value})}/></label><label>אימות סיסמה<input type="password" autoComplete="new-password" minLength="12" required value={form.confirmPassword} onChange={event=>setForm({...form,confirmPassword:event.target.value})}/></label><small>לפחות 12 תווים, אות גדולה, אות קטנה ומספר.</small>{error&&<div className="login-error">{error}</div>}<button className="primary-button" disabled={submitting}>{submitting?'שומר...':'שמירת סיסמה'} <ArrowLeft size={17}/></button></form></div></div>;
 }
 
 function UsersPage({ setNotice, currentUser, onChanged }) {

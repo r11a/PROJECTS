@@ -16,6 +16,7 @@ import { createGeocoder } from './geocoder.js';
 import { createBackupRouter } from './backup.js';
 import { createAiRouter } from './ai.js';
 import { createProductivityRouter, executeAutomations, startAutomationScheduler } from './productivity.js';
+import { imageFileFilter } from './uploadPolicy.js';
 
 const { Pool, Client } = pg;
 const DATA_DIR = process.env.PROJECTS_DATA_DIR || '/data';
@@ -178,13 +179,14 @@ async function seedDatabase() {
   const options = await readOptions();
   const username = String(options.admin_username || 'admin').trim();
   const password = String(options.admin_password || 'change-me-now');
-  const passwordHash = await bcrypt.hash(password, 12);
-  await pool.query(
-    `INSERT INTO users(username, display_name, password_hash, role)
-     VALUES($1, $2, $3, 'admin')
-     ON CONFLICT(username) DO UPDATE SET password_hash = EXCLUDED.password_hash, updated_at = NOW()`,
-    [username, username, passwordHash],
-  );
+  const existing = await pool.query('SELECT id,password_hash FROM users WHERE username=$1', [username]);
+  if (!existing.rowCount) {
+    const passwordHash = await bcrypt.hash(password, 12);
+    await pool.query(`INSERT INTO users(username,display_name,password_hash,role,must_change_password)
+      VALUES($1,$2,$3,'admin',$4)`, [username, username, passwordHash, password === 'change-me-now']);
+  } else if (existing.rows[0].password_hash && await bcrypt.compare('change-me-now', existing.rows[0].password_hash)) {
+    await pool.query('UPDATE users SET must_change_password=TRUE WHERE id=$1', [existing.rows[0].id]);
+  }
 
   await seedDemoProjects();
 }
@@ -292,7 +294,7 @@ try {
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 'loopback');
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({ contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],imgSrc:["'self'",'data:','blob:','https://*.tile.openstreetmap.org'],connectSrc:["'self'",'https://photon.komoot.io'],fontSrc:["'self'",'data:'],mediaSrc:["'self'",'blob:'],frameSrc:["'self'",'blob:'],objectSrc:["'none'"],baseUri:["'self'"],formAction:["'self'"],frameAncestors:["'self'",'http:','https:']}} }));
 app.use(express.json({ limit: '1mb' }));
 
 function cookieValue(request, name) {
@@ -304,7 +306,7 @@ function cookieValue(request, name) {
 }
 
 function publicUser(row) {
-  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, haUserId: row.ha_user_id, mergedIntoUserId:row.merged_into_user_id, identityTypes:[row.username?'web':null,row.ha_user_id?'ingress':null].filter(Boolean), avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', avatarImage: row.avatar_image || '', appearanceTheme: row.appearance_theme || 'light', messageSoundEnabled:row.message_sound_enabled !== false, lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
+  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, mustChangePassword:Boolean(row.must_change_password), haUserId: row.ha_user_id, mergedIntoUserId:row.merged_into_user_id, identityTypes:[row.username?'web':null,row.ha_user_id?'ingress':null].filter(Boolean), avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', avatarImage: row.avatar_image || '', appearanceTheme: row.appearance_theme || 'light', messageSoundEnabled:row.message_sound_enabled !== false, lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
 }
 
 const presenceWrites=new Map();
@@ -337,6 +339,7 @@ async function authenticate(request, response, next) {
     const result = await pool.query('SELECT * FROM users WHERE id = $1 AND active = TRUE', [payload.sub]);
     if (!result.rowCount) return response.status(401).json({ error: 'User is unavailable' });
     request.user = publicUser(result.rows[0]);
+    if (request.user.mustChangePassword && !['/api/auth/me','/api/auth/password','/api/auth/logout'].includes(request.path)) return response.status(428).json({ error:'Password change required',code:'PASSWORD_CHANGE_REQUIRED' });
     await touchPresence(request.user);
     next();
   } catch {
@@ -376,14 +379,25 @@ app.get('/api/health', async (_request, response) => {
   }
 });
 
+const dummyPasswordHash = await bcrypt.hash(randomBytes(24).toString('hex'), 12);
+const ipLoginAttempts = new Map();
 app.post('/api/auth/login', async (request, response) => {
   const username = String(request.body?.username || '').trim();
   const password = String(request.body?.password || '');
+  const key = `${request.ip}|${username.toLowerCase()}`;
+  const attempt = ipLoginAttempts.get(key);
+  if (attempt?.lockedUntil > Date.now()) return response.status(429).json({ error:'Too many login attempts' });
   const result = await pool.query('SELECT * FROM users WHERE username = $1 AND active = TRUE', [username]);
-  if (!result.rowCount || !result.rows[0].password_hash || !await bcrypt.compare(password, result.rows[0].password_hash)) {
+  const row=result.rows[0];
+  if (row?.locked_until && new Date(row.locked_until).getTime()>Date.now()) return response.status(429).json({error:'Account temporarily locked'});
+  const valid=await bcrypt.compare(password,row?.password_hash||dummyPasswordHash);
+  if (!row || !row.password_hash || !valid) {
+    const count=(attempt?.count||0)+1; ipLoginAttempts.set(key,{count,lockedUntil:count>=5?Date.now()+15*60*1000:0});
+    if(row)await pool.query(`UPDATE users SET failed_login_attempts=failed_login_attempts+1,locked_until=CASE WHEN failed_login_attempts+1>=5 THEN NOW()+INTERVAL '15 minutes' ELSE locked_until END WHERE id=$1`,[row.id]);
     return response.status(401).json({ error: 'שם משתמש או סיסמה שגויים' });
   }
-  const user = publicUser(result.rows[0]);
+  ipLoginAttempts.delete(key); await pool.query('UPDATE users SET failed_login_attempts=0,locked_until=NULL WHERE id=$1',[row.id]);
+  const user = publicUser(row);
   const token = jwt.sign({ sub: String(user.id), role: user.role }, jwtSecret, { expiresIn: '12h' });
   response.cookie('projects_session', token, { httpOnly: true, sameSite: 'strict', secure: request.secure, maxAge: 12 * 60 * 60 * 1000, path: '/' });
   await pool.query('UPDATE users SET last_login_at=NOW(),last_seen_at=NOW() WHERE id=$1',[user.id]);
@@ -399,6 +413,16 @@ app.post('/api/auth/logout', authenticate, async (request, response) => {
 });
 
 app.get('/api/auth/me', authenticate, (request, response) => response.json({ user: request.user }));
+
+app.post('/api/auth/password', authenticate, async (request,response) => {
+  const currentPassword=String(request.body?.currentPassword||''),newPassword=String(request.body?.newPassword||'');
+  if(newPassword.length<12||!/[a-z]/.test(newPassword)||!/[A-Z]/.test(newPassword)||!/\d/.test(newPassword))return response.status(400).json({error:'Password must contain at least 12 characters, upper and lower case letters, and a number'});
+  const current=await pool.query('SELECT * FROM users WHERE id=$1 AND active=TRUE',[request.user.id]);
+  if(!current.rowCount||!current.rows[0].password_hash||!await bcrypt.compare(currentPassword,current.rows[0].password_hash))return response.status(401).json({error:'Current password is incorrect'});
+  if(await bcrypt.compare(newPassword,current.rows[0].password_hash))return response.status(400).json({error:'Choose a different password'});
+  const result=await pool.query('UPDATE users SET password_hash=$1,must_change_password=FALSE,failed_login_attempts=0,locked_until=NULL,updated_at=NOW() WHERE id=$2 RETURNING *',[await bcrypt.hash(newPassword,12),request.user.id]);
+  await audit(request,'change_password','user',String(request.user.id)); response.json({user:publicUser(result.rows[0])});
+});
 
 app.get('/api/live', authenticate, (request, response) => {
   response.set({'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
@@ -686,7 +710,7 @@ app.post('/api/users', authenticate, requireRoles('admin'), async (request, resp
   const username = String(request.body.username || '').trim();
   const password = String(request.body.password || '');
   const role = ROLES.includes(request.body.role) ? request.body.role : 'viewer';
-  if (!username || password.length < 8) return response.status(400).json({ error: 'Username and password of at least 8 characters are required' });
+  if (!username || password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) return response.status(400).json({ error: 'Password must contain at least 12 characters, upper and lower case letters, and a number' });
   const passwordHash = await bcrypt.hash(password, 12);
   const result = await pool.query(
     `INSERT INTO users(username, display_name, password_hash, role, avatar_color, avatar_icon)
@@ -706,8 +730,9 @@ app.patch('/api/users/:id', authenticate, requireRoles('admin'), async (request,
   if (request.body.avatarColor) { values.push(request.body.avatarColor); updates.push(`avatar_color = $${values.length}`); }
   if (request.body.avatarIcon) { values.push(request.body.avatarIcon); updates.push(`avatar_icon = $${values.length}`); }
   if (request.body.password) {
-    if (String(request.body.password).length < 8) return response.status(400).json({ error: 'Password must contain at least 8 characters' });
-    values.push(await bcrypt.hash(String(request.body.password), 12)); updates.push(`password_hash = $${values.length}`);
+    const newPassword=String(request.body.password);
+    if (newPassword.length < 12 || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword)) return response.status(400).json({ error: 'Password must contain at least 12 characters, upper and lower case letters, and a number' });
+    values.push(await bcrypt.hash(newPassword, 12)); updates.push(`password_hash = $${values.length}`); updates.push('must_change_password = FALSE');
   }
   if (!updates.length) return response.status(400).json({ error: 'No editable fields supplied' });
   values.push(request.params.id);
@@ -809,6 +834,7 @@ app.use('/api', (_request, response) => response.status(404).json({ error: 'Not 
 app.use((error, _request, response, _next) => {
   console.error(error);
   if (error.statusCode) return response.status(error.statusCode).json({ error: error.message });
+  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') return response.status(413).json({ error:'File exceeds the allowed size limit' });
   if (error.code === '23505') return response.status(409).json({ error: 'A record with these details already exists' });
   if (error.code === '23503') return response.status(409).json({ error: 'לא ניתן למחוק רשומה שנמצאת בשימוש; אפשר להשבית אותה' });
   if (error.code === '23514' || error.code === '22P02') return response.status(400).json({ error: 'Invalid field value' });

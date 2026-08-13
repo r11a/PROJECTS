@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.0
+
+- Promoted the Home Assistant add-on from experimental to stable after a focused hardening pass.
+- Added Playwright coverage for initial-password replacement, authenticated navigation, template-based project creation and rejected unsafe uploads; all critical paths now run in CI.
+- Hardened login timing, persistent account lockout, first-login password replacement and password complexity without resetting administrator passwords on restart.
+- Added strict upload allowlists, role-aware video limits, CSP and response security headers.
+- Pinned all direct production and development dependencies and added production vulnerability auditing to CI.
+- Began feature-oriented extraction from the four largest frontend workspaces for authentication policy, task defaults, theme metadata and time-tracking models.
+
 ## 0.17.3
 
 - Removed the two obsolete dialog-layout layers that competed with the viewport portal system.
