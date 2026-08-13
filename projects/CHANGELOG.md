@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.1
+
+- Fixed Home Assistant add-on builds by fully locking the PowerPoint generator and all of its transitive npm dependencies for clean `npm ci` installations.
+
 ## 0.17.0
 
 - Added direct camera capture and device-file upload to the Forms & Files workspace, including project/client assignment, thumbnails and uploader metadata.
