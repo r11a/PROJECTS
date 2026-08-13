@@ -307,6 +307,15 @@ function App() {
       equipmentResult,
     };
   };
+  const refreshCurrentUser = async (changedUser) => {
+    if (changedUser && String(changedUser.id) === String(user?.id)) {
+      setUser(changedUser);
+    } else {
+      const result = await api("/auth/me");
+      setUser(result.user);
+    }
+    await loadReferenceData();
+  };
   const loadProjects = () =>
     api("/projects").then((result) => {
       setProjects(result.projects);
@@ -375,6 +384,7 @@ function App() {
         if (!table || table === "tasks") loadTaskCount().catch(() => {});
         if (["clients", "client_contacts", "projects"].includes(table))
           loadReferenceData().catch(() => {});
+        if (table === "users") refreshCurrentUser().catch(() => {});
         window.dispatchEvent(
           new CustomEvent("projects:live-change", { detail: { table } }),
         );
@@ -1002,7 +1012,7 @@ function App() {
               setNotice={setNotice}
               onUserChanged={setUser}
               onConfigurationChanged={setConfiguration}
-              usersPanel={user.role === "admin" ? <UsersPage setNotice={setNotice} currentUser={user} onChanged={loadReferenceData} /> : null}
+              usersPanel={user.role === "admin" ? <UsersPage setNotice={setNotice} currentUser={user} onChanged={refreshCurrentUser} /> : null}
             />
           )}
           {page === "project" && selectedProject && (
@@ -1227,12 +1237,12 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
   };
   const updateUser = async (id, patch) => {
     try {
-      await api(`/users/${id}`, {
+      const result = await api(`/users/${id}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
       });
       loadUsers();
-      onChanged?.();
+      onChanged?.(result.user);
       setNotice("ההרשאה עודכנה");
     } catch (error) {
       setNotice(error.message);
@@ -1243,9 +1253,9 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
     try {
       const body = new FormData();
       body.set("avatar", file);
-      await api(`/users/${id}/avatar`, { method: "POST", body });
+      const result = await api(`/users/${id}/avatar`, { method: "POST", body });
       loadUsers();
-      onChanged?.();
+      onChanged?.(result.user);
       setNotice("תמונת המשתמש עודכנה");
     } catch (error) {
       setNotice(error.message);
