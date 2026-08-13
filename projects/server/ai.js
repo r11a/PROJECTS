@@ -206,7 +206,7 @@ async function buildChatContext(pool, question) {
   const queries = [
     pool.query(`SELECT COUNT(*)::int projects,
       COUNT(*) FILTER (WHERE archived_at IS NULL)::int active_projects,
-      COALESCE(ROUND(AVG(progress)) FILTER (WHERE archived_at IS NULL),0)::int average_progress,
+      COALESCE(ROUND(AVG(progress) FILTER (WHERE archived_at IS NULL)),0)::int average_progress,
       COALESCE(SUM(value-paid) FILTER (WHERE archived_at IS NULL),0)::numeric outstanding
       FROM projects`),
   ];

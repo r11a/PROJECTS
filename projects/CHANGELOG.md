@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.11
+
+- Fixed the AI chat overview query for PostgreSQL by applying the active-project filter to `AVG(progress)` before rounding the aggregate result.
+- Prevented context preparation from failing before the question reaches the configured AI provider.
+
 ## 0.11.10
 
 - Moved AI chat generation to short-lived asynchronous jobs so slow provider calls no longer keep a Cloudflare, Home Assistant or Ingress request open.
