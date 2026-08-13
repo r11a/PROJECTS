@@ -54,6 +54,30 @@ test('project Gantt keeps short tasks readable and projects persist classificati
   assert.match(server, /projectClassification: 'project_classification'/);
 });
 
+test('Gantt scheduling supports drag, resize, long press duration and persistent color', async () => {
+  const timeline = await read('../src/GanttTimeline.jsx');
+  const operations = await read('../server/operations.js');
+  const migration = await read('../migrations/019_gantt_messages.sql');
+  for (const token of ['beginTaskDrag','moveTaskDrag','adjustDialogDuration','scheduleColors','onScheduleChange','mentionUserIds','משימה קריטית']) assert.match(timeline,new RegExp(token));
+  assert.match(timeline,/item\.critical \? "#C92A3A"/);
+  assert.match(operations,/color=\$12/);
+  assert.match(migration,/ALTER TABLE tasks ADD COLUMN IF NOT EXISTS color/);
+});
+
+test('management reports, presentation, replies and mentions are wired end to end', async () => {
+  const workspaces = await read('../src/Workspaces.jsx');
+  const messages = await read('../src/Messages.jsx');
+  const operational = await read('../server/operational.js');
+  assert.match(workspaces,/generatePresentation/);
+  assert.match(workspaces,/generateAiReport/);
+  assert.match(workspaces,/ישיבת ניהול פרויקטים/);
+  assert.match(messages,/const reply/);
+  assert.match(messages,/insertMention/);
+  assert.match(operational,/parent_message_id/);
+  assert.match(operational,/mentions:mentioned/);
+  assert.match(operational,/router\.post\('\/mentions'/);
+});
+
 test('proprietary release is explicitly unlicensed for npm reuse', async () => {
   const packageJson = JSON.parse(await read('../package.json'));
   const license = await read('../../LICENSE');

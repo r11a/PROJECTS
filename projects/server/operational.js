@@ -95,12 +95,17 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
 
   router.get('/messages', async (request,response) => {
     const result=await pool.query(`SELECT m.*,sender.display_name sender_name,recipient.display_name recipient_name FROM user_messages m JOIN users sender ON sender.id=m.sender_id JOIN users recipient ON recipient.id=m.recipient_id WHERE (m.recipient_id=$1 OR m.sender_id=$1) AND NOT ($1=ANY(m.hidden_for)) ORDER BY m.created_at DESC LIMIT 200`,[request.user.id]);
-    response.json({messages:result.rows.map(row=>({id:row.id,senderId:row.sender_id,senderName:row.sender_name,recipientId:row.recipient_id,recipientName:row.recipient_name,subject:row.subject,body:row.body,readAt:row.read_at,createdAt:row.created_at})),unread:result.rows.filter(row=>String(row.recipient_id)===String(request.user.id)&&!row.read_at).length});
+    response.json({messages:result.rows.map(row=>({id:row.id,senderId:row.sender_id,senderName:row.sender_name,recipientId:row.recipient_id,recipientName:row.recipient_name,subject:row.subject,body:row.body,readAt:row.read_at,createdAt:row.created_at,parentMessageId:row.parent_message_id,linkedUrl:row.linked_url,mention:row.mention})),unread:result.rows.filter(row=>String(row.recipient_id)===String(request.user.id)&&!row.read_at).length});
   });
   router.post('/messages', async (request,response) => {
     const recipientId=Number(request.body.recipientId);const body=String(request.body.body||'').trim();if(!recipientId||!body)return response.status(400).json({error:'יש לבחור נמען ולכתוב הודעה'});
-    const result=await pool.query('INSERT INTO user_messages(sender_id,recipient_id,subject,body) SELECT $1,id,$2,$3 FROM users WHERE id=$4 AND active=TRUE RETURNING *',[request.user.id,String(request.body.subject||'').trim(),body,recipientId]);
-    if(!result.rowCount)return response.status(404).json({error:'הנמען אינו זמין'});await audit(request,'create','message',String(result.rows[0].id),{recipientId});response.status(201).json({message:result.rows[0]});
+    const subject=String(request.body.subject||'').trim();const linkedUrl=String(request.body.linkedUrl||'').slice(0,500);const parentId=Number(request.body.parentId)||null;
+    const result=await pool.query('INSERT INTO user_messages(sender_id,recipient_id,subject,body,parent_message_id,linked_url) SELECT $1,id,$2,$3,$4,$5 FROM users WHERE id=$6 AND active=TRUE RETURNING *',[request.user.id,subject,body,parentId,linkedUrl,recipientId]);
+    if(!result.rowCount)return response.status(404).json({error:'הנמען אינו זמין'});
+    const team=await pool.query('SELECT id,username,display_name FROM users WHERE active=TRUE AND id<>$1',[request.user.id]);
+    const normalized=body.toLocaleLowerCase('he-IL');const mentioned=team.rows.filter(item=>normalized.includes(`@${String(item.display_name).toLocaleLowerCase('he-IL')}`)||normalized.includes(`@${String(item.username||'').toLocaleLowerCase('he-IL')}`)).filter(item=>Number(item.id)!==recipientId);
+    for(const item of mentioned)await pool.query('INSERT INTO user_messages(sender_id,recipient_id,subject,body,parent_message_id,linked_url,mention) VALUES($1,$2,$3,$4,$5,$6,TRUE)',[request.user.id,item.id,subject||'תויגת בהודעה',body,result.rows[0].id,linkedUrl]);
+    await audit(request,'create','message',String(result.rows[0].id),{recipientId,mentions:mentioned.map(item=>item.id)});response.status(201).json({message:result.rows[0],mentions:mentioned.length});
   });
   router.patch('/messages/:id/read', async (request,response) => { const result=await pool.query('UPDATE user_messages SET read_at=COALESCE(read_at,NOW()) WHERE id=$1 AND recipient_id=$2 RETURNING *',[request.params.id,request.user.id]);if(!result.rowCount)return response.status(404).json({error:'ההודעה לא נמצאה'});response.json({message:result.rows[0]}); });
   router.delete('/messages', async (request,response) => {
@@ -109,6 +114,13 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     const result=await pool.query(`UPDATE user_messages SET hidden_for=array_append(hidden_for,$1) WHERE id=ANY($2::bigint[]) AND (sender_id=$1 OR recipient_id=$1) AND NOT ($1=ANY(hidden_for)) RETURNING id`,[request.user.id,ids]);
     await audit(request,'delete','messages',result.rows.map(row=>row.id).join(','),{count:result.rowCount});
     response.json({deleted:result.rowCount});
+  });
+  router.post('/mentions', async (request,response)=>{
+    const userIds=[...new Set((Array.isArray(request.body.userIds)?request.body.userIds:[]).map(Number).filter(id=>Number.isInteger(id)&&id!==Number(request.user.id)))];
+    const body=String(request.body.body||'').trim();if(!userIds.length||!body)return response.status(400).json({error:'יש לבחור משתמש ולצרף תוכן לתיוג'});
+    const subject=String(request.body.subject||'תויגת ב-PROJECTS').slice(0,200);const linkedUrl=String(request.body.linkedUrl||'').slice(0,500);
+    const result=await pool.query(`INSERT INTO user_messages(sender_id,recipient_id,subject,body,linked_url,mention) SELECT $1,id,$2,$3,$4,TRUE FROM users WHERE id=ANY($5::bigint[]) AND active=TRUE RETURNING id,recipient_id`,[request.user.id,subject,body,linkedUrl,userIds]);
+    await audit(request,'create','mentions',result.rows.map(row=>row.id).join(','),{recipients:result.rows.map(row=>row.recipient_id)});response.status(201).json({created:result.rowCount});
   });
 
   router.patch('/preferences/appearance', async (request, response) => {

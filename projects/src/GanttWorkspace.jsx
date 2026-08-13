@@ -10,6 +10,7 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
   const [milestones, setMilestones] = useState([]);
   const [query, setQuery] = useState("");
   const [editor, setEditor] = useState(null);
+  const [users,setUsers]=useState([]);
   const load = () => Promise.all([
     api("/operations/tasks?q=&status="),
     api("/operations/milestones?projectId="),
@@ -19,6 +20,7 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
   }).catch((error) => setNotice(error.message));
   useEffect(() => {
     load();
+    api('/team').then(result=>setUsers(result.users||[])).catch(()=>{});
     const live = () => load();
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);
@@ -52,6 +54,16 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
       setNotice(error.message);
     }
   };
+  const saveSchedule = async (item, dates) => {
+    try {
+      const base = item.kind === "task" ? "/operations/tasks" : "/operations/milestones";
+      const body = item.kind === "task" ? dates : { dueDate:dates.dueDate, color:dates.color };
+      await api(`${base}/${item.id}`, { method:"PATCH", body:JSON.stringify(body) });
+      if(dates.mentionUserIds?.length)await api('/mentions',{method:'POST',body:JSON.stringify({userIds:dates.mentionUserIds,subject:`תיוג במשימה ${item.title}`,body:`תויגת במשימה ${item.title}. התאריכים עודכנו ל-${dates.startDate} עד ${dates.dueDate}.`,linkedUrl:`?project=${encodeURIComponent(item.project_id||'')}`})});
+      setNotice("תאריכי המשימה עודכנו");
+      await load();
+    } catch (error) { setNotice(error.message); await load(); }
+  };
 
   return (
     <div className="ops-page global-gantt-page">
@@ -59,7 +71,7 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
         <div><span className="ops-eyebrow"><CalendarDays size={15} />תכנון רוחבי</span><h2>לוח גאנט לכל הפרויקטים</h2><p>משימות, אבני דרך, תלות ונתיב קריטי בתצוגה מסחרית אחידה.</p></div>
         <div className="gantt-summary"><b>{groups.length}</b><span>פרויקטים</span><b>{tasks.filter((item) => item.critical).length}</b><span>משימות קריטיות</span></div>
       </section>
-      <GanttTimeline groups={groups} query={query} onQueryChange={setQuery} onOpen={(item) => setEditor({ kind: item.kind, item })} title="תכנון כלל הפרויקטים" />
+      <GanttTimeline groups={groups} query={query} onQueryChange={setQuery} onOpen={(item) => setEditor({ kind: item.kind, item })} onScheduleChange={saveSchedule} users={users.filter(item=>String(item.id)!==String(user.id))} title="תכנון כלל הפרויקטים" />
       {editor && <TaskEditor kind={editor.kind} initial={editor.item} projects={projects} professionals={professionals} tasks={tasks} onClose={() => setEditor(null)} onSave={save} />}
     </div>
   );

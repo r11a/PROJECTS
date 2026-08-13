@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Boxes,
+  ArrowDownAZ,
+  BriefcaseBusiness,
   Building2,
   Check,
   Download,
@@ -154,7 +156,7 @@ export function MasterDataWorkspace({
           />
         </label>
         <div className="master-toolbar-actions">
-          {tab==='professionals'&&<><select value={professionalRole} onChange={e=>setProfessionalRole(e.target.value)}><option value="">כל התפקידים</option>{roles.filter(x=>x.active).map(x=><option key={x.id} value={String(x.id)}>{x.name}</option>)}</select><select value={professionalSort} onChange={e=>setProfessionalSort(e.target.value)}><option value="az">א׳–ת׳</option><option value="za">ת׳–א׳</option><option value="new">חדש–ישן</option><option value="old">ישן–חדש</option></select><div className="professional-view-switch"><button className={professionalView==='grid'?'active':''} onClick={()=>{setProfessionalView('grid');localStorage.setItem('projects-professional-view','grid')}}><LayoutGrid size={16}/></button><button className={professionalView==='table'?'active':''} onClick={()=>{setProfessionalView('table');localStorage.setItem('projects-professional-view','table')}}><Rows3 size={16}/></button></div></>}
+          {tab==='professionals'&&<><label className="master-icon-filter" title="סינון לפי תפקיד"><BriefcaseBusiness size={17}/><select aria-label="סינון לפי תפקיד" value={professionalRole} onChange={e=>setProfessionalRole(e.target.value)}><option value="">הכול</option>{roles.filter(x=>x.active).map(x=><option key={x.id} value={String(x.id)}>{x.name}</option>)}</select></label><label className="master-icon-filter" title="סדר תצוגה"><ArrowDownAZ size={17}/><select aria-label="סדר תצוגה" value={professionalSort} onChange={e=>setProfessionalSort(e.target.value)}><option value="az">א׳–ת׳</option><option value="za">ת׳–א׳</option><option value="new">חדש–ישן</option><option value="old">ישן–חדש</option></select></label><div className="professional-view-switch"><button className={professionalView==='grid'?'active':''} onClick={()=>{setProfessionalView('grid');localStorage.setItem('projects-professional-view','grid')}}><LayoutGrid size={16}/></button><button className={professionalView==='table'?'active':''} onClick={()=>{setProfessionalView('table');localStorage.setItem('projects-professional-view','table')}}><Rows3 size={16}/></button></div></>}
           {tab === "professionals" && user.role === "admin" && (
             <button className="ops-secondary" onClick={() => setRoleForm(true)}>
               <Plus size={16} />

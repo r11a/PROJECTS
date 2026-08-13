@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Mail, MessageSquare, Plus, Send, Trash2, X } from "lucide-react";
+import { Check, CornerUpLeft, Link2, Mail, MessageSquare, Plus, Send, Trash2, X } from "lucide-react";
 
 export function MessageCenter({
   api,
@@ -12,7 +12,7 @@ export function MessageCenter({
   const [messages, setMessages] = useState([]);
   const [compose, setCompose] = useState(false);
   const [selected,setSelected]=useState([]);
-  const [form, setForm] = useState({ recipientId: "", subject: "", body: "" });
+  const [form, setForm] = useState({ recipientId: "", subject: "", body: "", parentId:null, linkedUrl:"" });
   const load = () =>
     api("/messages")
       .then((result) => {
@@ -39,7 +39,7 @@ export function MessageCenter({
     event.preventDefault();
     try {
       await api("/messages", { method: "POST", body: JSON.stringify(form) });
-      setForm({ recipientId: "", subject: "", body: "" });
+      setForm({ recipientId: "", subject: "", body: "", parentId:null, linkedUrl:"" });
       setCompose(false);
       setNotice("ההודעה נשלחה");
       load();
@@ -47,6 +47,12 @@ export function MessageCenter({
       setNotice(error.message);
     }
   };
+  const reply = (message) => {
+    const recipientId=String(message.senderId)===String(user.id)?message.recipientId:message.senderId;
+    setForm({recipientId:String(recipientId),subject:`תגובה: ${message.subject||"הודעה"}`,body:"",parentId:message.id,linkedUrl:message.linkedUrl||""});
+    setCompose(true);
+  };
+  const insertMention=(item)=>setForm(current=>({...current,body:`${current.body}${current.body&&!current.body.endsWith(' ')?' ':''}@${item.displayName} `}));
   const remove=async(ids)=>{if(!ids.length||!confirm(`למחוק ${ids.length===1?'את ההודעה':`${ids.length} הודעות`} מהתצוגה שלך?`))return;try{await api('/messages',{method:'DELETE',body:JSON.stringify({ids})});setSelected([]);setNotice('ההודעות שנבחרו נמחקו');load()}catch(error){setNotice(error.message)}};
   return (
     <div className="message-backdrop" onMouseDown={onClose}>
@@ -118,6 +124,7 @@ export function MessageCenter({
                 }
               />
             </label>
+            <div className="message-mentions"><small>תיוג משתמש:</small>{users.filter(item=>String(item.id)!==String(user.id)&&item.active!==false).map(item=><button type="button" key={item.id} onClick={()=>insertMention(item)}>@{item.displayName}</button>)}</div>
             <button className="ops-primary">
               <Send size={15} />
               שליחה
@@ -149,8 +156,9 @@ export function MessageCenter({
                   · {new Date(message.createdAt).toLocaleString("he-IL")}
                 </small>
                 <p>{message.body}</p>
+                {message.linkedUrl&&<a className="message-linked" href={message.linkedUrl}><Link2 size={13}/>פתיחת הקישור המצורף</a>}
               </div>
-              <div className="message-row-actions">{message.readAt && <Check size={15} />}<button onClick={event=>{event.stopPropagation();remove([message.id])}} title="מחיקת הודעה"><Trash2 size={14}/></button></div>
+              <div className="message-row-actions">{message.readAt && <Check size={15} />}<button onClick={event=>{event.stopPropagation();reply(message)}} title="שליחת תגובה"><CornerUpLeft size={14}/></button><button onClick={event=>{event.stopPropagation();remove([message.id])}} title="מחיקת הודעה"><Trash2 size={14}/></button></div>
             </article>
           ))}
           {!messages.length && (

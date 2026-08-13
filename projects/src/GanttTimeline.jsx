@@ -11,6 +11,7 @@ const inputDate = (value) => {
   return `${date.getFullYear()}-${month}-${day}`;
 };
 const palette = ["#6548D7", "#087EA4", "#A85E00", "#087F5B", "#B52B59", "#315FC4"];
+const scheduleColors = ["#6548D7", "#315FC4", "#087EA4", "#087F5B", "#A85E00", "#B52B59", "#C92A3A", "#495057"];
 const contrastText = (hex) => {
   const value = hex.replace("#", "");
   const channels = [0, 2, 4].map((offset) => parseInt(value.slice(offset, offset + 2), 16) / 255).map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
@@ -27,7 +28,7 @@ const zooms = {
 const clampScale = (value) => Math.min(2.2, Math.max(0.55, Math.round(value * 20) / 20));
 const touchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
 
-export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title = "לוח גאנט", compact = false }) {
+export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onScheduleChange, users = [], title = "לוח גאנט", compact = false }) {
   const [zoom, setZoom] = useState("week");
   const [anchor, setAnchor] = useState(midnight(new Date()));
   const [collapsed, setCollapsed] = useState(new Set());
@@ -35,10 +36,15 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
   const [timelineFocus, setTimelineFocus] = useState(true);
   const [scale, setScale] = useState(1);
   const [dragging, setDragging] = useState(false);
+  const [schedulePreview, setSchedulePreview] = useState({});
+  const [scheduleDialog, setScheduleDialog] = useState(null);
   const scrollRef = useRef(null);
   const pendingShift = useRef(0);
   const pinch = useRef(null);
   const mouseDrag = useRef(null);
+  const taskDrag = useRef(null);
+  const blockTaskClick = useRef(false);
+  const longPress = useRef(null);
   const config = zooms[zoom];
   const pixelsPerDay = config.pixelsPerDay * scale;
   const pagePixels = config.pageDays * pixelsPerDay;
@@ -143,6 +149,62 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
     mouseDrag.current = null;
     setDragging(false);
   };
+  const beginTaskDrag = (event, item, mode) => {
+    if (!onScheduleChange || event.pointerType === "touch" && event.isPrimary === false) return;
+    event.preventDefault();
+    event.stopPropagation();
+    taskDrag.current = { pointerId:event.pointerId, item, mode, x:event.clientX, start:midnight(item.start), end:midnight(item.end), moved:false };
+    if (mode === "move") longPress.current = setTimeout(() => {
+      taskDrag.current = null;
+      blockTaskClick.current = true;
+      setScheduleDialog({ item, startDate:inputDate(item.start), dueDate:inputDate(item.end), color:item.color || palette[0], critical:Boolean(item.critical), mentionUserIds:[] });
+    }, 650);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const moveTaskDrag = (event) => {
+    const drag = taskDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const days = Math.round((event.clientX - drag.x) / pixelsPerDay);
+    if (Math.abs(event.clientX - drag.x) > 6 && longPress.current) { clearTimeout(longPress.current); longPress.current=null; }
+    if (!days && !drag.moved) return;
+    drag.moved = true;
+    let start = drag.start;
+    let end = drag.end;
+    if (drag.mode === "move") { start += days * DAY; end += days * DAY; }
+    if (drag.mode === "start") start = Math.min(end, drag.start + days * DAY);
+    if (drag.mode === "end") end = Math.max(start, drag.end + days * DAY);
+    drag.preview = { start, end };
+    setSchedulePreview((current) => ({ ...current, [`${drag.item.kind}-${drag.item.id}`]:{ start, end } }));
+  };
+  const endTaskDrag = async (event) => {
+    const drag = taskDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) { if (longPress.current) { clearTimeout(longPress.current); longPress.current=null; } requestAnimationFrame(()=>{blockTaskClick.current=false;}); return; }
+    event.preventDefault();
+    event.stopPropagation();
+    taskDrag.current = null;
+    if (longPress.current) { clearTimeout(longPress.current); longPress.current=null; }
+    blockTaskClick.current = drag.moved;
+    const key = `${drag.item.kind}-${drag.item.id}`;
+    const preview = drag.preview;
+    if (drag.moved && preview) await onScheduleChange?.(drag.item, { startDate:inputDate(preview.start), dueDate:inputDate(preview.end) });
+    setSchedulePreview((current) => { const next={...current}; delete next[key]; return next; });
+    requestAnimationFrame(() => { blockTaskClick.current = false; });
+  };
+  const saveScheduleDialog = async (event) => {
+    event.preventDefault();
+    if (!scheduleDialog) return;
+    if (scheduleDialog.startDate > scheduleDialog.dueDate) return;
+    await onScheduleChange?.(scheduleDialog.item, { startDate:scheduleDialog.startDate, dueDate:scheduleDialog.dueDate, color:scheduleDialog.color, critical:scheduleDialog.critical, mentionUserIds:scheduleDialog.mentionUserIds });
+    setScheduleDialog(null);
+  };
+  const adjustDialogDuration = (days) => setScheduleDialog((current) => {
+    if (!current) return current;
+    const nextEnd=midnight(`${current.dueDate}T12:00:00`)+days*DAY;
+    const minimum=midnight(`${current.startDate}T12:00:00`);
+    return { ...current, dueDate:inputDate(Math.max(minimum,nextEnd)) };
+  });
   const goToday = () => {
     pendingShift.current = 0;
     setAnchor(midnight(new Date()));
@@ -194,18 +256,22 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
                   return <div className="cg-group-row" key={row.key} style={{ top: row.top, height: row.height }}><i style={{ left, width, background: palette[row.groupIndex % palette.length] }} /></div>;
                 }
                 const item = row.item;
-                const color = item.critical ? "#C92A3A" : item.status === "done" || item.status === "completed" ? "#087F5B" : palette[row.groupIndex % palette.length];
-                const left = ((midnight(item.start) - rangeStart) / DAY) * pixelsPerDay;
-                const exactWidth = Math.max(10, ((midnight(item.end) - midnight(item.start)) / DAY + 1) * pixelsPerDay);
+                const preview = schedulePreview[`${item.kind}-${item.id}`];
+                const itemStart = preview?.start ?? midnight(item.start);
+                const itemEnd = preview?.end ?? midnight(item.end);
+                const color = item.critical ? "#C92A3A" : item.color || (item.status === "done" || item.status === "completed" ? "#087F5B" : palette[row.groupIndex % palette.length]);
+                const left = ((itemStart - rangeStart) / DAY) * pixelsPerDay;
+                const exactWidth = Math.max(10, ((itemEnd - itemStart) / DAY + 1) * pixelsPerDay);
                 const visible = left + exactWidth >= 0 && left <= canvasWidth;
                 if (!visible) return <div className="cg-item-row" key={row.key} style={{ top: row.top, height: row.height }} />;
-                return <div className="cg-item-row" key={row.key} style={{ top: row.top, height: row.height }}><button type="button" className={`cg-bar ${item.kind} ${item.critical ? "critical" : ""}`} style={{ left, width: item.kind === "milestone" ? 22 : exactWidth, background: color, color: contrastText(color) }} onClick={() => onOpen?.(item)} onMouseMove={(event) => setTooltip({ item, x: event.clientX, y: event.clientY })} onMouseLeave={() => setTooltip(null)} aria-label={`פתיחת ${item.title}`}>{item.kind === "milestone" ? <i /> : <span>{item.title}</span>}</button></div>;
+                return <div className="cg-item-row" key={row.key} style={{ top: row.top, height: row.height }}><button type="button" className={`cg-bar ${item.kind} ${item.critical ? "critical" : ""} ${preview ? "editing-schedule" : ""}`} style={{ left, width: item.kind === "milestone" ? 22 : exactWidth, background: color, color: contrastText(color) }} onClick={() => { if (!blockTaskClick.current) onOpen?.(item); }} onPointerDown={(event)=>beginTaskDrag(event,item,"move")} onPointerMove={moveTaskDrag} onPointerUp={endTaskDrag} onPointerCancel={endTaskDrag} onMouseMove={(event) => !taskDrag.current && setTooltip({ item, x: event.clientX, y: event.clientY })} onMouseLeave={() => setTooltip(null)} aria-label={`פתיחת ${item.title}`}>{item.kind === "milestone" ? <i /> : <><i className="cg-resize start" onPointerDown={(event)=>beginTaskDrag(event,item,"start")}/><span>{item.title}</span><i className="cg-resize end" onPointerDown={(event)=>beginTaskDrag(event,item,"end")}/></>}</button></div>;
               })}
             </div>
           </div>
         </div>
       </div>
       <footer className="cg-legend"><span><i className="active" />משימה פעילה</span><span><i className="done" />הושלמה</span><span><i className="critical" />נתיב קריטי</span><small>גרירה אופקית עם העכבר · Shift + גלגלת · לחיצה פותחת משימה</small></footer>
+      {scheduleDialog && <div className="cg-dialog-backdrop"><form className="cg-schedule-dialog" onSubmit={saveScheduleDialog} onMouseDown={(event)=>event.stopPropagation()} dir="rtl"><header><div><small>עריכה מהירה מהגאנט</small><h3>{scheduleDialog.item.title}</h3></div><button type="button" onClick={()=>setScheduleDialog(null)}>×</button></header><div><label>הזז לתאריך<input type="date" value={scheduleDialog.startDate} onChange={(event)=>{const oldStart=midnight(scheduleDialog.startDate);const oldEnd=midnight(scheduleDialog.dueDate);const next=midnight(`${event.target.value}T12:00:00`);setScheduleDialog({...scheduleDialog,startDate:event.target.value,dueDate:inputDate(next+(oldEnd-oldStart))})}}/></label>{scheduleDialog.item.kind !== "milestone" && <><label>שנה פרק זמן עד<input type="date" min={scheduleDialog.startDate} value={scheduleDialog.dueDate} onChange={(event)=>setScheduleDialog({...scheduleDialog,dueDate:event.target.value})}/></label><div className="cg-duration-stepper"><span>משך מהיר</span><button type="button" onClick={()=>adjustDialogDuration(-1)} disabled={scheduleDialog.startDate===scheduleDialog.dueDate}><Minus size={15}/>הורדת יום</button><button type="button" onClick={()=>adjustDialogDuration(1)}><Plus size={15}/>הוספת יום</button></div><label className="cg-critical-toggle"><input type="checkbox" checked={scheduleDialog.critical} onChange={(event)=>setScheduleDialog({...scheduleDialog,critical:event.target.checked})}/><span><b>משימה קריטית</b><small>סימון לנתיב הקריטי והצגה קבועה באדום</small></span></label></>}{scheduleDialog.critical?<div className="cg-critical-color"><i/>משימה קריטית מוצגת תמיד באדום</div>:<div className="cg-color-picker"><span>צבע המשימה</span><div>{scheduleColors.map(color=><button type="button" key={color} className={scheduleDialog.color.toUpperCase()===color?"active":""} style={{background:color}} onClick={()=>setScheduleDialog({...scheduleDialog,color})} aria-label={`בחירת צבע ${color}`}/>)}</div><label>צבע מותאם<input type="color" value={scheduleDialog.color} onChange={(event)=>setScheduleDialog({...scheduleDialog,color:event.target.value})}/></label></div>}{users.length>0&&<div className="cg-mention-picker"><span>תיוג משתמשים</span><div>{users.filter(item=>item.active!==false).map(item=>{const selected=scheduleDialog.mentionUserIds.includes(item.id);return <button type="button" className={selected?'selected':''} key={item.id} onClick={()=>setScheduleDialog({...scheduleDialog,mentionUserIds:selected?scheduleDialog.mentionUserIds.filter(id=>id!==item.id):[...scheduleDialog.mentionUserIds,item.id]})}><i style={{background:item.avatarColor||'#6957df'}}>{item.displayName?.slice(0,2)}</i>@{item.displayName}</button>})}</div><small>ההתראה תישלח רק לאחר אישור ושמירה</small></div>}</div><footer><button type="button" onClick={()=>setScheduleDialog(null)}>ביטול</button><button className="primary" type="submit">אישור ושמירה</button></footer></form></div>}
       {tooltip && <div className="cg-tooltip" style={{ left: Math.min(tooltip.x + 14, window.innerWidth - 285), top: Math.max(12, tooltip.y - 94) }}><strong>{tooltip.item.title}</strong><span>{dateLabel(tooltip.item.start, true)} — {dateLabel(tooltip.item.end, true)}</span><span>{tooltip.item.assignee_name || tooltip.item.owner_name || "ללא אחראי"} · {tooltip.item.status || "ללא סטטוס"}</span>{tooltip.item.dependency_title && <em>תלויה ב: {tooltip.item.dependency_title}</em>}</div>}
     </section>
   );

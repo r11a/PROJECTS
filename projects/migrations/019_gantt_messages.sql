@@ -1,0 +1,6 @@
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS color TEXT NOT NULL DEFAULT '';
+ALTER TABLE project_milestones ADD COLUMN IF NOT EXISTS color TEXT NOT NULL DEFAULT '';
+ALTER TABLE user_messages ADD COLUMN IF NOT EXISTS parent_message_id BIGINT REFERENCES user_messages(id) ON DELETE SET NULL;
+ALTER TABLE user_messages ADD COLUMN IF NOT EXISTS linked_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE user_messages ADD COLUMN IF NOT EXISTS mention BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_user_messages_parent ON user_messages(parent_message_id);

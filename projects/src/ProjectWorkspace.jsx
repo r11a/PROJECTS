@@ -96,6 +96,7 @@ export function ProjectWorkspace({
     reviews: [],
     meetings: [],
   });
+  const [mentionUsers,setMentionUsers]=useState([]);
   const [note, setNote] = useState("");
   const [modal, setModal] = useState("");
   const [previewFile,setPreviewFile]=useState(null);
@@ -118,6 +119,7 @@ export function ProjectWorkspace({
   };
   useEffect(() => {
     load();
+    api('/team').then(result=>setMentionUsers(result.users||[])).catch(()=>{});
   }, [project.id]);
   useEffect(() => {
     if (!modal) return;
@@ -673,6 +675,7 @@ export function ProjectWorkspace({
           api={api}
           setNotice={setNotice}
           onDataChanged={load}
+          users={mentionUsers.filter(item=>String(item.id)!==String(user.id))}
         />
       )}
       {tab === "finance" && (
@@ -864,6 +867,7 @@ export function ProjectWorkspace({
               onChange={(e) => setNote(e.target.value)}
               placeholder="סיכום ביקור, החלטה, חריגה או הנחיה לביצוע"
             />
+            <div className="project-mention-picker"><small>תיוג משתמש:</small>{mentionUsers.filter(item=>item.active&&String(item.id)!==String(user.id)).map(item=><button type="button" key={item.id} onClick={()=>setNote(current=>`${current}${current&&!current.endsWith(' ')?' ':''}@${item.displayName} `)}>@{item.displayName}</button>)}</div>
             <button className="ops-primary" disabled={!note.trim()}>
               <MessageSquare size={16} />
               פרסום לצוות
@@ -1534,7 +1538,7 @@ function GoogleAddressField({ project, api, updateProject, setNotice }) {
   );
 }
 
-function CommercialProjectGantt({ tasks, milestones, project, projects, professionals, api, setNotice, onDataChanged }) {
+function CommercialProjectGantt({ tasks, milestones, project, projects, professionals, api, setNotice, onDataChanged, users=[] }) {
   const [editor, setEditor] = useState(null);
   const items = [
     ...tasks.filter((item) => item.start_date && item.due_date).map((item) => ({ ...item, kind: "task", start: item.start_date, end: item.due_date })),
@@ -1551,10 +1555,19 @@ function CommercialProjectGantt({ tasks, milestones, project, projects, professi
       setNotice(error.message);
     }
   };
+  const saveSchedule = async (item, dates) => {
+    try {
+      const base = item.kind === "task" ? "/operations/tasks" : "/operations/milestones";
+      await api(`${base}/${item.id}`, { method:"PATCH", body:JSON.stringify(item.kind === "task" ? dates : { dueDate:dates.dueDate, color:dates.color }) });
+      if(dates.mentionUserIds?.length)await api('/mentions',{method:'POST',body:JSON.stringify({userIds:dates.mentionUserIds,subject:`תיוג במשימה ${item.title}`,body:`תויגת במשימה ${item.title}. התאריכים עודכנו ל-${dates.startDate} עד ${dates.dueDate}.`,linkedUrl:`?project=${encodeURIComponent(project.id)}`})});
+      setNotice("תאריכי המשימה עודכנו");
+      await onDataChanged?.();
+    } catch (error) { setNotice(error.message); await onDataChanged?.(); }
+  };
   if (!items.length) return <div className="panel gantt-empty"><Activity size={30} /><h3>לוח הגאנט מוכן</h3><p>הוסיפו למשימות תאריך התחלה וסיום או אבני דרך כדי לבנות את ציר הביצוע.</p></div>;
   return (
     <>
-      <GanttTimeline compact groups={[[project.name, items]]} onOpen={(item) => setEditor({ kind: item.kind, item })} title={`גאנט ביצוע · ${project.name}`} />
+      <GanttTimeline compact groups={[[project.name, items]]} onOpen={(item) => setEditor({ kind: item.kind, item })} onScheduleChange={saveSchedule} users={users} title={`גאנט ביצוע · ${project.name}`} />
       {editor && <TaskEditor kind={editor.kind} initial={editor.item} projects={projects} professionals={professionals} tasks={tasks} fixedProjectId={project.id} onClose={() => setEditor(null)} onSave={save} />}
     </>
   );

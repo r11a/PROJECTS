@@ -53,8 +53,8 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     if(String(request.body.dependencyTaskId||'')===String(request.params.id))return response.status(400).json({error:'משימה אינה יכולה להיות תלויה בעצמה'});
     if(dependencyId){const dependency=await pool.query("SELECT project_id,status FROM tasks WHERE id=$1",[dependencyId]);if(!dependency.rowCount||dependency.rows[0].project_id!==row.project_id||!['open','in_progress'].includes(dependency.rows[0].status))return response.status(400).json({error:'משימת התלות חייבת להיות פתוחה או בביצוע ובאותו פרויקט'});}
     if (nextStart && nextDue && String(nextStart).slice(0,10) > String(nextDue).slice(0,10)) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
-    const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,start_date=$6,due_date=$7,estimated_hours=$8,task_type=$9,dependency_task_id=$10,critical=$11,
-      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$12 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, request.body.estimatedHours ?? row.estimated_hours, request.body.taskType ?? row.task_type, dependencyId,request.body.critical ?? row.critical, request.params.id]);
+    const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,start_date=$6,due_date=$7,estimated_hours=$8,task_type=$9,dependency_task_id=$10,critical=$11,color=$12,
+      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$13 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, request.body.estimatedHours ?? row.estimated_hours, request.body.taskType ?? row.task_type, dependencyId,request.body.critical ?? row.critical, request.body.color ?? row.color, request.params.id]);
     await syncProjectMetrics(pool, row.project_id);
     await audit(request, 'update', 'task', request.params.id, request.body);
     response.json({ task: result.rows[0] });
@@ -89,8 +89,8 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const current = await pool.query('SELECT * FROM project_milestones WHERE id=$1', [request.params.id]);
     if (!current.rowCount) return response.status(404).json({ error: 'אבן הדרך לא נמצאה' });
     const row = current.rows[0]; const status = MILESTONE_STATUSES.includes(request.body.status) ? request.body.status : row.status;
-    const result = await pool.query(`UPDATE project_milestones SET title=$1,due_date=$2,status=$3,progress=$4,owner_professional_id=$5,description=$6,
-      completed_at=CASE WHEN $3='completed' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$7 RETURNING *`, [request.body.title ?? row.title, request.body.dueDate ?? row.due_date, status, Number(request.body.progress ?? row.progress), request.body.ownerProfessionalId ?? row.owner_professional_id, request.body.description ?? row.description, request.params.id]);
+    const result = await pool.query(`UPDATE project_milestones SET title=$1,due_date=$2,status=$3,progress=$4,owner_professional_id=$5,description=$6,color=$7,
+      completed_at=CASE WHEN $3='completed' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$8 RETURNING *`, [request.body.title ?? row.title, request.body.dueDate ?? row.due_date, status, Number(request.body.progress ?? row.progress), request.body.ownerProfessionalId ?? row.owner_professional_id, request.body.description ?? row.description, request.body.color ?? row.color, request.params.id]);
     await audit(request, 'update', 'milestone', request.params.id, request.body); response.json({ milestone: result.rows[0] });
   });
 
@@ -160,7 +160,11 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
   router.post('/projects/:id/updates', requireRoles('admin', 'manager', 'technician'), async (request, response) => {
     const body = String(request.body.body || '').trim(); if (!body) return response.status(400).json({ error: 'יש לכתוב תוכן לעדכון' });
     const result = await pool.query('INSERT INTO project_updates(project_id,body,created_by) VALUES($1,$2,$3) RETURNING *', [request.params.id, body, request.user.id]);
-    await audit(request, 'create', 'project_update', String(result.rows[0].id), { projectId: request.params.id }); response.status(201).json({ update: result.rows[0] });
+    const team=await pool.query('SELECT id,username,display_name FROM users WHERE active=TRUE AND id<>$1',[request.user.id]);
+    const normalized=body.toLocaleLowerCase('he-IL');const mentioned=team.rows.filter(item=>normalized.includes(`@${String(item.display_name).toLocaleLowerCase('he-IL')}`)||normalized.includes(`@${String(item.username||'').toLocaleLowerCase('he-IL')}`));
+    const projectName=(await pool.query('SELECT name FROM projects WHERE id=$1',[request.params.id])).rows[0]?.name||request.params.id;
+    for(const item of mentioned)await pool.query(`INSERT INTO user_messages(sender_id,recipient_id,subject,body,linked_url,mention) VALUES($1,$2,$3,$4,$5,TRUE)`,[request.user.id,item.id,`תויגת בפרויקט ${projectName}`,body,`?project=${encodeURIComponent(request.params.id)}`]);
+    await audit(request, 'create', 'project_update', String(result.rows[0].id), { projectId: request.params.id,mentions:mentioned.map(item=>item.id) }); response.status(201).json({ update: result.rows[0],mentions:mentioned.length });
   });
 
   router.post('/projects/:id/team', requireRoles('admin', 'manager'), async (request, response) => {

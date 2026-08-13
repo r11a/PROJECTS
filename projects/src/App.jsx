@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   Archive,
+  ArrowUpDown,
   ArrowLeft,
   Bell,
   Building2,
@@ -434,6 +435,12 @@ function App() {
     setPage("project");
     setSidebarOpen(false);
   };
+  useEffect(()=>{
+    if(!user||!projects.length)return;
+    const params=new URLSearchParams(window.location.search);const projectId=params.get('project');
+    if(!projectId)return;const target=projects.find(item=>String(item.id)===projectId);if(target)openProject(target);
+    params.delete('project');const query=params.toString();window.history.replaceState({},'',`${window.location.pathname}${query?`?${query}`:''}${window.location.hash}`);
+  },[user?.id,projects.length]);
   const updateProject = async (id, patch) => {
     try {
       const { project } = await api(`/projects/${encodeURIComponent(id)}`, {
@@ -1230,6 +1237,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                   {item.haUserId && "· Ingress"}
                 </span>
                 <small className={item.online?"user-online":"user-offline"}>{item.online?"מחובר כעת":item.lastSeenAt?`נראה לאחרונה ${new Date(item.lastSeenAt).toLocaleString("he-IL")}`:"טרם התחבר"}</small>
+                <small className="user-last-login">התחברות אחרונה: {item.lastLoginAt?new Date(item.lastLoginAt).toLocaleString("he-IL"):"טרם התחבר"}</small>
               </div>
               <select
                 value={item.role}
@@ -1852,6 +1860,7 @@ function ProjectsPage({
   const [manager, setManager] = useState("");
   const [priority, setPriority] = useState("");
   const [flagged, setFlagged] = useState(false);
+  const [projectSort, setProjectSort] = useState({ key:"name", direction:"asc" });
   const switchArchive = async (archived) => {
     setShowArchived(archived);
     setStageFilter("all");
@@ -1898,12 +1907,19 @@ function ProjectsPage({
           (stageFilter === "all" || project.stage === stageFilter),
       )
     : projects;
-  const visibleProjects = sourceProjects.filter(
+  const filteredProjects = sourceProjects.filter(
     (project) =>
       (!manager || project.manager === manager) &&
       (!priority || project.priority === priority) &&
       (!flagged || project.flag),
   );
+  const visibleProjects = useMemo(() => {
+    const stageOrder=Object.keys(stageMeta);
+    const value=(project,key)=>key==="name"?(project.name||""):key==="stage"?stageOrder.indexOf(project.stage):key==="progress"?Number(project.progress||0):key==="manager"?(project.manager||""):key==="milestone"?new Date(project.due||"9999-12-31").getTime():key==="balance"?Number(project.value||0)-Number(project.paid||0):"";
+    const direction=projectSort.direction==="asc"?1:-1;
+    return [...filteredProjects].sort((a,b)=>{const left=value(a,projectSort.key),right=value(b,projectSort.key);return (typeof left==="string"?left.localeCompare(right,"he"):(left-right))*direction;});
+  },[filteredProjects,projectSort]);
+  const toggleProjectSort=(key)=>setProjectSort(current=>({key,direction:current.key===key&&current.direction==="asc"?"desc":"asc"}));
   const managers = [
     ...new Set(
       sourceProjects.map((project) => project.manager).filter(Boolean),
@@ -2060,12 +2076,12 @@ function ProjectsPage({
           <table className="projects-table">
             <thead>
               <tr>
-                <th>פרויקט</th>
-                <th>שלב נוכחי</th>
-                <th>התקדמות</th>
-                <th>מנהל פרויקט</th>
-                <th>אבן דרך הבאה</th>
-                <th>יתרה לגבייה</th>
+                <th><button className={projectSort.key==="name"?"active":""} onClick={()=>toggleProjectSort("name")}>פרויקט<ArrowUpDown size={13}/></button></th>
+                <th><button className={projectSort.key==="stage"?"active":""} onClick={()=>toggleProjectSort("stage")}>שלב נוכחי<ArrowUpDown size={13}/></button></th>
+                <th><button className={projectSort.key==="progress"?"active":""} onClick={()=>toggleProjectSort("progress")}>התקדמות<ArrowUpDown size={13}/></button></th>
+                <th><button className={projectSort.key==="manager"?"active":""} onClick={()=>toggleProjectSort("manager")}>מנהל פרויקט<ArrowUpDown size={13}/></button></th>
+                <th><button className={projectSort.key==="milestone"?"active":""} onClick={()=>toggleProjectSort("milestone")}>אבן דרך הבאה<ArrowUpDown size={13}/></button></th>
+                <th><button className={projectSort.key==="balance"?"active":""} onClick={()=>toggleProjectSort("balance")}>יתרה לגבייה<ArrowUpDown size={13}/></button></th>
                 <th />
               </tr>
             </thead>

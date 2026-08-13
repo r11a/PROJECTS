@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.16.0
+
+- Added persisted drag-and-drop scheduling and edge resizing to both Gantt views, including live date previews and automatic database updates.
+- Added a long-press scheduling panel with move-to-date, add/remove day, end-date and standards-based color picker controls; critical tasks always remain red.
+- Added a management-meeting PDF report, professional PowerPoint-compatible presentation export and a dedicated AI report generator.
+- Standardized modal viewport behavior and rebuilt the professionals toolbar with consistent icon filters, sizing and responsive grouping.
+- Added sortable project table headers with workflow-aware stage ordering.
+- Added message replies, user mentions, linked mention notifications and project-update @mentions.
+- Added explicit last-login information to user administration.
+
 ## 0.15.3
 
 - Added desktop drag-to-pan navigation directly on both Gantt timelines, removing the need to reach the bottom scrollbar.
