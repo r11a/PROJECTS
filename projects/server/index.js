@@ -1,6 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import bcrypt from 'bcryptjs';
+import multer from 'multer';
 import jwt from 'jsonwebtoken';
 import pg from 'pg';
 import { randomBytes } from 'node:crypto';
@@ -91,6 +92,7 @@ async function runMigrations() {
 const projectColumns = [
   'id', 'name', 'client', 'location', 'address', 'lat', 'lng', 'stage', 'progress', 'manager',
   'owner_initials', 'value', 'paid', 'due', 'priority', 'flag', 'systems', 'next_milestone',
+  'installation_hours_target', 'programming_hours_target',
   'phone', 'email', 'health', 'tasks_done', 'tasks_total', 'manager_professional_id', 'client_id',
   'project_size', 'contractor_progress', 'document_folder', 'project_classification',
 ];
@@ -98,6 +100,7 @@ const inputToColumn = {
   id: 'id', name: 'name', client: 'client', location: 'location', address: 'address', lat: 'lat', lng: 'lng',
   stage: 'stage', progress: 'progress', manager: 'manager', ownerInitials: 'owner_initials', value: 'value',
   paid: 'paid', due: 'due', priority: 'priority', flag: 'flag', systems: 'systems',
+  installationHoursTarget:'installation_hours_target',programmingHoursTarget:'programming_hours_target',
   nextMilestone: 'next_milestone', phone: 'phone', email: 'email', health: 'health',
   tasksDone: 'tasks_done', tasksTotal: 'tasks_total',
   managerId: 'manager_professional_id',
@@ -116,7 +119,7 @@ function projectFromRow(row) {
     id: row.id, serialCode:row.serial_code, name: row.name, client: row.client, location: row.location, address: withoutArabic(row.address),
     lat: Number(row.lat), lng: Number(row.lng), stage: row.stage, progress: Number(row.progress),
     manager: row.manager, ownerInitials: row.owner_initials, value: Number(row.value), paid: Number(row.paid),
-    due: row.due, priority: row.priority, flag: row.flag, systems: row.systems || [],
+    due: row.due, priority: row.priority, flag: row.flag, systems: row.systems || [], installationHoursTarget:Number(row.installation_hours_target||0),programmingHoursTarget:Number(row.programming_hours_target||0),
     nextMilestone: row.next_milestone, phone: row.phone, email: row.email, health: Number(row.health),
     tasksDone: Number(row.tasks_done), tasksTotal: Number(row.tasks_total), managerId: row.manager_professional_id, clientId: row.client_id,
     archived: Boolean(row.archived_at), archivedAt: row.archived_at, archivedBy: row.archived_by,
@@ -263,7 +266,7 @@ function cookieValue(request, name) {
 }
 
 function publicUser(row) {
-  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, haUserId: row.ha_user_id, mergedIntoUserId:row.merged_into_user_id, identityTypes:[row.username?'web':null,row.ha_user_id?'ingress':null].filter(Boolean), avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', appearanceTheme: row.appearance_theme || 'light', lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
+  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, haUserId: row.ha_user_id, mergedIntoUserId:row.merged_into_user_id, identityTypes:[row.username?'web':null,row.ha_user_id?'ingress':null].filter(Boolean), avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', avatarImage: row.avatar_image || '', appearanceTheme: row.appearance_theme || 'light', lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
 }
 
 const presenceWrites=new Map();
@@ -396,6 +399,8 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
     email: request.body.email || selectedClient.email || '', health: request.body.health ?? 100, tasksDone: request.body.tasksDone ?? 0, tasksTotal: request.body.tasksTotal ?? 0,
     managerId: request.body.managerId || null, clientId: selectedClient.id, projectSize: request.body.projectSize || 'medium', contractorProgress: request.body.contractorProgress || 'waiting', documentFolder: request.body.documentFolder || '',
     projectClassification: request.body.projectClassification || 'private_house',
+    installationHoursTarget: Math.max(0, Number(request.body.installationHoursTarget) || 0),
+    programmingHoursTarget: Math.max(0, Number(request.body.programmingHoursTarget) || 0),
     };
     const values = Object.keys(inputToColumn).map((key) => key === 'systems' ? JSON.stringify(project[key]) : project[key]);
     const columns = Object.values(inputToColumn);
@@ -590,6 +595,41 @@ app.patch('/api/users/:id', authenticate, requireRoles('admin'), async (request,
   if (!result.rowCount) return response.status(404).json({ error: 'User not found' });
   await audit(request, 'update', 'user', request.params.id);
   response.json({ user: publicUser(result.rows[0]) });
+});
+
+const userAvatarDir = path.join(DATA_DIR, 'uploads', 'user-avatars');
+await mkdir(userAvatarDir, { recursive: true });
+const userAvatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: userAvatarDir,
+    filename: (_request, file, callback) => callback(null, `${Date.now()}-${randomBytes(8).toString('hex')}${path.extname(file.originalname).toLowerCase()}`),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_request, file, callback) => callback(file.mimetype.startsWith('image/') ? null : new Error('יש לבחור קובץ תמונה'), file.mimetype.startsWith('image/')),
+});
+
+app.post('/api/users/:id/avatar', authenticate, requireRoles('admin'), userAvatarUpload.single('avatar'), async (request, response) => {
+  if (!request.file) return response.status(400).json({ error: 'יש לבחור תמונה' });
+  const current = await pool.query('SELECT avatar_image FROM users WHERE id=$1', [request.params.id]);
+  if (!current.rowCount) { await unlink(request.file.path).catch(() => {}); return response.status(404).json({ error: 'המשתמש לא נמצא' }); }
+  const result = await pool.query('UPDATE users SET avatar_image=$1,updated_at=NOW() WHERE id=$2 RETURNING *', [request.file.filename, request.params.id]);
+  if (current.rows[0].avatar_image) await unlink(path.join(userAvatarDir, current.rows[0].avatar_image)).catch(() => {});
+  await audit(request, 'update_avatar', 'user', request.params.id);
+  response.json({ user: publicUser(result.rows[0]) });
+});
+
+app.delete('/api/users/:id/avatar', authenticate, requireRoles('admin'), async (request, response) => {
+  const current = await pool.query('SELECT avatar_image FROM users WHERE id=$1', [request.params.id]);
+  const result = await pool.query("UPDATE users SET avatar_image='',updated_at=NOW() WHERE id=$1 RETURNING id", [request.params.id]);
+  if (!result.rowCount) return response.status(404).json({ error: 'המשתמש לא נמצא' });
+  if (current.rows[0]?.avatar_image) await unlink(path.join(userAvatarDir, current.rows[0].avatar_image)).catch(() => {});
+  response.status(204).end();
+});
+
+app.get('/api/users/:id/avatar', authenticate, async (request, response) => {
+  const result = await pool.query('SELECT avatar_image FROM users WHERE id=$1 AND merged_into_user_id IS NULL', [request.params.id]);
+  if (!result.rowCount || !result.rows[0].avatar_image) return response.status(404).end();
+  response.sendFile(path.join(userAvatarDir, path.basename(result.rows[0].avatar_image)));
 });
 
 app.delete('/api/users/:id', authenticate, requireRoles('admin'), async (request, response) => {

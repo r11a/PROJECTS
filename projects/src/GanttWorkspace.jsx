@@ -59,7 +59,7 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
       const base = item.kind === "task" ? "/operations/tasks" : "/operations/milestones";
       const body = item.kind === "task" ? dates : { dueDate:dates.dueDate, color:dates.color };
       await api(`${base}/${item.id}`, { method:"PATCH", body:JSON.stringify(body) });
-      if(dates.mentionUserIds?.length)await api('/mentions',{method:'POST',body:JSON.stringify({userIds:dates.mentionUserIds,subject:`תיוג במשימה ${item.title}`,body:`תויגת במשימה ${item.title}. התאריכים עודכנו ל-${dates.startDate} עד ${dates.dueDate}.`,linkedUrl:`?project=${encodeURIComponent(item.project_id||'')}`})});
+      if(dates.mentionUserIds?.length)await api('/mentions',{method:'POST',body:JSON.stringify({userIds:dates.mentionUserIds,subject:`תיוג במשימה ${item.title}`,body:`תויגת במשימה ${item.title}. התאריכים עודכנו ל-${dates.startDate} עד ${dates.dueDate}.`,linkedUrl:`?project=${encodeURIComponent(item.project_id||'')}&task=${encodeURIComponent(item.id)}`})});
       setNotice("תאריכי המשימה עודכנו");
       await load();
     } catch (error) { setNotice(error.message); await load(); }

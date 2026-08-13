@@ -4,11 +4,13 @@ import { ModalPortal } from "./AppModal";
 
 export function MessageCenter({
   api,
+  apiRoot,
   user,
   users,
   onClose,
   setNotice,
   onUnread,
+  onOpenLinked,
 }) {
   const [messages, setMessages] = useState([]);
   const [compose, setCompose] = useState(false);
@@ -55,6 +57,16 @@ export function MessageCenter({
   };
   const insertMention=(item)=>setForm(current=>({...current,body:`${current.body}${current.body&&!current.body.endsWith(' ')?' ':''}@${item.displayName} `}));
   const remove=async(ids)=>{if(!ids.length||!confirm(`למחוק ${ids.length===1?'את ההודעה':`${ids.length} הודעות`} מהתצוגה שלך?`))return;try{await api('/messages',{method:'DELETE',body:JSON.stringify({ids})});setSelected([]);setNotice('ההודעות שנבחרו נמחקו');load()}catch(error){setNotice(error.message)}};
+  const openLinked = async (event, message) => {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      await read(message);
+      onOpenLinked?.(message.linkedUrl);
+    } catch (error) {
+      setNotice(error.message || "לא ניתן לפתוח את מקור התיוג");
+    }
+  };
   return (
     <ModalPortal>
     <div className="message-backdrop" onMouseDown={onClose}>
@@ -146,8 +158,8 @@ export function MessageCenter({
               onClick={() => read(message)}
             >
               <input type="checkbox" checked={selected.includes(message.id)} onClick={event=>event.stopPropagation()} onChange={event=>setSelected(current=>event.target.checked?[...current,message.id]:current.filter(id=>id!==message.id))} aria-label="בחירת הודעה"/>
-              <span>
-                <Mail size={17} />
+              <span className="message-avatar" style={{"--avatar-color":message.senderAvatarColor||"#6957df"}}>
+                {message.senderAvatarImage?<img src={`${apiRoot}/users/${message.senderId}/avatar`} alt={message.senderName}/>:<b>{String(message.senderName||"משתמש").trim().split(/\s+/).slice(0,2).map(part=>part[0]).join("")}</b>}
               </span>
               <div>
                 <strong>{message.subject || "הודעה ללא כותרת"}</strong>
@@ -158,7 +170,7 @@ export function MessageCenter({
                   · {new Date(message.createdAt).toLocaleString("he-IL")}
                 </small>
                 <p>{message.body}</p>
-                {message.linkedUrl&&<a className="message-linked" href={message.linkedUrl}><Link2 size={13}/>פתיחת הקישור המצורף</a>}
+                {message.linkedUrl&&<button type="button" className="message-linked" onClick={(event)=>openLinked(event,message)}><Link2 size={13}/>פתיחת המשימה במקור</button>}
               </div>
               <div className="message-row-actions">{message.readAt && <Check size={15} />}<button onClick={event=>{event.stopPropagation();reply(message)}} title="שליחת תגובה"><CornerUpLeft size={14}/></button><button onClick={event=>{event.stopPropagation();remove([message.id])}} title="מחיקת הודעה"><Trash2 size={14}/></button></div>
             </article>

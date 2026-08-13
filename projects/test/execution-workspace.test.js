@@ -60,8 +60,27 @@ test('Gantt scheduling supports drag, resize, long press duration and persistent
   const migration = await read('../migrations/019_gantt_messages.sql');
   for (const token of ['beginTaskDrag','moveTaskDrag','adjustDialogDuration','scheduleColors','onScheduleChange','mentionUserIds','משימה קריטית']) assert.match(timeline,new RegExp(token));
   assert.match(timeline,/item\.critical \? "#C92A3A"/);
-  assert.match(operations,/color=\$12/);
+  assert.match(operations,/critical=\$13,color=\$14/);
   assert.match(migration,/ALTER TABLE tasks ADD COLUMN IF NOT EXISTS color/);
+});
+
+test('project time reporting keeps targets in project setup and actual hours in the workspace', async () => {
+  const app = await read('../src/App.jsx');
+  const projectWorkspace = await read('../src/ProjectWorkspace.jsx');
+  const operations = await read('../server/operations.js');
+  const server = await read('../server/index.js');
+  const migration = await read('../migrations/021_task_avatars_project_hours.sql');
+  for (const token of ['installationHoursTarget','programmingHoursTarget']) {
+    assert.match(app,new RegExp(token));
+    assert.match(projectWorkspace,new RegExp(token));
+    assert.match(server,new RegExp(token));
+  }
+  assert.match(projectWorkspace,/דיווח שעות עבודה/);
+  assert.match(projectWorkspace,/openRequest/);
+  assert.doesNotMatch(projectWorkspace,/setTargetsOpen/);
+  assert.match(operations,/project_time_entries/);
+  assert.match(migration,/installation_hours_target/);
+  assert.match(migration,/programming_hours_target/);
 });
 
 test('management reports, presentation, replies and mentions are wired end to end', async () => {

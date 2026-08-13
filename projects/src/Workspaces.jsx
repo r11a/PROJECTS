@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowDownUp,
   BarChart3,
   CalendarDays,
   CheckCircle2,
@@ -9,6 +10,7 @@ import {
   Download,
   Flag,
   FolderKanban,
+  ListFilter,
   ListChecks,
   Plus,
   Presentation,
@@ -54,6 +56,13 @@ const taskStatus = {
   done: "הושלמה",
   cancelled: "בוטלה",
 };
+const taskPriority = {
+  urgent: "דחופה",
+  high: "גבוהה",
+  normal: "רגילה",
+  low: "נמוכה",
+};
+const taskPriorityRank = { urgent: 4, high: 3, normal: 2, low: 1 };
 const milestoneStatus = {
   planned: "מתוכננת",
   in_progress: "בתהליך",
@@ -160,8 +169,10 @@ export function TaskEditor({
             startDate: new Date().toISOString().slice(0, 10),
             dueDate: "",
             status: "open",
-            priority: "normal",
-            assigneeProfessionalId: "",
+          priority: "normal",
+          assigneeProfessionalId: "",
+          ownerProfessionalId: "",
+          parentTaskId: "",
             taskType: "task",
             estimatedHours: "",
             description: "",
@@ -176,6 +187,7 @@ export function TaskEditor({
       dueDate: form.dueDate || initial?.due_date,
       assigneeProfessionalId: form.assigneeProfessionalId || null,
       ownerProfessionalId: form.ownerProfessionalId || null,
+      parentTaskId: form.parentTaskId || null,
     });
   };
   return (
@@ -261,21 +273,18 @@ export function TaskEditor({
           </select>
         </label>
         <label>
-          אחראי
+          {isMilestone ? "אחראי" : "אחראי למשימה"}
           <select
             value={
               form.ownerProfessionalId ||
               form.owner_professional_id ||
-              form.assigneeProfessionalId ||
-              form.assignee_professional_id ||
+              (isMilestone ? "" : form.ownerProfessionalId || form.owner_professional_id) ||
               ""
             }
             onChange={(e) =>
               setForm({
                 ...form,
-                [isMilestone
-                  ? "ownerProfessionalId"
-                  : "assigneeProfessionalId"]: e.target.value,
+                ownerProfessionalId: e.target.value,
               })
             }
           >
@@ -305,6 +314,13 @@ export function TaskEditor({
           </label>
         ) : (
           <>
+            <label>
+              מבצע
+              <select value={form.assigneeProfessionalId || form.assignee_professional_id || ""} onChange={(e) => setForm({ ...form, assigneeProfessionalId: e.target.value })}>
+                <option value="">ללא מבצע</option>
+                {professionals.filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.displayName} · {p.jobTitle || p.roles?.[0]?.name || "איש מקצוע"}</option>)}
+              </select>
+            </label>
             <label>
               עדיפות
               <select
@@ -348,6 +364,7 @@ export function TaskEditor({
           </>
         )}
         {!isMilestone && (
+          <>
           <label>
             תלויה במשימה
             <select
@@ -371,6 +388,14 @@ export function TaskEditor({
                 ))}
             </select>
           </label>
+          <label>
+            תת־משימה של
+            <select value={form.parentTaskId || form.parent_task_id || ""} onChange={(e) => setForm({ ...form, parentTaskId: e.target.value || null })}>
+              <option value="">משימה ראשית</option>
+              {tasks.filter((item) => item.id !== initial?.id && item.project_id === (form.projectId || initial?.project_id) && !item.parent_task_id).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+            </select>
+          </label>
+          </>
         )}
         <label className="wide">
           הנחיות והערות
@@ -401,12 +426,20 @@ export function TasksWorkspace({
   setNotice,
   projectId = "",
   onDataChanged,
+  initialTaskId = "",
+  onInitialTaskOpened,
 }) {
   const [tab, setTab] = useState("tasks");
   const [tasks, setTasks] = useState([]);
   const [milestones, setMilestones] = useState([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
+  const [priority, setPriority] = useState("");
+  const [assigneeId, setAssigneeId] = useState("");
+  const [managerId, setManagerId] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [dueFilter, setDueFilter] = useState("");
+  const [sortBy, setSortBy] = useState("due_asc");
   const [editor, setEditor] = useState(null);
   const [loading, setLoading] = useState(true);
   const load = async () => {
@@ -436,11 +469,57 @@ export function TasksWorkspace({
     return () => clearTimeout(timer);
   }, [query, status, projectId]);
   useEffect(() => {
+    if (!initialTaskId || !tasks.length) return;
+    const item = tasks.find((task) => String(task.id) === String(initialTaskId));
+    if (!item) return;
+    setTab("tasks");
+    setEditor({ kind: "task", item });
+    onInitialTaskOpened?.();
+  }, [initialTaskId, tasks, onInitialTaskOpened]);
+  useEffect(() => {
     const live = () => load();
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);
   }, [query, status, projectId]);
-  const items = tab === "tasks" ? tasks : milestones;
+  const visibleTasks = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(today);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const filtered = tasks.filter((item) => {
+      const due = item.due_date
+        ? new Date(`${String(item.due_date).slice(0, 10)}T00:00:00`)
+        : null;
+      if (priority && (item.priority || "normal") !== priority) return false;
+      if (assigneeId && String(item.assignee_professional_id || "") !== assigneeId) return false;
+      if (managerId && String(item.project_manager_id || "") !== managerId) return false;
+      if (projectFilter && String(item.project_id || "") !== projectFilter) return false;
+      if (dueFilter === "overdue" && (!due || due >= today || ["done", "cancelled"].includes(item.status))) return false;
+      if (dueFilter === "today" && (!due || due.getTime() !== today.getTime())) return false;
+      if (dueFilter === "week" && (!due || due < today || due > weekEnd)) return false;
+      if (dueFilter === "unscheduled" && due) return false;
+      return true;
+    });
+    return filtered.sort((a, b) => {
+      if (sortBy === "priority") return (taskPriorityRank[b.priority] || 2) - (taskPriorityRank[a.priority] || 2);
+      if (sortBy === "created_desc") return new Date(b.created_at) - new Date(a.created_at);
+      if (sortBy === "project") return String(a.project_name || "").localeCompare(String(b.project_name || ""), "he");
+      if (sortBy === "assignee") return String(a.assignee_name || "").localeCompare(String(b.assignee_name || ""), "he");
+      const left = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+      const right = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+      return sortBy === "due_desc" ? right - left : left - right;
+    });
+  }, [tasks, priority, assigneeId, managerId, projectFilter, dueFilter, sortBy]);
+  const items = tab === "tasks" ? visibleTasks : milestones;
+  const activeFilterCount = [status, priority, assigneeId, managerId, projectFilter, dueFilter].filter(Boolean).length;
+  const clearFilters = () => {
+    setStatus("");
+    setPriority("");
+    setAssigneeId("");
+    setManagerId("");
+    setProjectFilter("");
+    setDueFilter("");
+  };
   const canEdit = ["admin", "manager", "technician"].includes(user.role);
   currentTaskOptions = tasks;
   const save = async (value) => {
@@ -480,11 +559,10 @@ export function TasksWorkspace({
             ביצוע ובקרה
           </span>
           <h2>
-            {projectId ? "משימות ואבני דרך בפרויקט" : "מרכז משימות ואבני דרך"}
+            {projectId ? "משימות ואבני דרך בפרויקט" : "מרכז המשימות"}
           </h2>
           <p>
-            תמונה אחת של אחריות, מועדים, חריגות והתקדמות — עם היסטוריה מלאה בלוח
-            השנה.
+            שולחן עבודה אחד לתעדוף, הקצאה ובקרה — מהדחוף ביותר ועד לתכנון קדימה.
           </p>
         </div>
         <div className="work-stat-strip">
@@ -538,14 +616,26 @@ export function TasksWorkspace({
           />
         </label>
         {tab === "tasks" && (
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">כל הסטטוסים</option>
-            {Object.entries(taskStatus).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
+          <div className="task-toolbar-actions">
+            <label className="task-select" title="סינון לפי סטטוס">
+              <ListFilter size={16} />
+              <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="סטטוס">
+                <option value="">כל הסטטוסים</option>
+                {Object.entries(taskStatus).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
+            <label className="task-select" title="מיון משימות">
+              <ArrowDownUp size={16} />
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} aria-label="מיון משימות">
+                <option value="due_asc">מועד קרוב</option>
+                <option value="due_desc">מועד רחוק</option>
+                <option value="priority">קדימות</option>
+                <option value="project">פרויקט</option>
+                <option value="assignee">אחראי</option>
+                <option value="created_desc">חדשות תחילה</option>
+              </select>
+            </label>
+          </div>
         )}
         {canEdit && (
           <button
@@ -559,7 +649,38 @@ export function TasksWorkspace({
           </button>
         )}
       </div>
+      {tab === "tasks" && (
+        <section className="task-filter-bar" aria-label="סינון מתקדם למשימות">
+          <div className="task-filter-heading"><ListFilter size={17}/><span>מיקוד מהיר</span>{activeFilterCount > 0 && <em>{activeFilterCount}</em>}</div>
+          <select value={priority} onChange={(event) => setPriority(event.target.value)} aria-label="קדימות">
+            <option value="">כל הקדימויות</option>
+            {Object.entries(taskPriority).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+          </select>
+          <select value={dueFilter} onChange={(event) => setDueFilter(event.target.value)} aria-label="מועד">
+            <option value="">כל המועדים</option>
+            <option value="overdue">באיחור</option>
+            <option value="today">להיום</option>
+            <option value="week">7 ימים קרובים</option>
+            <option value="unscheduled">ללא תאריך</option>
+          </select>
+          {!projectId && <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} aria-label="פרויקט">
+            <option value="">כל הפרויקטים</option>
+            {projects.map((project) => <option value={String(project.id)} key={project.id}>{project.name}</option>)}
+          </select>}
+          <select value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} aria-label="אחראי למשימה">
+            <option value="">כל האחראים</option>
+            {professionals.filter((person) => person.active !== false).map((person) => <option value={String(person.id)} key={person.id}>{person.displayName || person.name}</option>)}
+          </select>
+          {!projectId && <select value={managerId} onChange={(event) => setManagerId(event.target.value)} aria-label="מנהל פרויקט">
+            <option value="">כל מנהלי הפרויקט</option>
+            {professionals.filter((person) => person.active !== false && ["project_manager", "מנהל פרויקט"].includes(person.role)).map((person) => <option value={String(person.id)} key={person.id}>{person.displayName || person.name}</option>)}
+          </select>}
+          {activeFilterCount > 0 && <button type="button" onClick={clearFilters}>ניקוי סינון</button>}
+          <small>{visibleTasks.length} מתוך {tasks.length} משימות</small>
+        </section>
+      )}
       <div className="work-list panel">
+        {tab === "tasks" && items.length > 0 && <div className="work-table-head"><span>משימה ופרויקט</span><span>קדימות</span><span>אחראי</span><span>מבצע</span><span>מנהל פרויקט</span><span>תאריך סיום</span><span/></div>}
         {loading ? (
           <div className="work-loading">טוען נתונים…</div>
         ) : !items.length ? (
@@ -577,7 +698,7 @@ export function TasksWorkspace({
         ) : (
           items.map((item) => (
             <article
-              className={`work-row ${item.status} ${item.critical ? "critical" : ""}`}
+              className={`work-row ${tab === "tasks" ? "task-row" : "milestone-row"} ${item.status} ${item.critical ? "critical" : ""}`}
               key={item.id}
               onClick={() =>
                 canEdit &&
@@ -603,18 +724,23 @@ export function TasksWorkspace({
                   {item.description && `· ${item.description}`}
                 </span>
                 {tab === "tasks" && item.dependency_title && <small className="task-dependency">תלויה ב: {item.dependency_title}</small>}
+                {tab === "tasks" && item.parent_task_title && <small className="task-parent">תת־משימה של: {item.parent_task_title}</small>}
+                {tab === "tasks" && item.subtask_count > 0 && <small className="task-subtasks">{item.completed_subtask_count}/{item.subtask_count} תתי־משימות הושלמו</small>}
               </div>
               <span className={`work-priority ${item.priority || item.status}`}>
                 {tab === "tasks"
-                  ? item.priority === "urgent"
-                    ? "דחופה"
-                    : taskStatus[item.status]
+                  ? taskPriority[item.priority || "normal"]
                   : milestoneStatus[item.status]}
               </span>
               <span className="work-owner">
                 <UserRound size={15} />
-                {item.assignee_name || item.owner_name || "לא הוקצה"}
+                <span><small>{tab === "tasks" ? "אחראי" : "בעלים"}</small>{item.owner_name || "לא הוקצה"}</span>
               </span>
+              {tab === "tasks" && <span className="work-assignee"><UserRound size={15}/><span><small>מבצע</small>{item.assignee_name || "לא הוקצה"}</span></span>}
+              {tab === "tasks" && <span className="work-manager">
+                <FolderKanban size={15}/>
+                {item.project_manager_name || "לא הוקצה"}
+              </span>}
               <span
                 className={`work-date ${new Date(item.due_date) < new Date() && !["done", "completed"].includes(item.status) ? "late" : ""}`}
               >
@@ -654,6 +780,7 @@ export function TasksWorkspace({
                   dueDate: String(editor.item.due_date || "").slice(0, 10),
                   assigneeProfessionalId: editor.item.assignee_professional_id,
                   ownerProfessionalId: editor.item.owner_professional_id,
+                  parentTaskId: editor.item.parent_task_id,
                   taskType: editor.item.task_type,
                   estimatedHours: editor.item.estimated_hours,
                 }

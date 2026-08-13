@@ -3,6 +3,7 @@ import express from 'express';
 const TEMPLATE_CATEGORIES = ['general', 'inspection', 'handover', 'infrastructure', 'change_order'];
 const FIELD_TYPES = ['text', 'textarea', 'number', 'date', 'checkbox', 'select', 'phone', 'email'];
 const STATUSES = ['draft', 'completed', 'approved'];
+const TIME_ACTIVITY_TYPES = ['planning','supervision','technician','installation','threading','programming','training'];
 
 function normalizeFields(fields) {
   if (!Array.isArray(fields)) return [];
@@ -20,7 +21,14 @@ function templateFromRow(row) {
 }
 
 function recordFromRow(row) {
-  return { id: row.id, templateId: row.template_id, templateName: row.template_name, templateFields: row.template_fields || [], clientId: row.client_id, clientName: row.client_name, projectId: row.project_id, projectName: row.project_name, title: row.title, status: row.status, values: row.values || {}, notes: row.notes, scheduledFor: row.scheduled_for, createdByName: row.created_by_name, completedByName: row.completed_by_name, approvedByName: row.approved_by_name, completedAt: row.completed_at, approvedAt: row.approved_at, createdAt: row.created_at, updatedAt: row.updated_at };
+  return { id: row.id, templateId: row.template_id, templateName: row.template_name, templateFields: row.template_fields || [], clientId: row.client_id, clientName: row.client_name, projectId: row.project_id, projectName: row.project_name, title: row.title, status: row.status, values: row.values || {}, notes: row.notes, scheduledFor: row.scheduled_for, activityType:row.activity_type || '', workHours:Number(row.work_hours || 0), professionalId:row.professional_id || '', createdByName: row.created_by_name, completedByName: row.completed_by_name, approvedByName: row.approved_by_name, completedAt: row.completed_at, approvedAt: row.approved_at, createdAt: row.created_at, updatedAt: row.updated_at };
+}
+
+async function syncRecordHours(pool, record, userId) {
+  await pool.query("DELETE FROM project_time_entries WHERE source_type='form_record' AND source_id=$1", [String(record.id)]);
+  const hours = Number(record.work_hours || 0);
+  if (!record.project_id || !TIME_ACTIVITY_TYPES.includes(record.activity_type) || hours <= 0) return;
+  await pool.query(`INSERT INTO project_time_entries(project_id,professional_id,user_id,activity_type,work_date,hours,source_type,source_id,notes) VALUES($1,$2,$3,$4,$5,$6,'form_record',$7,$8)`, [record.project_id,record.professional_id || null,userId,record.activity_type,record.scheduled_for || new Date(),hours,String(record.id),record.title]);
 }
 
 function missingRequired(fields, values) {
@@ -89,7 +97,10 @@ export function createFormsRouter({ pool, authenticate, requireRoles, audit }) {
     const missing = status === 'draft' ? [] : missingRequired(template.rows[0].fields, values);
     if (missing.length) return response.status(400).json({ error: `חסרים שדות חובה: ${missing.join(', ')}` });
     const title = String(request.body.title || template.rows[0].name).trim();
-    const result = await pool.query(`INSERT INTO form_records(template_id,template_version,template_fields,client_id,project_id,title,status,values,notes,scheduled_for,created_by,completed_by,completed_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`, [request.body.templateId, template.rows[0].version, JSON.stringify(template.rows[0].fields), request.body.clientId || null, request.body.projectId || null, title, status, JSON.stringify(values), request.body.notes || '', request.body.scheduledFor || null, request.user.id, status === 'completed' ? request.user.id : null, status === 'completed' ? new Date() : null]);
+    const activityType=TIME_ACTIVITY_TYPES.includes(request.body.activityType)?request.body.activityType:null;const workHours=Math.max(0,Number(request.body.workHours)||0);
+    if(workHours>0&&(!request.body.projectId||!activityType))return response.status(400).json({error:'דיווח שעות בטופס מחייב פרויקט וסוג פעילות'});
+    const result = await pool.query(`INSERT INTO form_records(template_id,template_version,template_fields,client_id,project_id,title,status,values,notes,scheduled_for,created_by,completed_by,completed_at,activity_type,work_hours,professional_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`, [request.body.templateId, template.rows[0].version, JSON.stringify(template.rows[0].fields), request.body.clientId || null, request.body.projectId || null, title, status, JSON.stringify(values), request.body.notes || '', request.body.scheduledFor || null, request.user.id, status === 'completed' ? request.user.id : null, status === 'completed' ? new Date() : null,activityType,workHours,request.body.professionalId||null]);
+    await syncRecordHours(pool,result.rows[0],request.user.id);
     await audit(request, 'create', 'form_record', String(result.rows[0].id), { title, status, templateId: request.body.templateId });
     response.status(201).json({ record: result.rows[0] });
   });
@@ -116,7 +127,10 @@ export function createFormsRouter({ pool, authenticate, requireRoles, audit }) {
     const clientId = request.body.clientId === undefined ? row.client_id : request.body.clientId || null;
     const projectId = request.body.projectId === undefined ? row.project_id : request.body.projectId || null;
     const scheduledFor = request.body.scheduledFor === undefined ? row.scheduled_for : request.body.scheduledFor || null;
-    const result = await pool.query(`UPDATE form_records SET client_id=$1,project_id=$2,title=$3,status=$4,values=$5,notes=$6,scheduled_for=$7,completed_by=CASE WHEN $8 THEN $10 ELSE completed_by END,completed_at=CASE WHEN $8 THEN NOW() ELSE completed_at END,approved_by=CASE WHEN $9 THEN $10 ELSE approved_by END,approved_at=CASE WHEN $9 THEN NOW() ELSE approved_at END,updated_at=NOW() WHERE id=$11 RETURNING *`, [clientId, projectId, String(request.body.title ?? row.title).trim(), status, JSON.stringify(values), request.body.notes ?? row.notes, scheduledFor, completedNow, approvedNow, request.user.id, request.params.id]);
+    const activityType=request.body.activityType===undefined?row.activity_type:(TIME_ACTIVITY_TYPES.includes(request.body.activityType)?request.body.activityType:null);const workHours=request.body.workHours===undefined?Number(row.work_hours||0):Math.max(0,Number(request.body.workHours)||0);const professionalId=request.body.professionalId===undefined?row.professional_id:(request.body.professionalId||null);
+    if(workHours>0&&(!projectId||!activityType))return response.status(400).json({error:'דיווח שעות בטופס מחייב פרויקט וסוג פעילות'});
+    const result = await pool.query(`UPDATE form_records SET client_id=$1,project_id=$2,title=$3,status=$4,values=$5,notes=$6,scheduled_for=$7,completed_by=CASE WHEN $8 THEN $10 ELSE completed_by END,completed_at=CASE WHEN $8 THEN NOW() ELSE completed_at END,approved_by=CASE WHEN $9 THEN $10 ELSE approved_by END,approved_at=CASE WHEN $9 THEN NOW() ELSE approved_at END,activity_type=$11,work_hours=$12,professional_id=$13,updated_at=NOW() WHERE id=$14 RETURNING *`, [clientId, projectId, String(request.body.title ?? row.title).trim(), status, JSON.stringify(values), request.body.notes ?? row.notes, scheduledFor, completedNow, approvedNow, request.user.id,activityType,workHours,professionalId,request.params.id]);
+    await syncRecordHours(pool,result.rows[0],request.user.id);
     await audit(request, 'update', 'form_record', request.params.id, { title: result.rows[0].title, status });
     response.json({ record: result.rows[0] });
   });

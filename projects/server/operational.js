@@ -94,8 +94,8 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
 
   router.get('/messages', async (request,response) => {
-    const result=await pool.query(`SELECT m.*,sender.display_name sender_name,recipient.display_name recipient_name FROM user_messages m JOIN users sender ON sender.id=m.sender_id JOIN users recipient ON recipient.id=m.recipient_id WHERE (m.recipient_id=$1 OR m.sender_id=$1) AND NOT ($1=ANY(m.hidden_for)) ORDER BY m.created_at DESC LIMIT 200`,[request.user.id]);
-    response.json({messages:result.rows.map(row=>({id:row.id,senderId:row.sender_id,senderName:row.sender_name,recipientId:row.recipient_id,recipientName:row.recipient_name,subject:row.subject,body:row.body,readAt:row.read_at,createdAt:row.created_at,parentMessageId:row.parent_message_id,linkedUrl:row.linked_url,mention:row.mention})),unread:result.rows.filter(row=>String(row.recipient_id)===String(request.user.id)&&!row.read_at).length});
+    const result=await pool.query(`SELECT m.*,sender.display_name sender_name,sender.avatar_color sender_avatar_color,sender.avatar_image sender_avatar_image,recipient.display_name recipient_name,recipient.avatar_color recipient_avatar_color,recipient.avatar_image recipient_avatar_image FROM user_messages m JOIN users sender ON sender.id=m.sender_id JOIN users recipient ON recipient.id=m.recipient_id WHERE (m.recipient_id=$1 OR m.sender_id=$1) AND NOT ($1=ANY(m.hidden_for)) ORDER BY m.created_at DESC LIMIT 200`,[request.user.id]);
+    response.json({messages:result.rows.map(row=>({id:row.id,senderId:row.sender_id,senderName:row.sender_name,senderAvatarColor:row.sender_avatar_color,senderAvatarImage:row.sender_avatar_image,recipientId:row.recipient_id,recipientName:row.recipient_name,recipientAvatarColor:row.recipient_avatar_color,recipientAvatarImage:row.recipient_avatar_image,subject:row.subject,body:row.body,readAt:row.read_at,createdAt:row.created_at,parentMessageId:row.parent_message_id,linkedUrl:row.linked_url,mention:row.mention})),unread:result.rows.filter(row=>String(row.recipient_id)===String(request.user.id)&&!row.read_at).length});
   });
   router.post('/messages', async (request,response) => {
     const recipientId=Number(request.body.recipientId);const body=String(request.body.body||'').trim();if(!recipientId||!body)return response.status(400).json({error:'יש לבחור נמען ולכתוב הודעה'});
@@ -174,8 +174,8 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   });
 
   router.get('/team', async (_request, response) => {
-    const result = await pool.query('SELECT id,username,display_name,role,active,avatar_color,avatar_icon,last_seen_at,last_login_at FROM users WHERE merged_into_user_id IS NULL ORDER BY active DESC,display_name');
-    response.json({ users: result.rows.map((row) => ({ id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, avatarColor: row.avatar_color, avatarIcon: row.avatar_icon, lastSeenAt:row.last_seen_at,lastLoginAt:row.last_login_at,online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) })) });
+    const result = await pool.query('SELECT id,username,display_name,role,active,avatar_color,avatar_icon,avatar_image,last_seen_at,last_login_at FROM users WHERE merged_into_user_id IS NULL ORDER BY active DESC,display_name');
+    response.json({ users: result.rows.map((row) => ({ id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, avatarColor: row.avatar_color, avatarIcon: row.avatar_icon, avatarImage:row.avatar_image, lastSeenAt:row.last_seen_at,lastLoginAt:row.last_login_at,online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) })) });
   });
 
   router.post('/alerts/snooze', async (request, response) => {

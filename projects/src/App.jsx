@@ -112,6 +112,7 @@ import "./workspaces.css";
 import "./theme-dark.css";
 import "./contacts.css";
 import "./messages.css";
+import "./task-center.css";
 import "./ai-chat.css";
 import "./commercial-gantt.css";
 import "./modal-system.css";
@@ -245,6 +246,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [startupError, setStartupError] = useState("");
   const [selectedProject, setSelectedProject] = useState(null);
+  const [linkedTaskId, setLinkedTaskId] = useState("");
   const [search, setSearch] = useState("");
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [stageFilter, setStageFilter] = useState("all");
@@ -438,11 +440,28 @@ function App() {
     setPage("project");
     setSidebarOpen(false);
   };
+  const openMessageLink = (linkedUrl) => {
+    const params = new URLSearchParams(String(linkedUrl || "").replace(/^\?/, ""));
+    const projectId = params.get("project");
+    const taskId = params.get("task") || "";
+    if (!projectId) {
+      setNotice("התיוג אינו כולל קישור לפרויקט או למשימה");
+      return;
+    }
+    const target = projects.find((item) => String(item.id) === String(projectId));
+    if (!target) {
+      setNotice("הפרויקט שממנו נשלח התיוג אינו זמין יותר");
+      return;
+    }
+    setLinkedTaskId(taskId);
+    openProject(target);
+    setMessagesOpen(false);
+  };
   useEffect(()=>{
     if(!user||!projects.length)return;
-    const params=new URLSearchParams(window.location.search);const projectId=params.get('project');
+    const params=new URLSearchParams(window.location.search);const projectId=params.get('project');const taskId=params.get('task')||'';
     if(!projectId)return;const target=projects.find(item=>String(item.id)===projectId);if(target)openProject(target);
-    params.delete('project');const query=params.toString();window.history.replaceState({},'',`${window.location.pathname}${query?`?${query}`:''}${window.location.hash}`);
+    if(target)setLinkedTaskId(taskId);params.delete('project');params.delete('task');const query=params.toString();window.history.replaceState({},'',`${window.location.pathname}${query?`?${query}`:''}${window.location.hash}`);
   },[user?.id,projects.length]);
   const updateProject = async (id, patch) => {
     try {
@@ -756,8 +775,8 @@ function App() {
           </div>
           <div className="user-card">
             <div
-              className="avatar"
-              style={{ background: user.avatarColor, color: "#fff" }}
+              className={`avatar user-photo-avatar ${user.avatarImage ? "has-photo" : ""}`}
+              style={{ background: user.avatarColor, color: "#fff", "--avatar-color": user.avatarColor }}
             >
               {avatarGlyph(user)}
               <span />
@@ -985,6 +1004,8 @@ function App() {
               stageOptions={stageOptions}
               setNotice={setNotice}
               setPage={setPage}
+              linkedTaskId={linkedTaskId}
+              onLinkedTaskHandled={() => setLinkedTaskId("")}
             />
           )}
         </div>
@@ -1031,11 +1052,13 @@ function App() {
       {messagesOpen && (
         <MessageCenter
           api={api}
+          apiRoot={apiRoot}
           user={user}
           users={team}
           onClose={() => setMessagesOpen(false)}
           setNotice={setNotice}
           onUnread={setUnreadMessages}
+          onOpenLinked={openMessageLink}
         />
       )}
       {aiChatOpen && <AiChatBoundary onClose={() => setAiChatOpen(false)}><AiChat apiRoot={apiRoot} onClose={() => setAiChatOpen(false)} /></AiChatBoundary>}
@@ -1065,6 +1088,11 @@ const avatarIcons = {
   star: "כוכב",
 };
 function avatarGlyph(user) {
+  if (user.avatarImage) return <img src={`${apiRoot}/users/${user.id}/avatar?v=${encodeURIComponent(user.avatarImage)}`} alt="" />;
+  if (!user.avatarIcon || user.avatarIcon === "user") {
+    const names = String(user.displayName || "משתמש").trim().split(/\s+/);
+    return `${names[0]?.[0] || "מ"}${names.length > 1 ? names.at(-1)?.[0] || "" : names[0]?.[1] || ""}`;
+  }
   return (
     { wrench: "🔧", hardhat: "⛑", lightning: "ϟ", shield: "◆", star: "★" }[
       user.avatarIcon
@@ -1192,6 +1220,29 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       setNotice(error.message);
     }
   };
+  const uploadAvatar = async (id, file) => {
+    if (!file) return;
+    try {
+      const body = new FormData();
+      body.set("avatar", file);
+      await api(`/users/${id}/avatar`, { method: "POST", body });
+      loadUsers();
+      onChanged?.();
+      setNotice("תמונת המשתמש עודכנה");
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
+  const removeAvatar = async (id) => {
+    try {
+      await api(`/users/${id}/avatar`, { method: "DELETE" });
+      loadUsers();
+      onChanged?.();
+      setNotice("תמונת המשתמש הוסרה");
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
   const deleteUser = async (item) => {
     if (!window.confirm(`למחוק את המשתמש „${item.displayName}”?`)) return;
     try {
@@ -1246,8 +1297,8 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
           {users.map((item) => (
             <div className="user-row visual-user-row" key={item.id}>
               <div
-                className="avatar"
-                style={{ background: item.avatarColor, color: "#fff" }}
+                className={`avatar user-photo-avatar ${item.avatarImage ? "has-photo" : ""}`}
+                style={{ background: item.avatarColor, color: "#fff", "--avatar-color": item.avatarColor }}
               >
                 {avatarGlyph(item)}
               </div>
@@ -1292,6 +1343,11 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                     </option>
                   ))}
                 </select>
+                <label className="user-photo-upload" title="העלאת תמונת משתמש">
+                  <input type="file" accept="image/*" onChange={(event) => { uploadAvatar(item.id, event.target.files?.[0]); event.target.value = ""; }} />
+                  תמונה
+                </label>
+                {item.avatarImage && <button type="button" className="user-photo-remove" onClick={() => removeAvatar(item.id)}>הסרה</button>}
               </div>
               <label className="active-toggle">
                 <input
@@ -3089,6 +3145,8 @@ function NewProjectModal({
     managerId: managers[0]?.id || "",
     stage: stageOptions[0]?.metadata?.key || "planning",
     value: "",
+    installationHoursTarget: "",
+    programmingHoursTarget: "",
     startDate: new Date().toISOString().slice(0, 10),
     targetDate: "",
     selectedEquipment: {},
@@ -3135,6 +3193,8 @@ function NewProjectModal({
       manager: manager?.displayName || "",
       ownerInitials: manager?.displayName?.slice(0, 2) || "",
       value: Number(form.value) || 0,
+      installationHoursTarget: Number(form.installationHoursTarget) || 0,
+      programmingHoursTarget: Number(form.programmingHoursTarget) || 0,
       paid: 0,
       due: form.targetDate
         ? new Date(form.targetDate).toLocaleDateString("he-IL")
@@ -3567,6 +3627,31 @@ function NewProjectModal({
                   placeholder="₪ 0"
                 />
               </label>
+              <div className="form-row project-hour-target-fields">
+                <label>
+                  יעד שעות התקנה
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={form.installationHoursTarget}
+                    onChange={(e) => setForm({ ...form, installationHoursTarget: e.target.value })}
+                    placeholder="ללא יעד"
+                  />
+                </label>
+                <label>
+                  יעד שעות תכנות
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={form.programmingHoursTarget}
+                    onChange={(e) => setForm({ ...form, programmingHoursTarget: e.target.value })}
+                    placeholder="ללא יעד"
+                  />
+                </label>
+              </div>
+              <p className="time-target-note">היעדים מיועדים רק להתקנה ולתכנות. יתר הפעילויות נמדדות בפועל ללא יעד.</p>
             </>
           )}
           {step === 3 && (

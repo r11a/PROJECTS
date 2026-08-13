@@ -22,6 +22,7 @@ import {
   Settings,
   Trash2,
   Upload,
+  Timer,
   UserRound,
   Users,
   X,
@@ -29,6 +30,7 @@ import {
 import { TasksWorkspace, FinanceWorkspace, TaskEditor } from "./Workspaces";
 import { GanttTimeline } from "./GanttTimeline";
 import { AppModal } from "./AppModal";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const money = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -64,6 +66,8 @@ export function ProjectWorkspace({
   stageOptions,
   setNotice,
   setPage,
+  linkedTaskId = "",
+  onLinkedTaskHandled,
 }) {
   const [tab, setTab] = useState("overview");
   const [workspace, setWorkspace] = useState({
@@ -78,10 +82,12 @@ export function ProjectWorkspace({
     activity: [],
     reviews: [],
     meetings: [],
+    timeEntries: [],
   });
   const [mentionUsers,setMentionUsers]=useState([]);
   const [note, setNote] = useState("");
   const [modal, setModal] = useState("");
+  const [hoursReportRequest, setHoursReportRequest] = useState(0);
   const [previewFile,setPreviewFile]=useState(null);
   const [teamRoleId,setTeamRoleId]=useState("");
   const [teamQuery,setTeamQuery]=useState("");
@@ -104,6 +110,9 @@ export function ProjectWorkspace({
     load();
     api('/team').then(result=>setMentionUsers(result.users||[])).catch(()=>{});
   }, [project.id]);
+  useEffect(() => {
+    if (linkedTaskId) setTab("tasks");
+  }, [linkedTaskId]);
   useEffect(() => {
     if (!modal) return;
     Promise.all([api("/professional-roles"), api("/equipment-catalog")])
@@ -192,8 +201,8 @@ export function ProjectWorkspace({
     }
   };
   const uploadRecordFiles=async(files,title,category)=>{for(const file of files.filter(file=>file instanceof File&&file.size)){const body=new FormData();body.set('projectId',project.id);body.set('title',`${title} · ${file.name}`);body.set('category',category);body.set('file',file);await api('/documents',{method:'POST',body});}};
-  const addReview=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/projects/${project.id}/site-reviews`,{method:'POST',body:JSON.stringify({reviewDate:f.get('reviewDate'),performedBy:f.get('performedBy'),supervisionType:f.get('supervisionType'),summary:f.get('summary'),followUp:f.get('followUp'),planUpdateRequired:f.get('planUpdateRequired')==='on'})});await uploadRecordFiles(f.getAll('attachments'),`ביקורת אתר ${f.get('reviewDate')}`,'ביקורת אתר');setModal('');setNotice('ביקורת האתר והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
-  const addMeeting=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/projects/${project.id}/meetings`,{method:'POST',body:JSON.stringify({meetingAt:f.get('meetingAt'),attendees:f.get('attendees'),summary:f.get('summary'),followUp:f.get('followUp')})});await uploadRecordFiles(f.getAll('attachments'),`סיכום פגישה ${String(f.get('meetingAt')).slice(0,10)}`,'סיכום פגישה');setModal('');setNotice('סיכום הפגישה והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
+  const addReview=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/projects/${project.id}/site-reviews`,{method:'POST',body:JSON.stringify({reviewDate:f.get('reviewDate'),performedBy:f.get('performedBy'),supervisionType:f.get('supervisionType'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours'),planUpdateRequired:f.get('planUpdateRequired')==='on'})});await uploadRecordFiles(f.getAll('attachments'),`ביקורת אתר ${f.get('reviewDate')}`,'ביקורת אתר');setModal('');setNotice('ביקורת האתר, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
+  const addMeeting=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/projects/${project.id}/meetings`,{method:'POST',body:JSON.stringify({meetingAt:f.get('meetingAt'),attendees:f.get('attendees'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours')})});await uploadRecordFiles(f.getAll('attachments'),`סיכום פגישה ${String(f.get('meetingAt')).slice(0,10)}`,'סיכום פגישה');setModal('');setNotice('סיכום הפגישה, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
   const archiveDocument=async(file)=>{if(user.role!=='admin'||!confirm(`להעביר את „${file.title||file.original_name}” לסל המחזור ל־14 יום?`))return;try{await api(`/documents/${file.id}`,{method:'DELETE'});setNotice('המסמך הועבר לסל המחזור ל־14 יום');load()}catch(error){setNotice(error.message)}};
   const deleteTeam = async (x) => {
     if (!confirm(`להסיר את ${x.display_name} מהפרויקט?`)) return;
@@ -239,6 +248,8 @@ export function ProjectWorkspace({
       priority: f.get("priority"),
       flag: f.get("flag"),
       projectClassification: f.get("projectClassification"),
+      installationHoursTarget: Number(f.get("installationHoursTarget") || 0),
+      programmingHoursTarget: Number(f.get("programmingHoursTarget") || 0),
     };
     if (editClientMode === "new")
       patch.newClient = {
@@ -271,6 +282,7 @@ export function ProjectWorkspace({
     ["tasks", "משימות ואבני דרך"],
     ["gantt", "גאנט"],
     ["reviews", "ביקורות ופגישות"],
+    ["hours", "שעות עבודה"],
     ["systems", "מערכות וצוות"],
     ["forms", "טפסים וקבצים"],
     ["finance", "כספים"],
@@ -303,6 +315,10 @@ export function ProjectWorkspace({
           </div>
         </div>
         <div className="project-hero-actions">
+          <button className="secondary-button" disabled={!canEdit} onClick={() => { setTab("hours"); setHoursReportRequest((current) => current + 1); }}>
+            <Timer size={16}/>
+            דיווח שעות
+          </button>
           <button
             className="secondary-button"
             disabled={!canEdit}
@@ -485,6 +501,9 @@ export function ProjectWorkspace({
           onDone={load}
         />
       )}
+      {tab === "hours" && (
+        <ProjectHoursPanel project={project} entries={workspace.timeEntries || []} professionals={professionals} api={api} setNotice={setNotice} onDone={load} canEdit={canEdit} openRequest={hoursReportRequest}/>
+      )}
       {tab === "overview" && (
         <div className="detail-grid">
           <div className="detail-main">
@@ -646,6 +665,8 @@ export function ProjectWorkspace({
           setNotice={setNotice}
           projectId={project.id}
           onDataChanged={load}
+          initialTaskId={linkedTaskId}
+          onInitialTaskOpened={onLinkedTaskHandled}
         />
       )}
       {tab === "gantt" && (
@@ -900,8 +921,8 @@ export function ProjectWorkspace({
           </section>
         </div>
       )}
-      {modal==='review'&&<Modal title="ביקורת אתר חדשה" onClose={()=>setModal('')}><form className="work-form" onSubmit={addReview}><label>תאריך פיקוח<input type="date" name="reviewDate" required defaultValue={new Date().toISOString().slice(0,10)}/></label><label>סוג פיקוח<input name="supervisionType" placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label className="wide">מי ביצע<select name="performedBy"><option value="">בחירה מהמאגר</option>{professionals.filter(x=>x.active).map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label className="wide">ממצאים וסיכום<textarea name="summary" required rows="5"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired"/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת ביקורת</button></div></form></Modal>}
-      {modal==='meeting'&&<Modal title="סיכום פגישה חדש" onClose={()=>setModal('')}><form className="work-form" onSubmit={addMeeting}><label>תאריך ושעה<input type="datetime-local" name="meetingAt" required defaultValue={new Date().toISOString().slice(0,16)}/></label><label>נוכחים<input name="attendees" placeholder="שמות מופרדים בפסיק"/></label><label className="wide">סיכום והחלטות<textarea name="summary" required rows="6"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><label className="wide">תמונות ומסמכי הפגישה<input type="file" name="attachments" accept="image/*,application/pdf,.doc,.docx,.xlsx" multiple/></label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת סיכום</button></div></form></Modal>}
+      {modal==='review'&&<Modal title="ביקורת אתר חדשה" onClose={()=>setModal('')}><form className="work-form" onSubmit={addReview}><label>תאריך פיקוח<input type="date" name="reviewDate" required defaultValue={new Date().toISOString().slice(0,10)}/></label><label>סוג פיקוח<input name="supervisionType" placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy"><option value="">בחירה מהמאגר</option>{professionals.filter(x=>x.active).map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.25" placeholder="0"/></label><label className="wide">ממצאים וסיכום<textarea name="summary" required rows="5"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired"/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת ביקורת</button></div></form></Modal>}
+      {modal==='meeting'&&<Modal title="סיכום פגישה חדש" onClose={()=>setModal('')}><form className="work-form" onSubmit={addMeeting}><label>תאריך ושעה<input type="datetime-local" name="meetingAt" required defaultValue={new Date().toISOString().slice(0,16)}/></label><label>נוכחים<input name="attendees" placeholder="שמות מופרדים בפסיק"/></label><label>שעות תכנון / ישיבה<input type="number" name="hours" min="0" max="24" step="0.25" placeholder="0"/></label><label className="wide">סיכום והחלטות<textarea name="summary" required rows="6"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><label className="wide">תמונות ומסמכי הפגישה<input type="file" name="attachments" accept="image/*,application/pdf,.doc,.docx,.xlsx" multiple/></label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת סיכום</button></div></form></Modal>}
       {modal === "team" && (
         <Modal title="שיוך איש צוות" onClose={() => setModal("")}>
           <form className="work-form" onSubmit={addTeam}>
@@ -1231,6 +1252,15 @@ function ProjectEditModal({
           />
         </label>
         <label>
+          יעד שעות התקנה
+          <input name="installationHoursTarget" type="number" min="0" step="0.5" defaultValue={project.installationHoursTarget || ""} placeholder="ללא יעד" />
+        </label>
+        <label>
+          יעד שעות תכנות
+          <input name="programmingHoursTarget" type="number" min="0" step="0.5" defaultValue={project.programmingHoursTarget || ""} placeholder="ללא יעד" />
+        </label>
+        <p className="wide time-target-note">רק התקנה ותכנות מנוהלות מול יעד. יתר סוגי העבודה נמדדים בפועל ללא יעד.</p>
+        <label>
           תאריך יעד / טקסט
           <input name="due" defaultValue={project.due} />
         </label>
@@ -1542,7 +1572,7 @@ function CommercialProjectGantt({ tasks, milestones, project, projects, professi
     try {
       const base = item.kind === "task" ? "/operations/tasks" : "/operations/milestones";
       await api(`${base}/${item.id}`, { method:"PATCH", body:JSON.stringify(item.kind === "task" ? dates : { dueDate:dates.dueDate, color:dates.color }) });
-      if(dates.mentionUserIds?.length)await api('/mentions',{method:'POST',body:JSON.stringify({userIds:dates.mentionUserIds,subject:`תיוג במשימה ${item.title}`,body:`תויגת במשימה ${item.title}. התאריכים עודכנו ל-${dates.startDate} עד ${dates.dueDate}.`,linkedUrl:`?project=${encodeURIComponent(project.id)}`})});
+      if(dates.mentionUserIds?.length)await api('/mentions',{method:'POST',body:JSON.stringify({userIds:dates.mentionUserIds,subject:`תיוג במשימה ${item.title}`,body:`תויגת במשימה ${item.title}. התאריכים עודכנו ל-${dates.startDate} עד ${dates.dueDate}.`,linkedUrl:`?project=${encodeURIComponent(project.id)}&task=${encodeURIComponent(item.id)}`})});
       setNotice("תאריכי המשימה עודכנו");
       await onDataChanged?.();
     } catch (error) { setNotice(error.message); await onDataChanged?.(); }
@@ -1554,6 +1584,23 @@ function CommercialProjectGantt({ tasks, milestones, project, projects, professi
       {editor && <TaskEditor kind={editor.kind} initial={editor.item} projects={projects} professionals={professionals} tasks={tasks} fixedProjectId={project.id} onClose={() => setEditor(null)} onSave={save} />}
     </>
   );
+}
+
+const timeActivityLabels={planning:'תכנון',supervision:'פיקוח',technician:'זמן טכנאים',installation:'התקנה',threading:'השחלות',programming:'תכנות',training:'הדרכה'};
+
+function ProjectHoursPanel({project,entries,professionals,api,setNotice,onDone,canEdit,openRequest=0}){
+  const [open,setOpen]=useState(false);
+  useEffect(()=>{if(openRequest>0)setOpen(true)},[openRequest]);
+  const totals=Object.entries(timeActivityLabels).map(([key,label])=>({key,label,hours:entries.filter(item=>item.activity_type===key).reduce((sum,item)=>sum+Number(item.hours||0),0)}));
+  const totalHours=totals.reduce((sum,item)=>sum+item.hours,0);
+  const submit=async(event)=>{event.preventDefault();const data=new FormData(event.currentTarget);try{await api(`/projects/${project.id}/time-entries`,{method:'POST',body:JSON.stringify({activityType:data.get('activityType'),workDate:data.get('workDate'),hours:data.get('hours'),professionalId:data.get('professionalId')||null,notes:data.get('notes')})});setOpen(false);setNotice('דיווח השעות נשמר');onDone()}catch(error){setNotice(error.message)}};
+  const targetFor=(key)=>key==='installation'?Number(project.installationHoursTarget||0):key==='programming'?Number(project.programmingHoursTarget||0):0;
+  return <section className="project-hours-page">
+    <header className="panel project-hours-head"><div><span><Timer size={19}/></span><div><h3>מונה שעות לפרויקט</h3><p>נתוני ביצוע מובנים מדוחות, טפסים ודיווח ידני. יעדים נקבעים בהקמת הפרויקט או בעריכתו.</p></div></div><strong>{totalHours.toLocaleString('he-IL',{maximumFractionDigits:1})}<small> שעות בפועל</small></strong>{canEdit&&<div className="hours-actions"><button className="ops-primary" onClick={()=>setOpen(true)}><Plus size={16}/>דיווח שעות</button></div>}</header>
+    <div className="project-hours-kpis">{totals.map(item=>{const target=targetFor(item.key);const percent=target?item.hours/target*100:0;return <article className={target&&item.hours>target?'over-target':''} key={item.key}><span>{item.label}</span><b>{item.hours.toLocaleString('he-IL',{maximumFractionDigits:1})}</b><small>{target?`מתוך יעד ${target} שעות`:'שעות שנמדדו'}</small><i style={{width:`${target?Math.min(100,Math.max(4,percent)):totalHours?Math.max(4,item.hours/totalHours*100):0}%`}}/>{target>0&&<em>{Math.round(percent)}%</em>}</article>})}</div>
+    <div className="project-hours-grid"><section className="panel"><h3>התפלגות שעות לפי פעילות</h3><ResponsiveContainer width="100%" height={300}><BarChart data={totals} layout="vertical" margin={{right:15,left:15}}><CartesianGrid strokeDasharray="3 3" horizontal={false}/><XAxis type="number"/><YAxis type="category" dataKey="label" width={90}/><Tooltip formatter={(value)=>[`${value} שעות`,'בפועל']} contentStyle={{direction:'rtl'}}/><Bar dataKey="hours" fill="#6957df" radius={[7,7,7,7]} isAnimationActive/></BarChart></ResponsiveContainer></section><section className="panel time-entry-list"><h3>דיווחים אחרונים</h3>{entries.slice(0,12).map(item=><article key={item.id}><i/><div><strong>{timeActivityLabels[item.activity_type]||item.activity_type}</strong><small>{item.professional_name||item.user_name||'משתמש'} · {dateText(item.work_date)}</small></div><b>{Number(item.hours)} ש׳</b></article>)}{!entries.length&&<div className="inline-empty">טרם דווחו שעות לפרויקט.</div>}</section></div>
+    {open&&<ProjectModal title="דיווח שעות עבודה" onClose={()=>setOpen(false)}><form className="work-form" onSubmit={submit}><label>סוג פעילות<select name="activityType" required>{Object.entries(timeActivityLabels).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label><label>תאריך<input type="date" name="workDate" required defaultValue={new Date().toISOString().slice(0,10)}/></label><label>מספר שעות<input type="number" name="hours" required min="0.25" max="24" step="0.25"/></label><label>מבצע<select name="professionalId"><option value="">המשתמש המדווח</option>{professionals.filter(item=>item.active!==false).map(item=><option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label><label className="wide">הערות<textarea name="notes"/></label><div className="form-actions wide"><button type="button" className="secondary-button" onClick={()=>setOpen(false)}>ביטול</button><button className="ops-primary">שמירת דיווח</button></div></form></ProjectModal>}
+  </section>;
 }
 
 function ProjectGantt({ tasks, milestones }) {
