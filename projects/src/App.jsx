@@ -110,7 +110,7 @@ import "./theme-dark.css";
 import "./contacts.css";
 import "./messages.css";
 import "./ai-chat.css";
-import "./gantt.css";
+import "./commercial-gantt.css";
 import projectsMark from "./assets/projects-mark.svg";
 
 const money = new Intl.NumberFormat("he-IL", {
@@ -943,7 +943,7 @@ function App() {
               setNotice={setNotice}
             />
           )}
-          {page==='gantt'&&<GanttWorkspace api={api} setNotice={setNotice}/>}
+          {page==='gantt'&&<GanttWorkspace api={api} setNotice={setNotice} user={user} projects={projects} professionals={professionals}/>}
           {page === "reports" && (
             <ReportsWorkspace api={api} setNotice={setNotice} company={company} companyLogo={companyLogo} user={user} />
           )}

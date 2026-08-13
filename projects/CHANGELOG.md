@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.15.0
+
+- Replaced both legacy Gantt implementations with one shared commercial-grade timeline component.
+- Separated the RTL task list from the LTR time canvas to eliminate date jumps, label overlap and inconsistent scrolling.
+- Added seamless virtual paging, stable day/week/month zoom, previous/next navigation, date selection and a reliable Today action.
+- Added WCAG-aware text contrast calculation for every bar color and a fixed task list that keeps names readable at every duration.
+- Added task detail tooltips on hover and direct task/milestone editing in a modal from both Gantt screens.
+- Rebuilt dependency connectors, group summaries, milestones, critical-path styling and responsive mobile behavior.
+
 ## 0.14.3
 
 - Corrected Gantt typography contrast: solid colored bars now use white text, while readable extensions for short tasks use dark text.

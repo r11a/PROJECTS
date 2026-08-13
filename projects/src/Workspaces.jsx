@@ -163,6 +163,7 @@ export function TaskEditor({
     onSave({
       ...form,
       projectId: form.projectId || initial?.project_id,
+      startDate: form.startDate || initial?.start_date,
       dueDate: form.dueDate || initial?.due_date,
       assigneeProfessionalId: form.assigneeProfessionalId || null,
       ownerProfessionalId: form.ownerProfessionalId || null,

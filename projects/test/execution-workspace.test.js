@@ -21,15 +21,16 @@ test('document deletion is admin-only soft deletion with a restore route', async
 
 test('portfolio Gantt exposes critical tasks and dependency connectors', async () => {
   const gantt = await read('../src/GanttWorkspace.jsx');
-  assert.match(gantt, /global-gantt-dependencies/);
-  assert.match(gantt, /dependency_task_id/);
-  assert.match(gantt, /משימה קריטית/);
+  const timeline = await read('../src/GanttTimeline.jsx');
+  assert.match(timeline, /cg-dependencies/);
+  assert.match(timeline, /dependency_task_id/);
+  assert.match(timeline, /נתיב קריטי/);
   assert.match(gantt, /לוח גאנט לכל הפרויקטים/);
-  assert.match(gantt, /pixelsPerDay/);
-  assert.match(gantt, /Math\.max\(actualWidth, 132\)/);
-  assert.match(gantt, /\["fit", "התאם"\]/);
-  assert.match(gantt, /setFutureDays/);
-  assert.match(gantt, /onScroll=\{extendTimeline\}/);
+  assert.match(timeline, /pixelsPerDay/);
+  assert.match(timeline, /contrastText/);
+  assert.match(timeline, /type="date"/);
+  assert.match(timeline, /onScroll=\{handleScroll\}/);
+  assert.match(gantt, /TaskEditor/);
 });
 
 test('project Gantt keeps short tasks readable and projects persist classification', async () => {
@@ -39,8 +40,8 @@ test('project Gantt keeps short tasks readable and projects persist classificati
   const server = await read('../server/index.js');
   assert.match(workspace, /pixelsPerDay/);
   assert.match(workspace, /Math\.max\(118, duration \* zoomConfig\.pixelsPerDay\)/);
-  assert.match(workspace, /project-gantt-actions/);
-  assert.match(workspace, /onScroll=\{extendTimeline\}/);
+  assert.match(workspace, /CommercialProjectGantt/);
+  assert.match(workspace, /GanttTimeline/);
   assert.match(app, /projectClassificationOptions/);
   assert.match(migration, /project_classification/);
   assert.match(server, /projectClassification: 'project_classification'/);

@@ -26,7 +26,8 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { TasksWorkspace, FinanceWorkspace } from "./Workspaces";
+import { TasksWorkspace, FinanceWorkspace, TaskEditor } from "./Workspaces";
+import { GanttTimeline } from "./GanttTimeline";
 
 const money = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -663,9 +664,15 @@ export function ProjectWorkspace({
         />
       )}
       {tab === "gantt" && (
-        <ProjectGantt
+        <CommercialProjectGantt
           tasks={workspace.tasks}
           milestones={workspace.milestones}
+          project={project}
+          projects={projects}
+          professionals={professionals}
+          api={api}
+          setNotice={setNotice}
+          onDataChanged={load}
         />
       )}
       {tab === "finance" && (
@@ -1524,6 +1531,32 @@ function GoogleAddressField({ project, api, updateProject, setNotice }) {
       )}
       <small>Photon · OpenStreetMap — ללא מפתח API וללא עלות שימוש.</small>
     </section>
+  );
+}
+
+function CommercialProjectGantt({ tasks, milestones, project, projects, professionals, api, setNotice, onDataChanged }) {
+  const [editor, setEditor] = useState(null);
+  const items = [
+    ...tasks.filter((item) => item.start_date && item.due_date).map((item) => ({ ...item, kind: "task", start: item.start_date, end: item.due_date })),
+    ...milestones.filter((item) => item.due_date).map((item) => ({ ...item, kind: "milestone", start: item.due_date, end: item.due_date })),
+  ].sort((a, b) => new Date(a.start) - new Date(b.start));
+  const save = async (value) => {
+    try {
+      const base = editor.kind === "task" ? "/operations/tasks" : "/operations/milestones";
+      await api(`${base}/${editor.item.id}`, { method: "PATCH", body: JSON.stringify(value) });
+      setEditor(null);
+      setNotice("המשימה נשמרה בהצלחה");
+      onDataChanged?.();
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
+  if (!items.length) return <div className="panel gantt-empty"><Activity size={30} /><h3>לוח הגאנט מוכן</h3><p>הוסיפו למשימות תאריך התחלה וסיום או אבני דרך כדי לבנות את ציר הביצוע.</p></div>;
+  return (
+    <>
+      <GanttTimeline compact groups={[[project.name, items]]} onOpen={(item) => setEditor({ kind: item.kind, item })} title={`גאנט ביצוע · ${project.name}`} />
+      {editor && <TaskEditor kind={editor.kind} initial={editor.item} projects={projects} professionals={professionals} tasks={tasks} fixedProjectId={project.id} onClose={() => setEditor(null)} onSave={save} />}
+    </>
   );
 }
 
