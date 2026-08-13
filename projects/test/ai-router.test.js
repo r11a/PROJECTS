@@ -84,6 +84,10 @@ test('AI router completes settings, provider test, async chat polling and usage 
   assert.equal(pool.usage.length,1);
   assert.equal(pool.usage[0][3],'chat');
 
+  const repeatedPoll=await originalFetch(`${base}/ai/chat/${jobId}`);
+  assert.equal(repeatedPoll.status,200);
+  assert.equal((await repeatedPoll.json()).answer,'מצב הגבייה תקין');
+
   pool.global.monthlyBudgetUsd=0.000001;
   const budgetResponse=await originalFetch(`${base}/ai/chat`,{ method:'POST',headers:{ 'content-type':'application/json' },body:JSON.stringify({ question:'שאלה נוספת',history:[] }) });
   assert.equal(budgetResponse.status,402);

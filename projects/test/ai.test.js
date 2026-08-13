@@ -14,10 +14,21 @@ test('project overview SQL filters AVG before ROUND', async () => {
   const queries=[];
   const pool={ query:async (sql)=>{ queries.push(String(sql));return { rows:[] }; } };
   const context=await buildChatContext(pool,'project client task payment manager system');
-  assert.deepEqual(Object.keys(context),['overview','projects','clients','tasks','finance','professionals','systems']);
+  assert.deepEqual(Object.keys(context),['overview','projects','clients','tasks','finance','professionals','projectSystems','systems']);
   assert.match(queries[0],/ROUND\(AVG\(progress\) FILTER \(WHERE archived_at IS NULL\)\)/);
   assert.doesNotMatch(queries[0],/ROUND\(AVG\(progress\)\) FILTER/);
-  assert.equal(queries.length,7);
+  assert.equal(queries.length,8);
+  assert.match(queries[6],/jsonb_array_elements_text/);
+});
+
+test('software help uses the product guide without loading unrelated project records', async () => {
+  const queries=[];
+  const pool={ query:async (sql)=>{ queries.push(String(sql));return { rows:[] }; } };
+  const context=await buildChatContext(pool,'איך יוצרים פרויקט חדש?');
+  assert.deepEqual(Object.keys(context),['overview','help']);
+  assert.equal(queries.length,1);
+  assert.match(context.help.createProject.join(' '),/שלב 1/);
+  assert.match(chatPrompt({ question:'איך יוצרים פרויקט חדש?',history:[],context }),/פרויקט חדש/);
 });
 
 test('context routing only loads the requested domain plus overview', async () => {

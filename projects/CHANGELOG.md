@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.1
+
+- Made completed AI chat jobs idempotent for ten minutes so Home Assistant Ingress or Cloudflare retries cannot consume and lose a response.
+- Added client-side recovery for short Cloudflare and upstream gateway interruptions while an AI answer is being prepared.
+- Combined systems saved directly on projects with quantities assigned from the equipment catalog, fixing incomplete system and camera counts.
+- Added a structured in-product guide for project creation, Outlook calendar sharing, PDF reports and AI settings.
+- Added regression coverage for repeated chat polling, direct project systems and software-help questions.
+
 ## 0.12.0
 
 - Completed an end-to-end reliability review of AI settings, encrypted keys, provider tests, database context, asynchronous chat polling, usage logging and automated insights.

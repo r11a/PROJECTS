@@ -35,9 +35,19 @@ export function AiChat({ api, onClose }) {
       let result = await api("/ai/chat",{ method:"POST",body:JSON.stringify({ question:text,history }) });
       if (result.jobId) {
         const deadline=Date.now()+90_000;
+        let transientFailures=0;
         while (Date.now()<deadline) {
           await new Promise((resolve)=>setTimeout(resolve,750));
-          result=await api(`/ai/chat/${encodeURIComponent(result.jobId)}`);
+          try {
+            result=await api(`/ai/chat/${encodeURIComponent(result.jobId)}`);
+            transientFailures=0;
+          } catch (error) {
+            if ([502,503,504].includes(Number(error.status)) && transientFailures<3) {
+              transientFailures+=1;
+              continue;
+            }
+            throw error;
+          }
           if (result.answer) break;
         }
         if (!result.answer) throw new Error("הסוכן עדיין מעבד את השאלה. נסו שוב בעוד רגע.");

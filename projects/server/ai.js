@@ -215,6 +215,7 @@ ${JSON.stringify(snapshot)}`;
 
 export async function buildChatContext(pool, question) {
   const normalized = String(question || '').toLowerCase();
+  const wantsHelp = /(איך|איפה|כיצד).*(יוצר|מפיק|מגדיר|משתמש|מעלה|משתף|מוסיף|עורך|מוחק|פותח)|עזרה|מדריך|how to|where.*setting|help|create|export/.test(normalized);
   const wantsProjects = /פרויקט|לקוח|כתובת|שלב|התקדמות|project|client/.test(normalized);
   const wantsTasks = /משימ|איחור|לבצע|תאריך|יומן|לוח שנה|task|calendar/.test(normalized);
   const wantsFinance = /כספ|תשלום|גבייה|יתרה|שקל|חשבונ|payment|finance/.test(normalized);
@@ -228,7 +229,7 @@ export async function buildChatContext(pool, question) {
       FROM projects`),
   ];
   const keys = ['overview'];
-  if (wantsProjects || (!wantsTasks && !wantsFinance && !wantsPeople && !wantsSystems)) {
+  if ((!wantsHelp && wantsProjects) || (!wantsHelp && !wantsTasks && !wantsFinance && !wantsPeople && !wantsSystems)) {
     keys.push('projects');
     queries.push(pool.query(`SELECT serial_code,name,client,address,stage,progress,manager,value,paid,due,health,flag,project_size,contractor_progress
       FROM projects WHERE archived_at IS NULL ORDER BY updated_at DESC LIMIT 60`));
@@ -255,6 +256,10 @@ export async function buildChatContext(pool, question) {
       FROM professionals ORDER BY active DESC,display_name LIMIT 60`));
   }
   if (wantsSystems) {
+    keys.push('projectSystems');
+    queries.push(pool.query(`SELECT system name,COUNT(DISTINCT p.id)::int projects
+      FROM projects p CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(p.systems,'[]'::jsonb)) system
+      WHERE p.archived_at IS NULL GROUP BY system ORDER BY projects DESC,system LIMIT 60`));
     keys.push('systems');
     queries.push(pool.query(`SELECT ec.name,ec.item_type,COALESCE(parent.name,'ללא קטגוריה') category,
       COUNT(DISTINCT pe.project_id)::int projects,COALESCE(SUM(pe.quantity),0)::numeric quantity
@@ -263,7 +268,27 @@ export async function buildChatContext(pool, question) {
       GROUP BY ec.id,parent.name ORDER BY quantity DESC LIMIT 60`));
   }
   const results = await Promise.all(queries);
-  return Object.fromEntries(results.map((result,index)=>[keys[index],result.rows]));
+  const context = Object.fromEntries(results.map((result,index)=>[keys[index],result.rows]));
+  if (wantsHelp) context.help = {
+    createProject:[
+      'לחצו על פרויקט חדש בכותרת הראשית.',
+      'שלב 1: הזינו שם פרויקט ובחרו לקוח קיים, או צרו לקוח חדש עם שם פרטי, שם משפחה, טלפון וכתובת.',
+      'שלב 2: בחרו מנהל פרויקט, שלב התחלתי, תאריכי התחלה ומסירה ושווי משוער.',
+      'שלב 3: בחרו מערכות ורכיבים וכמות, ואז לחצו יצירת פרויקט.',
+    ],
+    calendarShare:[
+      'פתחו הגדרות ומערכת ובחרו Outlook.',
+      'צרו קישור לוח שנה לקריאה בלבד והעתיקו אותו.',
+      'ב-Outlook בחרו Add calendar ואז Subscribe from web והדביקו את הקישור.',
+    ],
+    pdfReport:[
+      'פתחו דוחות וניתוחים ולחצו אשף דוח PDF.',
+      'בחרו סוג דוח ופרויקט לפי הצורך.',
+      'בחרו אם לשמור עותק במסמכי הפרויקט ולחצו הפקת והורדת PDF.',
+    ],
+    aiSettings:'הגדרות הספק, המודל, מפתח ה-API והתקציב נמצאות תחת הגדרות ומערכת > סוכן AI.',
+  };
+  return context;
 }
 
 export function chatPrompt({ question, history, context }) {
@@ -293,7 +318,7 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
 
   const cleanChatJobs = () => {
     const expiry=Date.now()-10*60*1000;
-    for (const [id,job] of chatJobs) if (job.createdAt<expiry) chatJobs.delete(id);
+    for (const [id,job] of chatJobs) if ((job.completedAt || job.createdAt)<expiry) chatJobs.delete(id);
   };
 
   const chatError = (error) => ({
@@ -419,10 +444,10 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
           { onUsage:usageRecorder({ user },global.activeProvider,selected.model,'chat') },
         )).trim();
         if (!answer) throw new Error('AI provider returned an empty answer');
-        Object.assign(job,{ status:'complete',answer:answer.slice(0,6000),provider:global.activeProvider,providerName:definition.name,model:selected.model,generatedAt:new Date().toISOString() });
+        Object.assign(job,{ status:'complete',answer:answer.slice(0,6000),provider:global.activeProvider,providerName:definition.name,model:selected.model,generatedAt:new Date().toISOString(),completedAt:Date.now() });
       } catch (error) {
         console.error('AI chat failed',global.activeProvider,error.message);
-        Object.assign(job,{ status:'error',...chatError(error) });
+        Object.assign(job,{ status:'error',...chatError(error),completedAt:Date.now() });
       }
     })();
   });
@@ -432,7 +457,6 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     const job=chatJobs.get(request.params.jobId);
     if (!job || job.userId!==String(request.user.id)) return response.status(404).json({ error:'בקשת השיחה אינה זמינה עוד' });
     if (job.status==='working') return response.status(202).json({ status:'working' });
-    chatJobs.delete(job.id);
     if (job.status==='error') return response.status(422).json({ error:job.error });
     response.json({ answer:job.answer,provider:job.provider,providerName:job.providerName,model:job.model,generatedAt:job.generatedAt });
   });
