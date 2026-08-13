@@ -3168,15 +3168,15 @@ function AiSettings({ api, setNotice }) {
       <aside className="panel ai-control-panel">
         <header><ShieldCheck size={22} /><div><h3>שליטה ובטיחות</h3><p>ברירות מחדל שמונעות הפתעות בעלות ובפעולות.</p></div></header>
         <label className="ai-field">ספק פעיל<select value={settings.activeProvider} onChange={(event) => setSettings({ ...settings, activeProvider: event.target.value })}>{Object.values(settings.providers).map((item) => <option key={item.provider} value={item.provider}>{item.name}</option>)}</select></label>
-        <label className="ai-field">תקרת תקציב חודשית (USD)<input type="number" min="0" max="100000" value={settings.monthlyBudgetUsd} onChange={(event) => setSettings({ ...settings, monthlyBudgetUsd: Number(event.target.value) })} /><small>תקרת תוכנה; אכיפה בפועל תתווסף עם הפעלת הסוכן.</small></label>
+        <label className="ai-field">תקרת תקציב חודשית (USD)<input type="number" min="0" max="100000" value={settings.monthlyBudgetUsd} onChange={(event) => setSettings({ ...settings, monthlyBudgetUsd: Number(event.target.value) })} /><small>נוצלו החודש כ־${Number(settings.monthUsageUsd || 0).toFixed(4)}. בהגעה לתקרה יצירת תשובות נעצרת; 0 מאפשר שימוש ללא הגבלה.</small></label>
         <label className="setting-toggle ai-toggle"><span><b>הפעלת {provider.name}</b><small>מאפשרת להשתמש בספק לאחר בדיקת החיבור.</small></span><input type="checkbox" checked={provider.enabled} onChange={(event) => updateProvider({ enabled: event.target.checked })} /><i /></label>
-        <label className="setting-toggle ai-toggle"><span><b>מצב קריאה בלבד</b><small>הסוכן יענה וינתח, אך לא ישנה נתונים.</small></span><input type="checkbox" checked={settings.readOnly !== false} onChange={(event) => setSettings({ ...settings, readOnly: event.target.checked })} /><i /></label>
+        <label className="setting-toggle ai-toggle"><span><b>מצב קריאה בלבד — נעול</b><small>הסוכן יענה וינתח, אך אין לו מסלול לשינוי נתונים. מידע רלוונטי לשאלה נשלח לספק ה־AI הפעיל.</small></span><input type="checkbox" checked disabled /><i /></label>
         {provider.lastTestedAt && <div className={`ai-last-test ${provider.lastTestStatus}`}><CheckCircle2 size={17} /><div><strong>{provider.lastTestStatus === "success" ? "בדיקה אחרונה הצליחה" : "בדיקה אחרונה נכשלה"}</strong><small>{new Date(provider.lastTestedAt).toLocaleString("he-IL")}{provider.lastTestError ? ` · ${provider.lastTestError}` : ""}</small></div></div>}
         <footer>
           <button className="ops-secondary" onClick={test} disabled={Boolean(busy) || (!provider.configured && !apiKeys[selectedProvider])}>{busy === "test" ? <RefreshCw className="spin" size={16} /> : <Zap size={16} />} בדיקת חיבור</button>
           <button className="ops-primary" onClick={save} disabled={Boolean(busy)}>{busy === "save" ? <RefreshCw className="spin" size={16} /> : <Save size={16} />} שמירה</button>
         </footer>
-        <p className="ai-foundation-note"><Sparkles size={15} /> מסך זה מכין את ספק ה-AI. הצ'אט והרשאות הגישה למידע יופעלו בשלב הסוכן עצמו.</p>
+        <p className="ai-foundation-note"><Sparkles size={15} /> הספק הפעיל משמש את הצ׳אט ואת התובנות האוטומטיות. הסוכן פועל בקריאה בלבד, מכבד את תקרת התקציב ומתעד שימוש לצורך בקרה.</p>
       </aside>
     </div>
   );

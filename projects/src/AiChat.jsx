@@ -26,7 +26,7 @@ export function AiChat({ api, onClose }) {
     event?.preventDefault();
     const text = question.trim();
     if (!text || busy) return;
-    const history = messages.slice(-6).map((item)=>({ role:item.role, text:item.text }));
+    const history = messages.filter((item)=>["user","assistant"].includes(item.role)).slice(-6).map((item)=>({ role:item.role, text:item.text }));
     setMessages((current)=>[...current,{ role:"user",text }]);
     setQuestion("");
     setHelpOpen(false);

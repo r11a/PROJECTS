@@ -7,17 +7,17 @@ import { buildOperationalInsights } from './insights.js';
 const INSIGHT_CACHE_TTL = 30 * 60 * 1000;
 const INSIGHT_REFRESH_COOLDOWN = 5 * 60 * 1000;
 const insightCache = new Map();
-const MODEL_RATES = {
+export const MODEL_RATES = {
   'gemini-3.5-flash-lite':{ input:0.30, output:2.50 },
   'gemini-3.6-flash':{ input:1.50, output:7.50 },
   'gemini-3.5-flash':{ input:1.50, output:9.00 },
   'gemini-3.1-flash-lite':{ input:0.25, output:1.50 },
-  'gpt-5.6-luna':{ input:0.20, output:1.20 },
-  'gpt-5.6-terra':{ input:2.00, output:12.00 },
+  'gpt-5.6-luna':{ input:1.00, output:6.00 },
+  'gpt-5.6-terra':{ input:2.50, output:15.00 },
   'gpt-5.6-sol':{ input:5.00, output:30.00 },
 };
 
-const PROVIDERS = {
+export const PROVIDERS = {
   gemini: {
     name: 'Google Gemini',
     keyUrl: 'https://aistudio.google.com/app/apikey',
@@ -36,8 +36,8 @@ const PROVIDERS = {
     docsUrl: 'https://developers.openai.com/api/docs/models',
     defaultModel: 'gpt-5.6-luna',
     models: [
-      { id:'gpt-5.6-luna', name:'GPT-5.6 Luna', recommendation:'הכי חסכוני', cost:'$0.20 קלט / $1.20 פלט למיליון טוקנים', description:'הבחירה המומלצת לעלות נמוכה ולפעולות שוטפות.' },
-      { id:'gpt-5.6-terra', name:'GPT-5.6 Terra', recommendation:'איזון מומלץ', cost:'$2.00 קלט / $12.00 פלט למיליון טוקנים', description:'איזון גבוה בין איכות, מהירות ועלות.' },
+      { id:'gpt-5.6-luna', name:'GPT-5.6 Luna', recommendation:'הכי חסכוני במשפחת 5.6', cost:'$1.00 קלט / $6.00 פלט למיליון טוקנים', description:'הבחירה המומלצת לעלות נמוכה ולפעולות שוטפות.' },
+      { id:'gpt-5.6-terra', name:'GPT-5.6 Terra', recommendation:'איזון מומלץ', cost:'$2.50 קלט / $15.00 פלט למיליון טוקנים', description:'איזון גבוה בין איכות, מהירות ועלות.' },
       { id:'gpt-5.6-sol', name:'GPT-5.6 Sol', recommendation:'איכות מרבית', cost:'$5 קלט / $30 פלט למיליון טוקנים', description:'לניתוחים המורכבים ביותר; אינו הבחירה החסכונית.' },
     ],
   },
@@ -87,8 +87,11 @@ function publicProvider(row, provider) {
   };
 }
 
-function providerError(provider, status, payload) {
+export function providerError(provider, status, payload) {
   const detail = payload?.error?.message || payload?.message || payload?.raw || '';
+  const reason = payload?.error?.details?.find?.((item)=>item?.reason)?.reason || payload?.error?.status || payload?.error?.code || '';
+  if (/API_KEY_INVALID|authentication|invalid.*key/i.test(`${reason} ${detail}`)) return 'מפתח ה־API אינו תקין. צרו מפתח חדש אצל הספק ושמרו אותו מחדש.';
+  if (/FAILED_PRECONDITION/i.test(reason)) return 'החשבון אינו מורשה למסלול שנבחר באזור זה. בדקו את זמינות המסלול או הפעילו חיוב אצל הספק.';
   if (status === 401 || status === 403) return 'מפתח ה-API אינו תקין או שאין לו הרשאה לשירות.';
   if (status === 429) return 'המכסה הסתיימה או שמגבלת הקצב נחצתה. בדקו את מסלול החיוב והמכסה.';
   if (status === 404) return `המודל שנבחר אינו זמין בחשבון ${PROVIDERS[provider].name}.`;
@@ -106,12 +109,12 @@ async function requestProvider(provider, model, apiKey, prompt, { test, response
     headers:{ 'Content-Type':'application/json', 'x-goog-api-key':apiKey },
     body:JSON.stringify({
       contents:[{ parts:[{ text:prompt }] }],
-      generationConfig:{ maxOutputTokens:test ? 32 : 900, temperature:test ? 0 : 0.2, ...(responseJson ? { responseMimeType:'application/json' } : {}) },
+      generationConfig:{ maxOutputTokens:test ? 128 : 900, ...(responseJson ? { responseMimeType:'application/json' } : {}) },
     }),
   } : {
     method:'POST',
     headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${apiKey}` },
-    body:JSON.stringify({ model, input:prompt, max_output_tokens:test ? 32 : 900 }),
+    body:JSON.stringify({ model, input:prompt, max_output_tokens:test ? 128 : 900 }),
   };
   let lastError;
   for (let attempt=0;attempt<2;attempt+=1) {
@@ -119,20 +122,21 @@ async function requestProvider(provider, model, apiKey, prompt, { test, response
       const response = await fetch(url,{ ...options,signal:AbortSignal.timeout(35000) });
       if ((response.status === 408 || response.status === 429 || response.status >= 500) && attempt === 0) {
         await response.arrayBuffer().catch(()=>{});
-        await wait(700);
+        const retryAfter=Number(response.headers.get('retry-after'));
+        await wait(Number.isFinite(retryAfter) && retryAfter>0 ? Math.min(retryAfter*1000,5000) : 850+Math.floor(Math.random()*250));
         continue;
       }
       return response;
     } catch (error) {
       lastError=error;
-      if (attempt === 0 && error.name !== 'TimeoutError') { await wait(700);continue; }
+      if (attempt === 0 && error.name !== 'TimeoutError') { await wait(850+Math.floor(Math.random()*250));continue; }
       throw error;
     }
   }
   throw lastError || new Error('AI provider request failed');
 }
 
-async function generateProviderText(provider, model, apiKey, prompt, { test = false, responseJson = false, onUsage } = {}) {
+export async function generateProviderText(provider, model, apiKey, prompt, { test = false, responseJson = false, onUsage } = {}) {
   let response;
   try {
     response = await requestProvider(provider,model,apiKey,prompt,{ test,responseJson });
@@ -151,6 +155,18 @@ async function generateProviderText(provider, model, apiKey, prompt, { test = fa
   const text = provider === 'gemini'
     ? payload.candidates?.[0]?.content?.parts?.map((part)=>part.text || '').join('') || ''
     : payload.output_text || payload.output?.flatMap((item)=>item.content || []).map((item)=>item.text || '').join('') || '';
+  if (!text.trim()) {
+    const finishReason=payload.candidates?.[0]?.finishReason || '';
+    const blockedReasons=new Set(['SAFETY','RECITATION','LANGUAGE','PROHIBITED_CONTENT','SPII','BLOCKLIST','IMAGE_SAFETY','IMAGE_PROHIBITED_CONTENT','IMAGE_RECITATION','CONTENT_BLOCKED']);
+    const blocked=payload.promptFeedback?.blockReason || (blockedReasons.has(finishReason) ? finishReason : '');
+    const incomplete=payload.incomplete_details?.reason || (finishReason==='MAX_TOKENS' ? finishReason : '') || (payload.status && payload.status!=='completed' ? payload.status : '');
+    const message=blocked
+      ? `הספק חסם את יצירת התשובה (${blocked}). נסחו את השאלה מחדש ללא מידע רגיש.`
+      : incomplete
+        ? `הספק לא השלים את התשובה (${incomplete}). נסו שאלה קצרה וממוקדת יותר.`
+        : 'הספק החזיר תשובה ריקה. בדקו את המודל שנבחר ונסו שוב.';
+    throw Object.assign(new Error(message),{ statusCode:422,publicMessage:message });
+  }
   if (!test && onUsage) {
     const inputTokens = Number(provider === 'gemini' ? payload.usageMetadata?.promptTokenCount : payload.usage?.input_tokens) || Math.ceil(prompt.length / 4);
     const reportedTotal = Number(provider === 'gemini' ? payload.usageMetadata?.totalTokenCount : payload.usage?.total_tokens);
@@ -163,12 +179,13 @@ async function generateProviderText(provider, model, apiKey, prompt, { test = fa
   return text;
 }
 
-async function testProvider(provider, model, apiKey) {
-  await generateProviderText(provider, model, apiKey, 'Reply with exactly OK', { test:true });
+export async function testProvider(provider, model, apiKey) {
+  const text=await generateProviderText(provider, model, apiKey, 'Reply with exactly OK', { test:true });
+  if (!text.trim()) throw new Error('AI provider returned an empty test response');
   return true;
 }
 
-function parseInsightResponse(text) {
+export function parseInsightResponse(text) {
   const cleaned = String(text || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
@@ -196,7 +213,7 @@ function insightPrompt(snapshot) {
 ${JSON.stringify(snapshot)}`;
 }
 
-async function buildChatContext(pool, question) {
+export async function buildChatContext(pool, question) {
   const normalized = String(question || '').toLowerCase();
   const wantsProjects = /פרויקט|לקוח|כתובת|שלב|התקדמות|project|client/.test(normalized);
   const wantsTasks = /משימ|איחור|לבצע|תאריך|יומן|לוח שנה|task|calendar/.test(normalized);
@@ -249,8 +266,8 @@ async function buildChatContext(pool, question) {
   return Object.fromEntries(results.map((result,index)=>[keys[index],result.rows]));
 }
 
-function chatPrompt({ question, history, context }) {
-  const safeHistory = (Array.isArray(history) ? history : []).slice(-6).map((item)=>({
+export function chatPrompt({ question, history, context }) {
+  const safeHistory = (Array.isArray(history) ? history : []).filter((item)=>['user','assistant'].includes(item?.role)).slice(-6).map((item)=>({
     role:item?.role === 'assistant' ? 'assistant' : 'user',
     text:String(item?.text || '').slice(0,1200),
   }));
@@ -292,14 +309,30 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     } catch (error) { console.error('AI usage logging failed',error.message); }
   };
 
+  async function monthlyUsageUsd() {
+    const result=await pool.query(`SELECT COALESCE(SUM(estimated_cost_usd),0)::numeric spent
+      FROM ai_usage_log WHERE created_at>=date_trunc('month',CURRENT_DATE)`);
+    return Number(result.rows[0]?.spent) || 0;
+  }
+
+  async function enforceBudget(global) {
+    const limit=Number(global.monthlyBudgetUsd) || 0;
+    if (limit<=0) return;
+    const spent=await monthlyUsageUsd();
+    if (spent<limit) return;
+    const message=`תקציב ה־AI החודשי של PROJECTS נוצל ($${spent.toFixed(2)} מתוך $${limit.toFixed(2)}). מנהל מערכת יכול להגדיל את התקציב או להגדיר 0 ללא הגבלה.`;
+    throw Object.assign(new Error(message),{ statusCode:402,publicMessage:message });
+  }
+
   async function getSettings() {
-    const [globalResult, providerResult] = await Promise.all([
+    const [globalResult, providerResult,spent] = await Promise.all([
       pool.query("SELECT value FROM app_settings WHERE key='ai'"),
       pool.query('SELECT * FROM ai_provider_settings ORDER BY provider'),
+      monthlyUsageUsd(),
     ]);
-    const global = { activeProvider:'gemini', monthlyBudgetUsd:10, readOnly:true, ...(globalResult.rows[0]?.value || {}) };
+    const global = { activeProvider:'gemini', monthlyBudgetUsd:10, ...(globalResult.rows[0]?.value || {}),readOnly:true };
     const rows = Object.fromEntries(providerResult.rows.map((row)=>[row.provider,row]));
-    return { ...global, providers:Object.fromEntries(Object.keys(PROVIDERS).map((provider)=>[provider,publicProvider(rows[provider],provider)])) };
+    return { ...global, monthUsageUsd:spent, providers:Object.fromEntries(Object.keys(PROVIDERS).map((provider)=>[provider,publicProvider(rows[provider],provider)])) };
   }
 
   router.get('/ai/insights', async (request, response) => {
@@ -331,6 +364,7 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     }
 
     try {
+      await enforceBudget(global);
       const text = await generateProviderText(global.activeProvider, selected.model, decrypt(selected.api_key_encrypted,encryptionKey), insightPrompt(snapshot), {
         responseJson:true,
         onUsage:usageRecorder(request,global.activeProvider,selected.model,'insights'),
@@ -345,7 +379,7 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
       return response.json({ ...base, ...value });
     } catch (error) {
       console.error('AI insights generation failed', global.activeProvider, error.message);
-      return response.json({ ...base, ai:{ status:'fallback', provider:global.activeProvider, providerName:definition.name, model:selected.model, generatedAt:new Date().toISOString(), error:'לא ניתן היה לעדכן את ניתוח ה-AI. מוצגות תובנות מקומיות עד לניסיון הבא.' } });
+      return response.json({ ...base, ai:{ status:'fallback', provider:global.activeProvider, providerName:definition.name, model:selected.model, generatedAt:new Date().toISOString(), error:error.publicMessage || 'לא ניתן היה לעדכן את ניתוח ה-AI. מוצגות תובנות מקומיות עד לניסיון הבא.' } });
     }
   });
 
@@ -363,6 +397,10 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
       return response.status(409).json({ error:'הסוכן אינו מוכן. יש להפעיל ספק ולשמור מפתח API תחת הגדרות ומערכת > סוכן AI.' });
     }
     cleanChatJobs();
+    const activeJob=[...chatJobs.values()].find((job)=>job.userId===String(request.user.id) && job.status==='working');
+    if (activeJob) return response.status(409).json({ error:'שאלה קודמת עדיין בעיבוד. המתינו לתשובה לפני שליחת שאלה נוספת.' });
+    try { await enforceBudget(global); }
+    catch (error) { return response.status(error.statusCode || 402).json({ error:error.publicMessage || error.message }); }
     const jobId=randomBytes(18).toString('base64url');
     const job={ id:jobId,userId:String(request.user.id),status:'working',createdAt:Date.now() };
     chatJobs.set(jobId,job);
@@ -419,7 +457,7 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
       [provider,Boolean(request.body.enabled),model,encryptedKey,request.user.id]);
     await pool.query(`INSERT INTO app_settings(key,value,updated_by) VALUES('ai',$1,$2)
       ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_by=EXCLUDED.updated_by,updated_at=NOW()`,
-      [JSON.stringify({ activeProvider, monthlyBudgetUsd, readOnly:request.body.readOnly !== false }),request.user.id]);
+      [JSON.stringify({ activeProvider, monthlyBudgetUsd, readOnly:true }),request.user.id]);
     await audit(request,'update','ai_provider',provider,{ model, activeProvider, enabled:Boolean(request.body.enabled), keyChanged:keyChanged || request.body.clearApiKey === true });
     response.json(await getSettings());
   });

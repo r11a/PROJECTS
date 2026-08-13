@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.0
+
+- Completed an end-to-end reliability review of AI settings, encrypted keys, provider tests, database context, asynchronous chat polling, usage logging and automated insights.
+- Added an automated AI integration suite covering the full settings-to-answer workflow plus SQL regression, Gemini/OpenAI response parsing, errors, usage costs, schema dependencies and release metadata.
+- Corrected OpenAI GPT-5.6 Luna and Terra cost estimates and refreshed their UI pricing labels from official API pricing.
+- Removed deprecated Gemini sampling parameters, increased provider-test output allowance and made empty, incomplete and safety-blocked responses report distinct actionable errors.
+- Prevented UI error messages from being sent back to the model as conversation history.
+- Enforced the configured monthly AI budget, displayed current estimated monthly usage and prevented duplicate in-flight questions per user.
+- Updated the AI settings copy to reflect the live chat, automatic insights, read-only operation and usage controls.
+
 ## 0.11.11
 
 - Fixed the AI chat overview query for PostgreSQL by applying the active-project filter to `AVG(progress)` before rounding the aggregate result.
