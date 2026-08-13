@@ -277,7 +277,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   router.post('/custom-fields', requireRoles('admin'), async (request, response) => {
     const { entityType, fieldKey, label, fieldType = 'text', options = [] } = request.body;
     const required = entityType === 'client' ? false : Boolean(request.body.required);
-    if (!entityType || !fieldKey || !label) return response.status(400).json({ error: 'Entity, key and label are required' });
+    if (!['client','project','task','inspection','professional'].includes(entityType) || !fieldKey || !label) return response.status(400).json({ error: 'Entity, key and label are required' });
     const result = await pool.query(
       `INSERT INTO custom_field_definitions(entity_type, field_key, label, field_type, required, options)
        VALUES($1,$2,$3,$4,$5,$6) RETURNING *`, [entityType, fieldKey, label, fieldType, required, JSON.stringify(options)],

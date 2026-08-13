@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 const PROFESSIONAL_FIELDS = {
-  displayName: 'display_name', companyName: 'company_name', jobTitle: 'job_title', affiliation: 'affiliation', employeeNumber: 'employee_number', phone: 'phone',
+  displayName: 'display_name', firstName:'first_name', lastName:'last_name', companyName: 'company_name', jobTitle: 'job_title', affiliation: 'affiliation', employeeNumber: 'employee_number', phone: 'phone',
   additionalPhones: 'additional_phones', email: 'email', additionalEmails: 'additional_emails', address: 'address',
   notes: 'notes', color: 'color', icon: 'icon', active: 'active', linkedUserId: 'linked_user_id', customValues: 'custom_values',
 };
@@ -22,7 +22,7 @@ const JSON_INPUTS = new Set(['additionalPhones', 'additionalEmails', 'customValu
 
 function professionalFromRow(row) {
   return {
-    id: row.id, displayName: row.display_name, companyName: row.company_name, jobTitle: row.job_title,
+    id: row.id, displayName: row.display_name, firstName:row.first_name || '', lastName:row.last_name || '', companyName: row.company_name, jobTitle: row.job_title,
     affiliation: row.affiliation, employeeNumber: row.employee_number,
     phone: row.phone, additionalPhones: row.additional_phones || [], email: row.email,
     additionalEmails: row.additional_emails || [], address: row.address, notes: row.notes, color: row.color,
@@ -139,13 +139,41 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
   router.post('/professional-roles', requireRoles('admin'), async (request, response) => {
     const name = String(request.body.name || '').trim();
     if (!name) return response.status(400).json({ error: 'שם התפקיד הוא שדה חובה' });
-    const key = String(request.body.key || name).trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_') || `role_${Date.now()}`;
+    const duplicate = await pool.query('SELECT id,active FROM professional_role_types WHERE lower(btrim(name))=lower($1) LIMIT 1',[name]);
+    if (duplicate.rowCount) return response.status(409).json({ error:duplicate.rows[0].active?'תפקיד בשם זה כבר קיים':'תפקיד בשם זה קיים אך מושבת — ניתן לערוך ולהפעיל אותו ברשימת התפקידים', code:'ROLE_EXISTS', roleId:duplicate.rows[0].id });
+    const requestedKey = String(request.body.key || '').trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g,'');
+    const key = requestedKey || `role_${randomUUID().replaceAll('-','')}`;
     const result = await pool.query(
       `INSERT INTO professional_role_types(role_key,name,color,icon,sort_order) VALUES($1,$2,$3,$4,$5) RETURNING *`,
       [key, name, request.body.color || '#6957df', request.body.icon || 'user-round', Number(request.body.sortOrder) || 0],
     );
     await audit(request, 'create', 'professional_role', String(result.rows[0].id), { name });
     response.status(201).json({ role: result.rows[0] });
+  });
+
+  router.patch('/professional-roles/:id', requireRoles('admin'), async (request,response)=>{
+    const current=await pool.query('SELECT * FROM professional_role_types WHERE id=$1',[request.params.id]);
+    if(!current.rowCount)return response.status(404).json({error:'התפקיד לא נמצא'});
+    const name=String(request.body.name??current.rows[0].name).trim();
+    if(!name)return response.status(400).json({error:'שם התפקיד הוא שדה חובה'});
+    const duplicate=await pool.query('SELECT id FROM professional_role_types WHERE lower(btrim(name))=lower($1) AND id<>$2 LIMIT 1',[name,request.params.id]);
+    if(duplicate.rowCount)return response.status(409).json({error:'תפקיד בשם זה כבר קיים'});
+    const result=await pool.query(`UPDATE professional_role_types SET name=$1,color=$2,icon=$3,active=$4,sort_order=$5,updated_at=NOW() WHERE id=$6 RETURNING *`,[name,request.body.color??current.rows[0].color,request.body.icon??current.rows[0].icon,request.body.active??current.rows[0].active,Number(request.body.sortOrder??current.rows[0].sort_order),request.params.id]);
+    await audit(request,'update','professional_role',request.params.id,{name,icon:result.rows[0].icon,color:result.rows[0].color,active:result.rows[0].active});
+    response.json({role:result.rows[0]});
+  });
+
+  router.delete('/professional-roles/:id', requireRoles('admin'), async (request,response)=>{
+    const usage=await pool.query(`SELECT
+      (SELECT COUNT(*)::int FROM professional_role_assignments WHERE role_type_id=$1) professional_count,
+      (SELECT COUNT(*)::int FROM project_professionals WHERE role_type_id=$1) project_count,
+      (SELECT COUNT(*)::int FROM client_professionals WHERE role_type_id=$1) client_count`,[request.params.id]);
+    const total=Number(usage.rows[0].professional_count)+Number(usage.rows[0].project_count)+Number(usage.rows[0].client_count);
+    if(total)return response.status(409).json({error:`לא ניתן למחוק תפקיד שנמצא בשימוש (${total} שיוכים). ניתן להשבית אותו בעריכה.`});
+    const result=await pool.query('DELETE FROM professional_role_types WHERE id=$1 RETURNING id,name',[request.params.id]);
+    if(!result.rowCount)return response.status(404).json({error:'התפקיד לא נמצא'});
+    await audit(request,'delete','professional_role',request.params.id,{name:result.rows[0].name});
+    response.status(204).end();
   });
 
   router.get('/professionals', async (request, response) => {
@@ -167,8 +195,14 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
   });
 
   router.post('/professionals', requireRoles('admin', 'manager'), async (request, response) => {
-    const displayName = String(request.body.displayName || '').trim();
+    const suppliedDisplayName=String(request.body.displayName||'').trim();
+    const suppliedParts=suppliedDisplayName.split(/\s+/).filter(Boolean);
+    const firstName=String(request.body.firstName||(suppliedParts.length>1?suppliedParts.slice(0,-1).join(' '):suppliedDisplayName)).trim();
+    const lastName=String(request.body.lastName||(suppliedParts.length>1?suppliedParts.at(-1):'')).trim();
+    const displayName = String(request.body.displayName || [firstName,lastName].filter(Boolean).join(' ')).trim();
     if (!displayName) return response.status(400).json({ error: 'שם איש המקצוע הוא שדה חובה' });
+    request.body.firstName=firstName;
+    request.body.lastName=lastName;
     const similar=await pool.query(`SELECT id,display_name,phone,email FROM professionals WHERE active=TRUE AND (lower(display_name)=lower($1) OR similarity(lower(display_name),lower($1))>.72) ORDER BY similarity(lower(display_name),lower($1)) DESC LIMIT 3`,[displayName]).catch(()=>pool.query('SELECT id,display_name,phone,email FROM professionals WHERE active=TRUE AND lower(display_name)=lower($1) LIMIT 3',[displayName]));
     if(similar.rowCount&&!request.body.allowDuplicate)return response.status(409).json({error:`קיים איש מקצוע בשם דומה: ${similar.rows.map(item=>item.display_name).join(', ')}`,code:'SIMILAR_PROFESSIONAL',matches:similar.rows});
     const client = await pool.connect();
@@ -186,6 +220,10 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
   });
 
   router.patch('/professionals/:id', requireRoles('admin', 'manager'), async (request, response) => {
+    if(request.body.firstName!==undefined||request.body.lastName!==undefined){
+      const currentName=await pool.query('SELECT first_name,last_name FROM professionals WHERE id=$1',[request.params.id]);
+      if(currentName.rowCount)request.body.displayName=[request.body.firstName??currentName.rows[0].first_name,request.body.lastName??currentName.rows[0].last_name].map(value=>String(value||'').trim()).filter(Boolean).join(' ');
+    }
     const entries = Object.entries(request.body || {}).filter(([key]) => PROFESSIONAL_FIELDS[key] && request.body[key] !== undefined);
     const client = await pool.connect();
     try {

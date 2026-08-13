@@ -106,6 +106,23 @@ test('project time reporting keeps targets in project setup and actual hours in 
   assert.match(migration,/programming_hours_target/);
 });
 
+test('professional roles and profiles are fully manageable', async()=>{
+  const management=await read('../server/management.js');
+  const master=await read('../src/MasterDataWorkspace.jsx');
+  const operational=await read('../src/Operational.jsx');
+  const migration=await read('../migrations/025_professional_profiles_and_fields.sql');
+  assert.match(management,/role_\$\{randomUUID\(\)\.replaceAll\('-',''\)\}/);
+  assert.match(management,/patch\('\/professional-roles\/:id'/);
+  assert.match(management,/delete\('\/professional-roles\/:id'/);
+  assert.match(migration,/ADD COLUMN IF NOT EXISTS first_name/);
+  assert.match(migration,/professional'/);
+  assert.match(master,/professionalAffiliation/);
+  assert.match(master,/company-flag-logo/);
+  assert.match(master,/roleIconOptions/);
+  assert.match(master,/customFields=\[\]/);
+  assert.match(operational,/<option value="professional">/);
+});
+
 test('management reports, presentation, replies and mentions are wired end to end', async () => {
   const workspaces = await read('../src/Workspaces.jsx');
   const messages = await read('../src/Messages.jsx');

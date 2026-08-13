@@ -4002,6 +4002,7 @@ function CustomFields({ fields, api, reload, setNotice }) {
             <option value="project">פרויקט</option>
             <option value="task">משימה</option>
             <option value="inspection">ביקורת</option>
+            <option value="professional">איש מקצוע</option>
           </select>
         </label>
         <label>

@@ -9,6 +9,17 @@ import {
   Eye,
   FileText,
   HardHat,
+  Hammer,
+  Cable,
+  Camera,
+  FolderKanban,
+  Network,
+  Palette,
+  Ruler,
+  ShieldCheck,
+  Truck,
+  Wrench,
+  Zap,
   Link2,
   Pencil,
   Plus,
@@ -24,6 +35,8 @@ import { AppModal } from "./AppModal";
 
 const emptyProfessional = {
   displayName: "",
+  firstName: "",
+  lastName: "",
   affiliation: "external",
   companyName: "",
   jobTitle: "",
@@ -36,7 +49,15 @@ const emptyProfessional = {
   icon: "user-round",
   linkedUserId: "",
   roleIds: [],
+  customValues: {},
 };
+const roleIconOptions = [
+  ["user-round", "אדם", UserRound], ["briefcase", "תפקיד", BriefcaseBusiness], ["folder-kanban", "ניהול פרויקט", FolderKanban],
+  ["wrench", "טכנאי", Wrench], ["hard-hat", "ביצוע", HardHat], ["hammer", "קבלן", Hammer], ["ruler", "אדריכלות", Ruler],
+  ["shield-check", "פיקוח", ShieldCheck], ["zap", "חשמל", Zap], ["cable", "תשתיות", Cable], ["network", "תקשורת", Network],
+  ["camera", "מצלמות", Camera], ["palette", "עיצוב", Palette], ["truck", "ספק", Truck], ["building", "חברה", Building2],
+];
+function RoleIcon({name,size=16}){const Icon=roleIconOptions.find(([key])=>key===name)?.[2]||UserRound;return <Icon size={size}/>}
 const emptyEquipment = {
   itemType: "system_type",
   parentId: "",
@@ -65,6 +86,7 @@ export function MasterDataWorkspace({
   const [tab, setTab] = useState(initialTab);
   const [professionals, setProfessionals] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [professionalFields,setProfessionalFields]=useState([]);
   const [equipment, setEquipment] = useState([]);
   const [query, setQuery] = useState("");
   const [professionalForm, setProfessionalForm] = useState(null);
@@ -76,18 +98,21 @@ export function MasterDataWorkspace({
   const [scanBusy, setScanBusy] = useState(false);
   const [professionalView,setProfessionalView]=useState(()=>localStorage.getItem('projects-professional-view')||'grid');
   const [professionalRole,setProfessionalRole]=useState('');
+  const [professionalAffiliation,setProfessionalAffiliation]=useState('');
   const [professionalSort,setProfessionalSort]=useState('az');
 
   const load = async () => {
     try {
-      const [people, roleData, equipmentData] = await Promise.all([
+      const [people, roleData, equipmentData,settingsData] = await Promise.all([
         api("/professionals"),
         api("/professional-roles"),
         api("/equipment-catalog"),
+        api("/settings"),
       ]);
       setProfessionals(people.professionals);
       setRoles(roleData.roles);
       setEquipment(equipmentData.items);
+      setProfessionalFields((settingsData.customFields||[]).filter(field=>field.entityType==='professional'&&field.active));
     } catch (error) {
       setNotice(error.message);
     }
@@ -107,8 +132,8 @@ export function MasterDataWorkspace({
         `${item.displayName} ${item.companyName} ${item.jobTitle} ${item.phone} ${item.email} ${item.roles.map((role) => role.name).join(" ")}`
           .toLowerCase()
           .includes(query.toLowerCase()),
-      ).filter(item=>!professionalRole||item.roles.some(role=>String(role.id)===professionalRole)).sort((a,b)=>professionalSort==='za'?b.displayName.localeCompare(a.displayName,'he'):professionalSort==='new'?Number(b.id)-Number(a.id):professionalSort==='old'?Number(a.id)-Number(b.id):a.displayName.localeCompare(b.displayName,'he')),
-    [professionals, query,professionalRole,professionalSort],
+      ).filter(item=>!professionalRole||item.roles.some(role=>String(role.id)===professionalRole)).filter(item=>!professionalAffiliation||item.affiliation===professionalAffiliation).sort((a,b)=>professionalSort==='za'?b.displayName.localeCompare(a.displayName,'he'):professionalSort==='new'?Number(b.id)-Number(a.id):professionalSort==='old'?Number(a.id)-Number(b.id):a.displayName.localeCompare(b.displayName,'he')),
+    [professionals, query,professionalRole,professionalAffiliation,professionalSort],
   );
   const tabs = initialTab === "equipment" ? [["equipment", "מערכות ורכיבים", Boxes]] : [["professionals", "אנשי מקצוע", Users]];
 
@@ -156,9 +181,9 @@ export function MasterDataWorkspace({
           />
         </label>
         <div className="master-toolbar-actions">
-          {tab==='professionals'&&<><label className="master-icon-filter" title="סינון לפי תפקיד"><BriefcaseBusiness size={17}/><select aria-label="סינון לפי תפקיד" value={professionalRole} onChange={e=>setProfessionalRole(e.target.value)}><option value="">הכול</option>{roles.filter(x=>x.active).map(x=><option key={x.id} value={String(x.id)}>{x.name}</option>)}</select></label><label className="master-icon-filter" title="סדר תצוגה"><ArrowDownAZ size={17}/><select aria-label="סדר תצוגה" value={professionalSort} onChange={e=>setProfessionalSort(e.target.value)}><option value="az">א׳–ת׳</option><option value="za">ת׳–א׳</option><option value="new">חדש–ישן</option><option value="old">ישן–חדש</option></select></label><div className="professional-view-switch"><button className={professionalView==='grid'?'active':''} onClick={()=>{setProfessionalView('grid');localStorage.setItem('projects-professional-view','grid')}}><LayoutGrid size={16}/></button><button className={professionalView==='table'?'active':''} onClick={()=>{setProfessionalView('table');localStorage.setItem('projects-professional-view','table')}}><Rows3 size={16}/></button></div></>}
+          {tab==='professionals'&&<><label className="master-icon-filter" title="סינון לפי שיוך"><Building2 size={17}/><select aria-label="סינון לפי שיוך" value={professionalAffiliation} onChange={e=>setProfessionalAffiliation(e.target.value)}><option value="">כולם</option><option value="company">עובדי חברה</option><option value="external">חיצוניים</option></select></label><label className="master-icon-filter" title="סינון לפי תפקיד"><BriefcaseBusiness size={17}/><select aria-label="סינון לפי תפקיד" value={professionalRole} onChange={e=>setProfessionalRole(e.target.value)}><option value="">הכול</option>{roles.filter(x=>x.active).map(x=><option key={x.id} value={String(x.id)}>{x.name}</option>)}</select></label><label className="master-icon-filter" title="סדר תצוגה"><ArrowDownAZ size={17}/><select aria-label="סדר תצוגה" value={professionalSort} onChange={e=>setProfessionalSort(e.target.value)}><option value="az">א׳–ת׳</option><option value="za">ת׳–א׳</option><option value="new">חדש–ישן</option><option value="old">ישן–חדש</option></select></label><div className="professional-view-switch"><button className={professionalView==='grid'?'active':''} onClick={()=>{setProfessionalView('grid');localStorage.setItem('projects-professional-view','grid')}}><LayoutGrid size={16}/></button><button className={professionalView==='table'?'active':''} onClick={()=>{setProfessionalView('table');localStorage.setItem('projects-professional-view','table')}}><Rows3 size={16}/></button></div></>}
           {tab === "professionals" && user.role === "admin" && (
-            <button className="ops-secondary" onClick={() => setRoleForm(true)}>
+            <button className="ops-secondary" onClick={() => setRoleForm({})}>
               <Plus size={16} />
               סוג תפקיד
             </button>
@@ -185,6 +210,8 @@ export function MasterDataWorkspace({
         <ProfessionalsGrid
           items={filteredProfessionals}
           view={professionalView}
+          apiRoot={apiRoot}
+          customFields={professionalFields}
           user={user}
           onEdit={(item) =>
             setProfessionalForm({
@@ -235,6 +262,7 @@ export function MasterDataWorkspace({
         <ProfessionalEditor
           value={professionalForm}
           roles={roles}
+          customFields={professionalFields}
           users={users}
           onClose={() => setProfessionalForm(null)}
           onSave={async (value) => {
@@ -311,21 +339,24 @@ export function MasterDataWorkspace({
         />
       )}
       {roleForm && (
-        <RoleEditor
+        <RoleManager
+          roles={roles}
           onClose={() => setRoleForm(false)}
           onSave={async (value) => {
             try {
-              await api("/professional-roles", {
-                method: "POST",
+              await api(value.id?`/professional-roles/${value.id}`:"/professional-roles", {
+                method: value.id?"PATCH":"POST",
                 body: JSON.stringify(value),
               });
-              setRoleForm(false);
-              setNotice("סוג התפקיד נוסף");
-              refresh();
+              setNotice(value.id?"התפקיד עודכן":"סוג התפקיד נוסף");
+              await refresh();
+              return true;
             } catch (error) {
               setNotice(error.message);
+              return false;
             }
           }}
+          onDelete={async(role)=>{if(!confirm(`למחוק את התפקיד „${role.name}”?`))return;try{await api(`/professional-roles/${role.id}`,{method:'DELETE'});setNotice('התפקיד נמחק');await refresh()}catch(error){setNotice(error.message)}}}
         />
       )}
       {priorityScanOpen && (
@@ -354,7 +385,7 @@ export function MasterDataWorkspace({
   );
 }
 
-function ProfessionalsGrid({ items, user, onEdit, onDelete,view='grid' }) {
+function ProfessionalsGrid({ items, user, onEdit, onDelete,view='grid',apiRoot,customFields=[] }) {
   if (!items.length)
     return (
       <EmptyState
@@ -381,13 +412,12 @@ function ProfessionalsGrid({ items, user, onEdit, onDelete,view='grid' }) {
               <h3>{item.displayName}</h3>
               <p>{item.jobTitle || item.companyName || "ללא תיאור תפקיד"}</p>
             </div>
-            <em className={`affiliation ${item.affiliation}`}>
-              {item.affiliation === "company" ? "עובד חברה" : "חיצוני"}
-            </em>
+            {item.affiliation === "company" ? <em className="affiliation company company-flag"><span className="company-flag-logo"><img src={`${apiRoot}/settings/company-logo`} alt="" onError={event=>event.currentTarget.hidden=true}/><Building2 size={14}/></span>עובד חברה</em>:<em className="affiliation external">חיצוני</em>}
           </header>
           <div className="role-chips">
             {item.roles.map((role) => (
               <span key={role.id} style={{ "--role-color": role.color }}>
+                <RoleIcon name={role.icon} size={13}/>
                 {role.name}
               </span>
             ))}
@@ -422,6 +452,7 @@ function ProfessionalsGrid({ items, user, onEdit, onDelete,view='grid' }) {
                 )}
               </dd>
             </div>
+            {customFields.filter(field=>item.customValues?.[field.fieldKey]!==undefined&&item.customValues?.[field.fieldKey]!==''&&item.customValues?.[field.fieldKey]!==false).map(field=><div key={field.id}><dt>{field.label}</dt><dd>{field.fieldType==='boolean'?'כן':String(item.customValues[field.fieldKey])}</dd></div>)}
           </dl>
           <footer>
             <span className="professional-project-load" title={`${item.projectCount} פרויקטים משויכים`}>
@@ -445,7 +476,7 @@ function ProfessionalsGrid({ items, user, onEdit, onDelete,view='grid' }) {
   );
 }
 
-function ProfessionalEditor({ value, roles, users, onClose, onSave }) {
+function ProfessionalEditor({ value, roles, users, customFields=[], onClose, onSave }) {
   const [form, setForm] = useState(value);
   const toggleRole = (role) => {
     const selected = form.roleIds.includes(Number(role.id));
@@ -473,15 +504,16 @@ function ProfessionalEditor({ value, roles, users, onClose, onSave }) {
         }}
       >
         <label>
-          שם מלא *
+          שם פרטי *
           <input
             required
-            value={form.displayName}
+            value={form.firstName}
             onChange={(event) =>
-              setForm({ ...form, displayName: event.target.value })
+              setForm({ ...form, firstName: event.target.value,displayName:[event.target.value,form.lastName].filter(Boolean).join(' ') })
             }
           />
         </label>
+        <label>שם משפחה<input required value={form.lastName} onChange={event=>setForm({...form,lastName:event.target.value,displayName:[form.firstName,event.target.value].filter(Boolean).join(' ')})}/></label>
         <label>
           שיוך ארגוני
           <select
@@ -508,7 +540,7 @@ function ProfessionalEditor({ value, roles, users, onClose, onSave }) {
                 style={{ "--role-color": role.color }}
                 onClick={() => toggleRole(role)}
               >
-                <Check size={14} />
+                <RoleIcon name={role.icon} size={14} />
                 {role.name}
               </button>
             ))}
@@ -597,6 +629,7 @@ function ProfessionalEditor({ value, roles, users, onClose, onSave }) {
             }
           />
         </label>
+        {customFields.map(field=><label key={field.id} className={field.fieldType==='boolean'?'custom-check':''}>{field.label}{field.fieldType==='boolean'?<input type="checkbox" checked={Boolean(form.customValues?.[field.fieldKey])} onChange={event=>setForm({...form,customValues:{...(form.customValues||{}),[field.fieldKey]:event.target.checked}})}/>:field.fieldType==='select'?<select required={field.required} value={form.customValues?.[field.fieldKey]||''} onChange={event=>setForm({...form,customValues:{...(form.customValues||{}),[field.fieldKey]:event.target.value}})}><option value="">בחירה</option>{(field.options||[]).map(option=><option key={option}>{option}</option>)}</select>:<input required={field.required} type={field.fieldType==='phone'?'tel':field.fieldType} value={form.customValues?.[field.fieldKey]||''} onChange={event=>setForm({...form,customValues:{...(form.customValues||{}),[field.fieldKey]:event.target.value}})}/>}</label>)}
         <div className="wide form-actions">
           <button type="button" className="ops-secondary" onClick={onClose}>
             ביטול
@@ -811,23 +844,21 @@ function EquipmentEditor({ value, items, onClose, onSave }) {
   );
 }
 
-function RoleEditor({ onClose, onSave }) {
-  const [form, setForm] = useState({
-    name: "",
-    color: "#6957df",
-    icon: "user-round",
-  });
+function RoleManager({ roles,onClose, onSave,onDelete }) {
+  const [form, setForm] = useState({name:"",color:"#6957df",icon:"user-round",active:true});
+  const edit=role=>setForm({...role});
+  const reset=()=>setForm({name:"",color:"#6957df",icon:"user-round",active:true});
   return (
     <Modal
-      title="סוג תפקיד חדש"
-      subtitle="התפקיד יהיה זמין לכל אנשי המקצוע"
+      title="ניהול תפקידים"
+      subtitle="הוספה, עריכה, צבע ואייקון מותאם לכל תפקיד"
       onClose={onClose}
     >
       <form
         className="master-form"
-        onSubmit={(event) => {
+        onSubmit={async(event) => {
           event.preventDefault();
-          onSave(form);
+          if(await onSave(form))reset();
         }}
       >
         <label>
@@ -850,20 +881,20 @@ function RoleEditor({ onClose, onSave }) {
           />
         </label>
         <label>
-          אייקון
-          <input
-            value={form.icon}
-            onChange={(event) => setForm({ ...form, icon: event.target.value })}
-            placeholder="user-round"
-          />
+          אייקון מותאם
+          <div className="role-icon-picker">{roleIconOptions.map(([key,label,Icon])=><button type="button" key={key} title={label} className={form.icon===key?'selected':''} onClick={()=>setForm({...form,icon:key})}><Icon size={19}/></button>)}</div>
         </label>
+        {form.id&&<label className="role-active-toggle"><input type="checkbox" checked={form.active!==false} onChange={event=>setForm({...form,active:event.target.checked})}/>תפקיד פעיל וזמין לבחירה</label>}
         <div className="wide form-actions">
           <button type="button" className="ops-secondary" onClick={onClose}>
             ביטול
           </button>
-          <button className="ops-primary">הוספת תפקיד</button>
+          {form.id&&<button type="button" className="danger-icon role-delete" onClick={()=>onDelete(form)}><Trash2 size={15}/>מחיקה</button>}
+          {form.id&&<button type="button" className="ops-secondary" onClick={reset}>תפקיד חדש</button>}
+          <button className="ops-primary">{form.id?'שמירת שינויים':'הוספת תפקיד'}</button>
         </div>
       </form>
+      <div className="role-management-list">{roles.map(role=><button type="button" key={role.id} className={!role.active?'inactive':''} onClick={()=>edit(role)}><i style={{background:role.color}}><RoleIcon name={role.icon}/></i><span><b>{role.name}</b><small>{role.active?'פעיל':'מושבת'}</small></span><Pencil size={15}/></button>)}</div>
     </Modal>
   );
 }
