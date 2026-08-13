@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.2
+
+- Added independent timeline-spacing zoom controls to both project and portfolio Gantt views.
+- Added two-finger pinch zoom on mobile and Ctrl/trackpad zoom on desktop without changing the selected day, week or month mode.
+- Kept the selected date centered while scaling the ruler, grid, task bars, milestones and dependency connectors together.
+
 ## 0.15.1
 
 - Added a mobile Gantt focus mode that reduces the task information rail to 72px and gives the timeline most of the screen.

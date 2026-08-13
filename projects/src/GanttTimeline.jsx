@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Columns2, Search } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Columns2, Minus, Plus, Search } from "lucide-react";
 
 const DAY = 86400000;
 const midnight = (value) => new Date(value).setHours(0, 0, 0, 0);
@@ -24,6 +24,8 @@ const zooms = {
   week: { label: "שבוע", pageDays: 56, tickDays: 7, pixelsPerDay: 18 },
   month: { label: "חודש", pageDays: 180, tickDays: 30, pixelsPerDay: 6 },
 };
+const clampScale = (value) => Math.min(2.2, Math.max(0.55, Math.round(value * 20) / 20));
+const touchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
 
 export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title = "לוח גאנט", compact = false }) {
   const [zoom, setZoom] = useState("week");
@@ -31,12 +33,15 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
   const [collapsed, setCollapsed] = useState(new Set());
   const [tooltip, setTooltip] = useState(null);
   const [timelineFocus, setTimelineFocus] = useState(true);
+  const [scale, setScale] = useState(1);
   const scrollRef = useRef(null);
   const pendingShift = useRef(0);
+  const pinch = useRef(null);
   const config = zooms[zoom];
-  const pagePixels = config.pageDays * config.pixelsPerDay;
+  const pixelsPerDay = config.pixelsPerDay * scale;
+  const pagePixels = config.pageDays * pixelsPerDay;
   const canvasDays = config.pageDays * 5;
-  const canvasWidth = canvasDays * config.pixelsPerDay;
+  const canvasWidth = canvasDays * pixelsPerDay;
   const rangeStart = anchor - config.pageDays * 2 * DAY;
   const rangeEnd = rangeStart + canvasDays * DAY;
 
@@ -57,8 +62,8 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
     if (!dependencyId) return [];
     const source = rowById.get(`${row.name}-${dependencyId}`);
     if (!source) return [];
-    const sourceX = ((midnight(source.item.end) - rangeStart) / DAY + 1) * config.pixelsPerDay;
-    const targetX = ((midnight(row.item.start) - rangeStart) / DAY) * config.pixelsPerDay;
+    const sourceX = ((midnight(source.item.end) - rangeStart) / DAY + 1) * pixelsPerDay;
+    const targetX = ((midnight(row.item.start) - rangeStart) / DAY) * pixelsPerDay;
     const sourceY = source.top + 32;
     const targetY = row.top + 32;
     const bendX = Math.max(sourceX + 22, (sourceX + targetX) / 2);
@@ -66,9 +71,9 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
   });
   const ticks = Array.from({ length: Math.floor(canvasDays / config.tickDays) + 1 }, (_, index) => {
     const value = rangeStart + index * config.tickDays * DAY;
-    return { value, left: index * config.tickDays * config.pixelsPerDay };
+    return { value, left: index * config.tickDays * pixelsPerDay };
   });
-  const todayLeft = ((midnight(new Date()) - rangeStart) / DAY) * config.pixelsPerDay;
+  const todayLeft = ((midnight(new Date()) - rangeStart) / DAY) * pixelsPerDay;
 
   const centerTimeline = (behavior = "auto") => {
     scrollRef.current?.scrollTo({ left: pagePixels * 2 - Math.max(0, (scrollRef.current.clientWidth - pagePixels) / 2), behavior });
@@ -79,7 +84,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
       scrollRef.current.scrollLeft -= pendingShift.current * pagePixels;
       pendingShift.current = 0;
     } else centerTimeline();
-  }, [anchor, zoom]);
+  }, [anchor, zoom, scale]);
   const shiftAnchor = (direction) => {
     pendingShift.current = 0;
     setAnchor((current) => current + direction * config.pageDays * DAY);
@@ -99,6 +104,24 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
     pendingShift.current = 0;
     setZoom(value);
   };
+  const changeScale = (delta) => setScale((current) => clampScale(current + delta));
+  const startPinch = (event) => {
+    if (event.touches.length !== 2) return;
+    pinch.current = { distance: touchDistance(event.touches), scale };
+  };
+  const movePinch = (event) => {
+    if (event.touches.length !== 2 || !pinch.current) return;
+    event.preventDefault();
+    setScale(clampScale(pinch.current.scale * (touchDistance(event.touches) / pinch.current.distance)));
+  };
+  const endPinch = (event) => {
+    if (event.touches.length < 2) pinch.current = null;
+  };
+  const wheelZoom = (event) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    changeScale(event.deltaY < 0 ? 0.1 : -0.1);
+  };
   const goToday = () => {
     pendingShift.current = 0;
     setAnchor(midnight(new Date()));
@@ -117,6 +140,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
         <div className="cg-title"><CalendarDays size={18} /><span><strong>{title}</strong><small>{dateLabel(anchor, true)} · תצוגת {config.label}</small></span></div>
         {onQueryChange && <label className="cg-search"><Search size={16} /><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="חיפוש פרויקט או משימה" /></label>}
         <div className="cg-zoom">{Object.entries(zooms).map(([value, item]) => <button type="button" className={zoom === value ? "active" : ""} onClick={() => chooseZoom(value)} key={value}>{item.label}</button>)}</div>
+        <div className="cg-scale" aria-label="שינוי רוחב מרווח הזמן"><button type="button" onClick={() => changeScale(-0.15)} disabled={scale <= 0.55} title="צמצום מרווח הזמן"><Minus size={15} /></button><output>{Math.round(scale * 100)}%</output><button type="button" onClick={() => changeScale(0.15)} disabled={scale >= 2.2} title="הרחבת מרווח הזמן"><Plus size={15} /></button></div>
         <div className="cg-navigation">
           <button type="button" onClick={() => shiftAnchor(-1)} title="תקופה קודמת"><ChevronRight size={17} /></button>
           <button type="button" className="today" onClick={goToday}>היום</button>
@@ -134,24 +158,24 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
             <button type="button" className="cg-item-label" style={{ height: row.height }} key={row.key} onClick={() => onOpen?.(row.item)}><span className="cg-avatar" style={{ background: row.item.assignee_color || palette[row.groupIndex % palette.length] }}>{(row.item.assignee_name || row.item.owner_name || "?").slice(0, 2)}</span><span><strong>{row.item.title}</strong><small>{row.item.assignee_name || row.item.owner_name || "לא הוקצה"} · {dateLabel(row.item.start)}–{dateLabel(row.item.end)}</small>{row.item.dependency_title && <em>תלויה ב: {row.item.dependency_title}</em>}</span></button>
           ))}
         </div>
-        <div className="cg-scroll" ref={scrollRef} onScroll={handleScroll}>
+        <div className="cg-scroll" ref={scrollRef} onScroll={handleScroll} onTouchStart={startPinch} onTouchMove={movePinch} onTouchEnd={endPinch} onTouchCancel={endPinch} onWheel={wheelZoom}>
           <div className="cg-canvas" style={{ width: canvasWidth }}>
             <div className="cg-ruler">{ticks.map((tick) => <span key={tick.value} style={{ left: tick.left }}>{dateLabel(tick.value, zoom === "day")}</span>)}</div>
-            <div className="cg-body" style={{ height: bodyHeight, "--grid": `${config.tickDays * config.pixelsPerDay}px` }}>
+            <div className="cg-body" style={{ height: bodyHeight, "--grid": `${config.tickDays * pixelsPerDay}px` }}>
               {todayLeft >= 0 && todayLeft <= canvasWidth && <div className="cg-today-line" style={{ left: todayLeft }}><span>היום</span></div>}
               <svg className="cg-dependencies" width={canvasWidth} height={bodyHeight} viewBox={`0 0 ${canvasWidth} ${bodyHeight}`} preserveAspectRatio="none"><defs><marker id="cg-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>{dependencies.map((line) => <path key={line.key} d={line.d} markerEnd="url(#cg-arrow)" />)}</svg>
               {rows.map((row) => {
                 if (row.type === "group") {
                   const starts = row.items.map((item) => midnight(item.start));
                   const ends = row.items.map((item) => midnight(item.end));
-                  const left = ((Math.min(...starts) - rangeStart) / DAY) * config.pixelsPerDay;
-                  const width = ((Math.max(...ends) - Math.min(...starts)) / DAY + 1) * config.pixelsPerDay;
+                  const left = ((Math.min(...starts) - rangeStart) / DAY) * pixelsPerDay;
+                  const width = ((Math.max(...ends) - Math.min(...starts)) / DAY + 1) * pixelsPerDay;
                   return <div className="cg-group-row" key={row.key} style={{ top: row.top, height: row.height }}><i style={{ left, width, background: palette[row.groupIndex % palette.length] }} /></div>;
                 }
                 const item = row.item;
                 const color = item.critical ? "#C92A3A" : item.status === "done" || item.status === "completed" ? "#087F5B" : palette[row.groupIndex % palette.length];
-                const left = ((midnight(item.start) - rangeStart) / DAY) * config.pixelsPerDay;
-                const exactWidth = Math.max(10, ((midnight(item.end) - midnight(item.start)) / DAY + 1) * config.pixelsPerDay);
+                const left = ((midnight(item.start) - rangeStart) / DAY) * pixelsPerDay;
+                const exactWidth = Math.max(10, ((midnight(item.end) - midnight(item.start)) / DAY + 1) * pixelsPerDay);
                 const visible = left + exactWidth >= 0 && left <= canvasWidth;
                 if (!visible) return <div className="cg-item-row" key={row.key} style={{ top: row.top, height: row.height }} />;
                 return <div className="cg-item-row" key={row.key} style={{ top: row.top, height: row.height }}><button type="button" className={`cg-bar ${item.kind} ${item.critical ? "critical" : ""}`} style={{ left, width: item.kind === "milestone" ? 22 : exactWidth, background: color, color: contrastText(color) }} onClick={() => onOpen?.(item)} onMouseMove={(event) => setTooltip({ item, x: event.clientX, y: event.clientY })} onMouseLeave={() => setTooltip(null)} aria-label={`פתיחת ${item.title}`}>{item.kind === "milestone" ? <i /> : <span>{item.title}</span>}</button></div>;
