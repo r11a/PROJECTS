@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Columns2, Search } from "lucide-react";
 
 const DAY = 86400000;
 const midnight = (value) => new Date(value).setHours(0, 0, 0, 0);
@@ -30,6 +30,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
   const [anchor, setAnchor] = useState(midnight(new Date()));
   const [collapsed, setCollapsed] = useState(new Set());
   const [tooltip, setTooltip] = useState(null);
+  const [timelineFocus, setTimelineFocus] = useState(true);
   const scrollRef = useRef(null);
   const pendingShift = useRef(0);
   const config = zooms[zoom];
@@ -111,7 +112,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
   const toggleGroup = (name) => setCollapsed((current) => { const next = new Set(current); next.has(name) ? next.delete(name) : next.add(name); return next; });
 
   return (
-    <section className={`cg-shell ${compact ? "compact" : ""}`}>
+    <section className={`cg-shell ${compact ? "compact" : ""} ${timelineFocus ? "timeline-focus" : "timeline-details"}`}>
       <header className="cg-toolbar">
         <div className="cg-title"><CalendarDays size={18} /><span><strong>{title}</strong><small>{dateLabel(anchor, true)} · תצוגת {config.label}</small></span></div>
         {onQueryChange && <label className="cg-search"><Search size={16} /><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="חיפוש פרויקט או משימה" /></label>}
@@ -122,6 +123,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, title
           <button type="button" onClick={() => shiftAnchor(1)} title="תקופה הבאה"><ChevronLeft size={17} /></button>
           <input aria-label="מעבר לתאריך" type="date" value={inputDate(anchor)} onChange={(event) => goDate(event.target.value)} />
         </div>
+        <button type="button" className="cg-mobile-toggle" onClick={() => setTimelineFocus((current) => !current)} aria-pressed={timelineFocus}><Columns2 size={16} />{timelineFocus ? "פרטים" : "ציר מלא"}</button>
       </header>
       <div className="cg-board" style={{ "--body-height": `${bodyHeight}px` }}>
         <div className="cg-labels">

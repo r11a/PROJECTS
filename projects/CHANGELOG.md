@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.1
+
+- Added a mobile Gantt focus mode that reduces the task information rail to 72px and gives the timeline most of the screen.
+- Added an in-view toggle between full task details and full timeline focus in both Gantt screens.
+- Improved touch scrolling, compact mobile controls and responsive toolbar layout without reducing readable font sizes.
+
 ## 0.15.0
 
 - Replaced both legacy Gantt implementations with one shared commercial-grade timeline component.

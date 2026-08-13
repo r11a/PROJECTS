@@ -30,6 +30,8 @@ test('portfolio Gantt exposes critical tasks and dependency connectors', async (
   assert.match(timeline, /contrastText/);
   assert.match(timeline, /type="date"/);
   assert.match(timeline, /onScroll=\{handleScroll\}/);
+  assert.match(timeline, /timelineFocus/);
+  assert.match(timeline, /cg-mobile-toggle/);
   assert.match(gantt, /TaskEditor/);
 });
 
