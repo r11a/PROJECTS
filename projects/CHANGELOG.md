@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.7
+
+- Added a full read-only AI chat drawer next to notifications and team messages, using the configured Gemini or OpenAI provider.
+- Added intent-aware context selection so each question sends only the relevant PROJECTS data and remains cost-efficient.
+- Added an in-chat help center with categorized, clickable example questions and guidance for more precise prompts.
+- Added per-call token and estimated-cost tracking for AI chat and automatic insights.
+- Added a live 30-day AI usage section to Reports & Analytics with questions, background insights, tokens and estimated list-price cost.
+
 ## 0.11.6
 
 - Connected the dashboard insights tile to the selected Gemini or OpenAI provider with concise Hebrew management analysis.

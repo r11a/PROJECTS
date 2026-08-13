@@ -89,6 +89,7 @@ import {
 } from "./Workspaces";
 import { ProjectWorkspace } from "./ProjectWorkspace";
 import { MessageCenter } from "./Messages";
+import { AiChat } from "./AiChat";
 import "./operational.css";
 import "./forms-workspace.css";
 import "./master-data.css";
@@ -96,6 +97,7 @@ import "./workspaces.css";
 import "./theme-dark.css";
 import "./contacts.css";
 import "./messages.css";
+import "./ai-chat.css";
 import projectsMark from "./assets/projects-mark.svg";
 
 const money = new Intl.NumberFormat("he-IL", {
@@ -232,6 +234,7 @@ function App() {
   const [alertsOpen, setAlertsOpen] = useState(true);
   const hiddenAlertSignature = useRef("");
   const [messagesOpen, setMessagesOpen] = useState(false);
+  const [aiChatOpen, setAiChatOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [configuration, setConfiguration] = useState({
     settings: {},
@@ -811,6 +814,9 @@ function App() {
               <Bell size={20} />
               {insights?.alerts?.length > 0 && <i />}
             </button>
+            <button className="icon-button ai-chat-button" onClick={() => setAiChatOpen(true)} title="הסוכן החכם">
+              <Sparkles size={20} />
+            </button>
             <button
               className="icon-button message-button"
               onClick={() => setMessagesOpen(true)}
@@ -995,6 +1001,7 @@ function App() {
           onUnread={setUnreadMessages}
         />
       )}
+      {aiChatOpen && <AiChat api={api} onClose={() => setAiChatOpen(false)} />}
       {notice && (
         <div className="toast">
           <CheckCircle2 size={19} />

@@ -181,7 +181,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
         return fallback;
       }
     };
-    const [stages, tasks, finance, managers, monthly, systems, components, projectSizes, contractorStages, deadlines, documents] = await Promise.all([
+    const [stages, tasks, finance, managers, monthly, systems, components, projectSizes, contractorStages, deadlines, documents, aiUsage, aiUsageSummary] = await Promise.all([
       reportQuery('stages', 'SELECT stage,COUNT(*)::int count,COALESCE(SUM(value),0)::numeric value FROM projects WHERE archived_at IS NULL GROUP BY stage ORDER BY count DESC', []),
       reportQuery('tasks', 'SELECT status,COUNT(*)::int count FROM tasks GROUP BY status', []),
       reportQuery('finance', 'SELECT COALESCE(SUM(value),0)::numeric total,COALESCE(SUM(paid),0)::numeric paid,COALESCE(SUM(value-paid),0)::numeric AS "open" FROM projects', [{ total: 0, paid: 0, open: 0 }]),
@@ -202,8 +202,16 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
         WHEN due_date IS NULL THEN 'none' ELSE 'later' END bucket FROM tasks WHERE status NOT IN ('done','cancelled')) items GROUP BY bucket`, []),
       reportQuery('documents', `SELECT COALESCE(NULLIF(f.category,''),'אחר') category,COUNT(*)::int count FROM client_files f
         LEFT JOIN projects p ON p.id=f.project_id WHERE f.project_id IS NULL OR p.archived_at IS NULL GROUP BY f.category ORDER BY count DESC LIMIT 10`, []),
+      reportQuery('aiUsage', `SELECT to_char(date_trunc('day',created_at),'YYYY-MM-DD') day,
+        COUNT(*) FILTER (WHERE feature='chat')::int questions,COUNT(*) FILTER (WHERE feature='insights')::int insights,
+        COALESCE(SUM(total_tokens),0)::bigint tokens,COALESCE(SUM(estimated_cost_usd),0)::numeric estimated_cost
+        FROM ai_usage_log WHERE created_at>=CURRENT_DATE-29 GROUP BY 1 ORDER BY 1`, []),
+      reportQuery('aiUsageSummary', `SELECT COUNT(*) FILTER (WHERE feature='chat')::int questions,
+        COUNT(*) FILTER (WHERE feature='insights')::int insights,COALESCE(SUM(total_tokens),0)::bigint tokens,
+        COALESCE(SUM(estimated_cost_usd),0)::numeric estimated_cost
+        FROM ai_usage_log WHERE created_at>=CURRENT_DATE-29`, [{ questions:0,insights:0,tokens:0,estimated_cost:0 }]),
     ]);
-    response.json({ stages, tasks, finance: finance[0] || { total: 0, paid: 0, open: 0 }, managers, monthly, systems, components, projectSizes, contractorStages, deadlines, documents });
+    response.json({ stages, tasks, finance: finance[0] || { total: 0, paid: 0, open: 0 }, managers, monthly, systems, components, projectSizes, contractorStages, deadlines, documents, aiUsage, aiUsageSummary:aiUsageSummary[0] || { questions:0,insights:0,tokens:0,estimated_cost:0 } });
   });
 
   return router;

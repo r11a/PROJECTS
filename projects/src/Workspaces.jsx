@@ -22,10 +22,12 @@ import {
   AreaChart,
   Bar,
   BarChart,
+  ComposedChart,
   CartesianGrid,
   Cell,
   Pie,
   PieChart,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -975,7 +977,7 @@ export function ReportsWorkspace({ api, setNotice }) {
   useEffect(() => {
     let timer;
     const live = (event) => {
-      if (!["projects","tasks","project_payments","project_equipment","equipment_catalog","client_files","professionals"].includes(event.detail?.table)) return;
+      if (!["projects","tasks","project_payments","project_equipment","equipment_catalog","client_files","professionals","ai_usage_log"].includes(event.detail?.table)) return;
       clearTimeout(timer);
       timer = setTimeout(() => loadReports(true), 180);
     };
@@ -1091,6 +1093,8 @@ export function ReportsWorkspace({ api, setNotice }) {
   const monthlyMap = new Map();
   (data.monthly || []).forEach((item) => { const row=monthlyMap.get(item.month)||{month:item.month,paid:0,pending:0}; row[item.status === "paid" ? "paid" : "pending"] += Number(item.amount); monthlyMap.set(item.month,row); });
   const monthlyData = [...monthlyMap.values()].slice(-12).map((item)=>({ ...item, label:new Date(`${item.month}-01T12:00:00`).toLocaleDateString("he-IL",{month:"short",year:"2-digit"}) }));
+  const aiUsageData = (data.aiUsage || []).map((item)=>({ ...item, questions:Number(item.questions),insights:Number(item.insights),tokens:Number(item.tokens),estimatedCost:Number(item.estimated_cost),label:new Date(`${item.day}T12:00:00`).toLocaleDateString("he-IL",{day:"numeric",month:"short"}) }));
+  const aiUsageSummary = { questions:Number(data.aiUsageSummary?.questions || 0),insights:Number(data.aiUsageSummary?.insights || 0),tokens:Number(data.aiUsageSummary?.tokens || 0),estimatedCost:Number(data.aiUsageSummary?.estimated_cost || 0) };
   return (
     <div className="ops-page reports-page">
       <section className="ops-hero compact-work-hero">
@@ -1209,6 +1213,11 @@ export function ReportsWorkspace({ api, setNotice }) {
       </div>
       <section className="report-category-head"><div><span>04</span><h3>כספים וגבייה</h3></div><p>מגמת תשלומים שהתקבלו מול תשלומים שטרם נגבו.</p></section>
       <div className="panel report-panel report-finance-trend"><h3>מגמת גבייה חודשית</h3>{monthlyData.length ? <ResponsiveContainer width="100%" height={300}><AreaChart data={monthlyData} margin={{top:10,right:12,left:12,bottom:5}}><defs><linearGradient id="paidGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#12a594" stopOpacity={0.45}/><stop offset="95%" stopColor="#12a594" stopOpacity={0.03}/></linearGradient><linearGradient id="pendingGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#e29b38" stopOpacity={0.35}/><stop offset="95%" stopColor="#e29b38" stopOpacity={0.02}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="label"/><YAxis tickFormatter={(value)=>`${Math.round(value/1000)}K`}/><Tooltip formatter={(value,name)=>[money.format(value),name==="paid"?"נגבה":"ממתין"]} contentStyle={{direction:"rtl"}}/><Area type="monotone" dataKey="paid" stroke="#12a594" strokeWidth={3} fill="url(#paidGradient)" isAnimationActive animationDuration={1100} animationEasing="ease-out"/><Area type="monotone" dataKey="pending" stroke="#e29b38" strokeWidth={2} fill="url(#pendingGradient)" isAnimationActive animationBegin={140} animationDuration={1100} animationEasing="ease-out"/></AreaChart></ResponsiveContainer> : <div className="chart-empty">אין תשלומים עם תאריך להצגת מגמה</div>}</div>
+      <section className="report-category-head"><div><span>05</span><h3>שימוש בסוכן AI</h3></div><p>כמות שאלות, תובנות אוטומטיות, טוקנים ואומדן עלות ב־30 הימים האחרונים.</p></section>
+      <div className="panel report-panel ai-usage-panel">
+        <header><div><h3>שאלות מול עלות משוערת</h3><small>העלות מחושבת לפי טוקנים ומחירי המחירון של המודל; במסלול Gemini החינמי החיוב בפועל עשוי להיות ₪0.</small></div><div className="ai-usage-kpis"><span><small>שאלות</small><b>{aiUsageSummary.questions}</b></span><span><small>תובנות רקע</small><b>{aiUsageSummary.insights}</b></span><span><small>טוקנים</small><b>{aiUsageSummary.tokens.toLocaleString("he-IL")}</b></span><span><small>אומדן</small><b>${aiUsageSummary.estimatedCost.toFixed(4)}</b></span></div></header>
+        {aiUsageData.length ? <ResponsiveContainer width="100%" height={310}><ComposedChart data={aiUsageData} margin={{top:18,right:12,left:12,bottom:5}}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="label"/><YAxis yAxisId="questions" allowDecimals={false} orientation="right"/><YAxis yAxisId="cost" orientation="left" tickFormatter={(value)=>`$${Number(value).toFixed(3)}`}/><Tooltip formatter={(value,name)=>name==="estimatedCost"?[`$${Number(value).toFixed(6)}`,"עלות משוערת"]:[value,name==="questions"?"שאלות":"תובנות רקע"]} contentStyle={{direction:"rtl"}}/><Bar yAxisId="questions" dataKey="questions" name="questions" fill="#6957df" radius={[7,7,2,2]} isAnimationActive animationDuration={900}/><Line yAxisId="cost" type="monotone" dataKey="estimatedCost" name="estimatedCost" stroke="#e29b38" strokeWidth={3} dot={{r:4,fill:"#e29b38"}} isAnimationActive animationBegin={160} animationDuration={1100}/></ComposedChart></ResponsiveContainer> : <div className="chart-empty">הנתונים יופיעו לאחר השאלה הראשונה לסוכן</div>}
+      </div>
       <div className="panel report-table">
         <h3>ביצועים לפי מנהל פרויקט</h3>
         <table>

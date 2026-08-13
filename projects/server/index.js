@@ -562,11 +562,11 @@ app.delete('/api/users/:id', authenticate, requireRoles('admin'), async (request
 });
 
 app.use('/api', await createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR, geocoder }));
-app.use('/api', await createBackupRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR, appVersion:APP_VERSION }));
 app.use('/api', await createAiRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR }));
 app.use('/api', createFormsRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
 app.use('/api', createOperationsRouter({ pool, authenticate, requireRoles, audit }));
+app.use('/api', await createBackupRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR, appVersion:APP_VERSION }));
 
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Not found' }));
 app.use((error, _request, response, _next) => {
