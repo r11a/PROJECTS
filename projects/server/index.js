@@ -185,9 +185,21 @@ async function seedDatabase() {
     [username, username, passwordHash],
   );
 
-  const count = await pool.query('SELECT COUNT(*)::int AS count FROM projects');
-  if (count.rows[0].count > 0) return;
+  await seedDemoProjects();
+}
+
+async function seedDemoProjects() {
+  const setting = await pool.query("SELECT value FROM app_settings WHERE key='demoData'");
+  if (setting.rows[0]?.value?.enabled === false) return 0;
+  const dataState = await pool.query(`SELECT
+    COUNT(*) FILTER (WHERE is_demo=TRUE)::int demo_count,
+    COUNT(*) FILTER (WHERE is_demo=FALSE)::int real_count FROM projects`);
+  if (dataState.rows[0].real_count > 0 && dataState.rows[0].demo_count === 0) return 0;
+  const existing = await pool.query('SELECT id FROM projects WHERE id=ANY($1::text[])', [seedProjects.map((project) => project.id)]);
+  const existingIds = new Set(existing.rows.map((row) => row.id));
+  let inserted = 0;
   for (const project of seedProjects) {
+    if (existingIds.has(project.id)) continue;
     const legacyStages = { planning:'waiting',installation:'installation_b',programming:'activation_programming',handover:'finishes',completed:'post_delivery' };
     const seededProject = {
       projectSize:'medium', contractorProgress:'waiting', documentFolder:'', projectClassification:'private_house',
@@ -205,7 +217,24 @@ async function seedDatabase() {
     });
     const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
     await pool.query(`INSERT INTO projects(${projectColumns.join(', ')}) VALUES(${placeholders})`, values);
+    await pool.query('UPDATE projects SET is_demo=TRUE WHERE id=$1', [project.id]);
+    inserted += 1;
   }
+  return inserted;
+}
+
+async function demoDataState(db = pool) {
+  const result = await db.query(`SELECT
+    COALESCE((SELECT (value->>'enabled')::boolean FROM app_settings WHERE key='demoData'),TRUE) enabled,
+    (SELECT COUNT(*)::int FROM projects WHERE is_demo=TRUE) project_count,
+    (SELECT COUNT(*)::int FROM tasks WHERE project_id IN (SELECT id FROM projects WHERE is_demo=TRUE)) task_count,
+    ((SELECT COUNT(*) FROM projects WHERE is_demo=FALSE) > 0
+      OR (SELECT COUNT(*) FROM tasks task WHERE task.project_id IS NULL OR EXISTS (SELECT 1 FROM projects project WHERE project.id=task.project_id AND project.is_demo=FALSE)) > 0
+      OR (SELECT COUNT(*) FROM clients client WHERE NOT EXISTS (SELECT 1 FROM projects project WHERE project.is_demo=TRUE AND project.client_id=client.id)) > 0
+      OR (SELECT COUNT(*) FROM professionals person WHERE NOT EXISTS (SELECT 1 FROM projects project WHERE project.is_demo=TRUE AND project.manager_professional_id=person.id)) > 0
+      OR (SELECT COUNT(*) FROM form_records form_record WHERE form_record.project_id IS NULL OR EXISTS (SELECT 1 FROM projects project WHERE project.id=form_record.project_id AND project.is_demo=FALSE)) > 0
+      OR (SELECT COUNT(*) FROM site_inspections inspection WHERE inspection.project_id IS NULL OR EXISTS (SELECT 1 FROM projects project WHERE project.id=inspection.project_id AND project.is_demo=FALSE)) > 0) has_real_data`);
+  return result.rows[0];
 }
 
 async function ensureSeedRelationships() {
@@ -534,6 +563,63 @@ app.get('/api/users', authenticate, requireRoles('admin'), async (_request, resp
   response.json({ users: result.rows.map(publicUser) });
 });
 
+app.get('/api/system/demo-data', authenticate, requireRoles('admin'), async (_request, response) => {
+  const state = await demoDataState();
+  response.json({ enabled:state.enabled, projectCount:state.project_count, taskCount:state.task_count, hasRealData:state.has_real_data, activationLocked:!state.enabled&&state.has_real_data });
+});
+
+app.patch('/api/system/demo-data', authenticate, requireRoles('admin'), async (request, response) => {
+  if (typeof request.body?.enabled !== 'boolean') return response.status(400).json({ error:'יש לבחור הפעלה או ביטול של נתוני הדמו' });
+  const enabled = request.body.enabled;
+  if (enabled) {
+    const state = await demoDataState();
+    if (state.has_real_data) return response.status(409).json({ error:'לא ניתן להפעיל נתוני דמו לאחר שנוצר מידע אמיתי במערכת' });
+  }
+  let projectCount = 0;
+  let taskCount = 0;
+  if (!enabled) {
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      const demo = await db.query('SELECT id,client_id,manager_professional_id FROM projects WHERE is_demo=TRUE FOR UPDATE');
+      const projectIds = demo.rows.map((row) => row.id);
+      const clientIds = [...new Set(demo.rows.map((row) => row.client_id).filter(Boolean))];
+      const professionalIds = [...new Set(demo.rows.map((row) => row.manager_professional_id).filter(Boolean))];
+      projectCount = projectIds.length;
+      if (projectIds.length) {
+        taskCount = Number((await db.query('SELECT COUNT(*)::int count FROM tasks WHERE project_id=ANY($1::text[])',[projectIds])).rows[0].count);
+        await db.query('DELETE FROM form_records WHERE project_id=ANY($1::text[])',[projectIds]);
+        await db.query('DELETE FROM site_inspections WHERE project_id=ANY($1::text[])',[projectIds]);
+        await db.query('DELETE FROM projects WHERE id=ANY($1::text[]) AND is_demo=TRUE',[projectIds]);
+        await db.query('DELETE FROM calendar_history WHERE project_id=ANY($1::text[])',[projectIds]);
+      }
+      if (clientIds.length) await db.query(`DELETE FROM clients c WHERE c.id=ANY($1::bigint[])
+        AND NOT EXISTS (SELECT 1 FROM projects p WHERE p.client_id=c.id)
+        AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.client_id=c.id)
+        AND NOT EXISTS (SELECT 1 FROM client_professionals cp WHERE cp.client_id=c.id)`,[clientIds]);
+      if (professionalIds.length) await db.query(`DELETE FROM professionals person WHERE person.id=ANY($1::bigint[])
+        AND person.linked_user_id IS NULL
+        AND NOT EXISTS (SELECT 1 FROM projects p WHERE p.manager_professional_id=person.id)
+        AND NOT EXISTS (SELECT 1 FROM project_professionals pp WHERE pp.professional_id=person.id)
+        AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.assignee_professional_id=person.id OR t.owner_professional_id=person.id)`,[professionalIds]);
+      await db.query(`INSERT INTO app_settings(key,value,updated_by) VALUES('demoData',$1,$2)
+        ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_by=EXCLUDED.updated_by,updated_at=NOW()`,[JSON.stringify({enabled:false}),request.user.id]);
+      await db.query('COMMIT');
+    } catch (error) {
+      await db.query('ROLLBACK');
+      throw error;
+    } finally { db.release(); }
+  } else {
+    await pool.query(`INSERT INTO app_settings(key,value,updated_by) VALUES('demoData',$1,$2)
+      ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_by=EXCLUDED.updated_by,updated_at=NOW()`,[JSON.stringify({enabled:true}),request.user.id]);
+    projectCount = await seedDemoProjects();
+    await ensureSeedRelationships();
+  }
+  await audit(request,'update','demo_data','seed',{enabled,projectCount,taskCount,usersPreserved:true});
+  const state = await demoDataState();
+  response.json({enabled:state.enabled,projectCount:state.project_count,taskCount:state.task_count,deletedProjects:enabled?0:projectCount,deletedTasks:enabled?0:taskCount,usersPreserved:true,hasRealData:state.has_real_data,activationLocked:!state.enabled&&state.has_real_data});
+});
+
 app.post('/api/users/merge-identities', authenticate, requireRoles('admin'), async (request, response) => {
   const primaryUserId = String(request.body.primaryUserId || '');
   const secondaryUserId = String(request.body.secondaryUserId || '');
@@ -634,6 +720,20 @@ app.post('/api/auth/avatar', authenticate, userAvatarUpload.single('avatar'), as
   if (!row) return response.status(404).json({ error: 'המשתמש לא נמצא' });
   await audit(request, 'update_avatar', 'user', String(request.user.id), { selfService:true });
   response.json({ user:publicUser(row) });
+});
+
+app.get('/api/auth/avatar', authenticate, async (request, response) => {
+  const result = await pool.query(`SELECT COALESCE(NULLIF(users.avatar_image,''),(
+    SELECT NULLIF(merged.avatar_image,'') FROM users merged
+    WHERE merged.merged_into_user_id=users.id AND merged.avatar_image<>''
+    ORDER BY merged.updated_at DESC LIMIT 1
+  ),'') avatar_image FROM users WHERE id=$1`, [request.user.id]);
+  const avatarImage = result.rows[0]?.avatar_image;
+  if (!avatarImage) return response.status(404).end();
+  response.set('Cache-Control','no-store');
+  response.sendFile(path.join(userAvatarDir,path.basename(avatarImage)),(error)=>{
+    if (error && !response.headersSent) response.status(error.code==='ENOENT'?404:500).end();
+  });
 });
 
 app.post('/api/users/:id/avatar', authenticate, requireRoles('admin'), userAvatarUpload.single('avatar'), async (request, response) => {

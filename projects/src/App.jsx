@@ -811,7 +811,7 @@ function App() {
               style={{ background: user.avatarColor, color: "#fff", "--avatar-color": user.avatarColor }}
               title="העלאה או החלפה של תמונת המשתמש"
             >
-              {avatarGlyph(user)}
+              {avatarGlyph(user, true)}
               <span />
               <input type="file" accept="image/*" onChange={(event) => { uploadCurrentUserAvatar(event.target.files?.[0]); event.target.value = ""; }} />
             </label>
@@ -1130,7 +1130,12 @@ const avatarIcons = {
   shield: "מגן",
   star: "כוכב",
 };
-function avatarGlyph(user) {
+function avatarGlyph(user, currentUser = false) {
+  if (currentUser) {
+    const names = String(user.displayName || "משתמש").trim().split(/\s+/);
+    const initials = `${names[0]?.[0] || "מ"}${names.length > 1 ? names.at(-1)?.[0] || "" : names[0]?.[1] || ""}`;
+    return <><b className="avatar-initials">{initials}</b><img className="current-user-avatar-image" src={`${apiRoot}/auth/avatar?v=${encodeURIComponent(user.avatarImage || user.id || "current")}`} alt="" onLoad={(event)=>event.currentTarget.classList.add("loaded")} onError={(event)=>event.currentTarget.classList.remove("loaded")}/></>;
+  }
   if (user.avatarImage) return <img src={`${apiRoot}/users/${user.id}/avatar?v=${encodeURIComponent(user.avatarImage)}`} alt="" />;
   if (!user.avatarIcon || user.avatarIcon === "user") {
     const names = String(user.displayName || "משתמש").trim().split(/\s+/);

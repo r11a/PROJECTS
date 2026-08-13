@@ -66,12 +66,14 @@ test('Gantt scheduling supports drag, resize, long press duration and persistent
 
 test('project time reporting keeps targets in project setup and actual hours in the workspace', async () => {
   const app = await read('../src/App.jsx');
+  const operational = await read('../src/Operational.jsx');
   const projectWorkspace = await read('../src/ProjectWorkspace.jsx');
   const operations = await read('../server/operations.js');
   const server = await read('../server/index.js');
   const migration = await read('../migrations/021_task_avatars_project_hours.sql');
   const avatarLiveMigration = await read('../migrations/022_user_avatar_live_updates.sql');
   const avatarRecoveryMigration = await read('../migrations/023_recover_merged_user_avatars.sql');
+  const demoMigration = await read('../migrations/024_demo_data_management.sql');
   for (const token of ['installationHoursTarget','programmingHoursTarget']) {
     assert.match(app,new RegExp(token));
     assert.match(projectWorkspace,new RegExp(token));
@@ -88,6 +90,14 @@ test('project time reporting keeps targets in project setup and actual hours in 
   assert.match(server,/column === 'installation_hours_target' \|\| column === 'programming_hours_target'/);
   assert.match(server,/avatar_image=COALESCE\(NULLIF\(avatar_image,''\),NULLIF\(\$7,''\),''\)/);
   assert.match(avatarRecoveryMigration,/merged_into_user_id = primary_user\.id/);
+  assert.match(demoMigration,/ADD COLUMN IF NOT EXISTS is_demo/);
+  assert.match(server,/patch\('\/api\/system\/demo-data'/);
+  assert.match(server,/לא ניתן להפעיל נתוני דמו לאחר שנוצר מידע אמיתי במערכת/);
+  assert.match(server,/DELETE FROM projects WHERE id=ANY\(\$1::text\[\]\) AND is_demo=TRUE/);
+  assert.match(server,/get\('\/api\/auth\/avatar'/);
+  assert.match(app,/user\.avatarImage \|\| user\.id \|\| "current"/);
+  assert.match(operational,/DemoDataToggle/);
+  assert.match(operational,/activationLocked/);
   assert.match(projectWorkspace,/openRequest/);
   assert.doesNotMatch(projectWorkspace,/setTargetsOpen/);
   assert.match(operations,/project_time_entries/);

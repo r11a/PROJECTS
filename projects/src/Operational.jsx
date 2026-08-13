@@ -3613,8 +3613,33 @@ function BusinessSettings({ settings, api, apiRoot, onSaved, setNotice }) {
           setNotice={setNotice}
         />
       ))}
+      <DemoDataToggle api={api} setNotice={setNotice} />
     </div>
   );
+}
+
+function DemoDataToggle({ api, setNotice }) {
+  const [state,setState]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const load=()=>api('/system/demo-data').then(setState).catch((error)=>setNotice(error.message));
+  useEffect(()=>{load()},[]);
+  const toggle=async(event)=>{
+    const enabled=event.target.checked;
+    if(!enabled&&!window.confirm(`לבטל ולמחוק ${state?.projectCount||0} פרויקטי דמו ואת הרשומות המשויכות אליהם? משתמשי המערכת וכל מידע אמיתי יישמרו.`))return;
+    setBusy(true);
+    try{
+      const result=await api('/system/demo-data',{method:'PATCH',body:JSON.stringify({enabled})});
+      setState(result);
+      setNotice(enabled?`נתוני הדמו הופעלו מחדש (${result.projectCount} פרויקטים)`:`נמחקו ${result.deletedProjects} פרויקטי דמו ו־${result.deletedTasks} משימות. משתמשי המערכת נשמרו.`);
+      window.dispatchEvent(new Event('projects:data-changed'));
+    }catch(error){setNotice(error.message)}finally{setBusy(false)}
+  };
+  return <section className="panel demo-data-card">
+    <header><span><Database size={20}/></span><div><h3>נתוני דמו</h3><p>הצגה או הסרה של הרשומות הפיקטיביות המובנות</p></div><label className="setting-toggle" title={state?.activationLocked?'לא ניתן להפעיל דמו לאחר יצירת מידע אמיתי':''}><input type="checkbox" checked={Boolean(state?.enabled)} disabled={busy||!state||state.activationLocked} onChange={toggle}/><i/></label></header>
+    <div className="demo-data-summary"><b>{state?.projectCount??'—'}</b><span>פרויקטי דמו</span><b>{state?.taskCount??'—'}</b><span>משימות משויכות</span></div>
+    <p>{state?.enabled?'כיבוי המתג ימחק רק נתונים שסומנו כדמו. משתמשים, הרשאות, הגדרות ומידע אמיתי יישמרו.':state?.activationLocked?'נתוני הדמו כבויים ונעולים להפעלה, מכיוון שכבר קיים מידע אמיתי במערכת.':'נתוני הדמו כבויים. ניתן להפעיל אותם שוב רק כל עוד לא נוצר מידע אמיתי.'}</p>
+    {busy&&<small><RefreshCw className="spin" size={14}/> מעדכן נתוני דמו...</small>}
+  </section>;
 }
 
 function SettingCard({
