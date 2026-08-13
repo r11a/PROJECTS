@@ -57,6 +57,7 @@ import {
   Zap,
 } from "lucide-react";
 import { AddressAutocomplete } from "./AddressAutocomplete";
+import { ModalPortal } from "./AppModal";
 
 const roleNames = {
   architect: "אדריכל",
@@ -271,6 +272,7 @@ export function AlertCenter({ alerts, api, onSnoozed, onClose, setNotice, onOpen
   };
   const dismiss=async()=>{setBusy(true);try{await api('/alerts/dismiss',{method:'POST',body:JSON.stringify({keys:alerts.map(alert=>alert.key)})});setNotice('ההתראות בוטלו עבורך');onSnoozed()}catch(error){setNotice(error.message)}finally{setBusy(false)}};
   return (
+    <ModalPortal>
     <div className="alert-backdrop">
       <section className="alert-center">
         <header>
@@ -329,6 +331,7 @@ export function AlertCenter({ alerts, api, onSnoozed, onClose, setNotice, onOpen
         </footer>
       </section>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -813,6 +816,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
         )}
       </section>
       {selectedDay && (
+        <ModalPortal>
         <aside className="day-drawer panel">
           <div className="day-drawer-head">
             <div>
@@ -836,6 +840,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
             <InlineEmpty text="אין אירועים ביום זה" />
           )}
         </aside>
+        </ModalPortal>
       )}
       {creating && (
         <CalendarEventModal
@@ -880,6 +885,7 @@ function CalendarEventModal({ api, onClose, onDone, setNotice }) {
     }
   };
   return (
+    <ModalPortal>
     <div className="ops-modal-backdrop" onMouseDown={onClose}>
       <div
         className="ops-modal compact"
@@ -987,6 +993,7 @@ function CalendarEventModal({ api, onClose, onDone, setNotice }) {
         </form>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -1350,6 +1357,7 @@ function ClientFormModal({
     }
   };
   return (
+    <ModalPortal>
     <div className="ops-modal-backdrop" onMouseDown={onClose}>
       <div
         className="ops-modal"
@@ -1576,6 +1584,7 @@ function ClientFormModal({
         </form>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -1630,6 +1639,7 @@ function LegacyClientFormModal({
     setSaving(false);
   };
   return (
+    <ModalPortal>
     <div className="ops-modal-backdrop" onMouseDown={onClose}>
       <div
         className="ops-modal"
@@ -1809,6 +1819,7 @@ function LegacyClientFormModal({
         </form>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

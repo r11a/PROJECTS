@@ -1,0 +1,208 @@
+/* Final modal layer. Imported after every feature stylesheet so legacy page
+   rules cannot clip dialogs or disable touch scrolling. */
+:root {
+  --dialog-edge: clamp(10px, 2vw, 22px);
+  --dialog-width: 1040px;
+}
+
+body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop, .alert-backdrop) {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 5000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: max(var(--dialog-edge), env(safe-area-inset-top))
+    max(var(--dialog-edge), env(safe-area-inset-right))
+    max(var(--dialog-edge), env(safe-area-inset-bottom))
+    max(var(--dialog-edge), env(safe-area-inset-left)) !important;
+  overflow: hidden !important;
+  overscroll-behavior: none;
+  background: #101423a6 !important;
+  backdrop-filter: blur(6px) !important;
+}
+
+body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop, .alert-backdrop)
+  > :is(.modal, .ops-modal, .cg-schedule-dialog, .alert-center) {
+  position: relative !important;
+  inset: auto !important;
+  width: min(var(--dialog-width), calc(100vw - var(--dialog-edge) * 2)) !important;
+  max-width: calc(100vw - var(--dialog-edge) * 2) !important;
+  max-height: calc(100dvh - var(--dialog-edge) * 2) !important;
+  min-height: 0 !important;
+  margin: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border-radius: 18px !important;
+  background: var(--surface, #fff) !important;
+  box-shadow: 0 28px 90px #090c1c70 !important;
+  transform: none;
+}
+
+body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop)
+  :is(.modal-head, .ops-modal-title, .cg-schedule-dialog > header) {
+  position: relative !important;
+  min-height: 68px !important;
+  flex: 0 0 auto !important;
+  padding: 16px 70px 13px 22px !important;
+  direction: rtl !important;
+}
+
+body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop)
+  :is(.modal-head, .ops-modal-title, .cg-schedule-dialog > header)
+  > button {
+  position: absolute !important;
+  top: 14px !important;
+  right: 16px !important;
+  left: auto !important;
+  width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 1px solid var(--line, #e1e4eb) !important;
+  border-radius: 11px !important;
+  background: var(--soft, #f6f7fa) !important;
+  color: #697185 !important;
+  z-index: 20 !important;
+}
+
+/* The shell stays fixed. Only the content region scrolls. */
+body > .modal-backdrop .modal > form,
+body > .ops-modal-backdrop .ops-modal > form,
+body > .ops-modal-backdrop .form-builder-body,
+body > .ops-modal-backdrop .form-fill-body,
+body > .cg-dialog-backdrop .cg-schedule-dialog > div,
+body > .alert-backdrop .alert-list {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+body > :is(.modal-backdrop, .ops-modal-backdrop)
+  :is(.modal-actions, .ops-modal-actions, .form-actions),
+body > .cg-dialog-backdrop .cg-schedule-dialog > footer,
+body > .alert-backdrop .alert-center > footer {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 25 !important;
+  flex: 0 0 auto !important;
+  padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+  background: var(--surface, #fff) !important;
+}
+
+body > .modal-backdrop .modal.compact,
+body > .ops-modal-backdrop .ops-modal.compact {
+  --dialog-width: 560px;
+}
+
+@media (max-width: 680px) {
+  :root { --dialog-edge: 0px; }
+
+  body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop, .alert-backdrop) {
+    padding: 0 !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+    background: #1014238f !important;
+    animation: mobile-backdrop-in 180ms ease-out both;
+  }
+
+  body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop, .alert-backdrop)
+    > :is(.modal, .ops-modal, .cg-schedule-dialog, .alert-center) {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: calc(100dvh - max(10px, env(safe-area-inset-top))) !important;
+    max-height: calc(100dvh - max(10px, env(safe-area-inset-top))) !important;
+    margin: 0 !important;
+    border-radius: 23px 23px 0 0 !important;
+    box-shadow: 0 -18px 55px #090c1c52 !important;
+    animation: mobile-sheet-in 260ms cubic-bezier(.22,.82,.26,1) both;
+  }
+
+  body > :is(.modal-backdrop, .ops-modal-backdrop)
+    > :is(.modal.compact, .ops-modal.compact) {
+    height: auto !important;
+    max-height: min(88dvh, 720px) !important;
+  }
+
+  body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop)
+    :is(.modal-head, .ops-modal-title, .cg-schedule-dialog > header) {
+    min-height: 70px !important;
+    padding: 20px 62px 11px 16px !important;
+    border-radius: 23px 23px 0 0 !important;
+    background: var(--surface, #fff) !important;
+  }
+
+  body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop)
+    :is(.modal-head, .ops-modal-title, .cg-schedule-dialog > header)::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    width: 42px;
+    height: 4px;
+    border-radius: 99px;
+    background: #cfd3dc;
+    transform: translateX(-50%);
+  }
+
+  body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop)
+    :is(.modal-head, .ops-modal-title, .cg-schedule-dialog > header)
+    > button {
+    top: 18px !important;
+    right: 11px !important;
+    left: auto !important;
+  }
+
+  body > .modal-backdrop .modal > form,
+  body > .ops-modal-backdrop .ops-modal > form,
+  body > .ops-modal-backdrop .form-builder-body,
+  body > .ops-modal-backdrop .form-fill-body,
+  body > .cg-dialog-backdrop .cg-schedule-dialog > div,
+  body > .alert-backdrop .alert-list {
+    padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important;
+    scrollbar-width: thin;
+  }
+
+  body > :is(.modal-backdrop, .ops-modal-backdrop)
+    > :is(.modal.compact, .ops-modal.compact)
+    > form {
+    flex: 0 1 auto !important;
+    max-height: calc(88dvh - 70px) !important;
+  }
+
+  body > :is(.modal-backdrop, .ops-modal-backdrop)
+    :is(.modal-actions, .ops-modal-actions, .form-actions) {
+    gap: 9px !important;
+    padding-inline: 14px !important;
+    box-shadow: 0 -8px 22px #20283c0d;
+  }
+
+  body > :is(.modal-backdrop, .ops-modal-backdrop)
+    :is(.modal-actions, .ops-modal-actions, .form-actions) > button {
+    min-height: 46px;
+  }
+}
+
+@keyframes mobile-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mobile-sheet-in {
+  from { opacity: .75; transform: translateY(28px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop, .alert-backdrop),
+  body > :is(.modal-backdrop, .ops-modal-backdrop, .cg-dialog-backdrop, .alert-backdrop)
+    > :is(.modal, .ops-modal, .cg-schedule-dialog, .alert-center) {
+    animation: none !important;
+  }
+}

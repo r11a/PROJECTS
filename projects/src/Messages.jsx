@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, CornerUpLeft, Link2, Mail, MessageSquare, Plus, Send, Trash2, X } from "lucide-react";
+import { ModalPortal } from "./AppModal";
 
 export function MessageCenter({
   api,
@@ -55,6 +56,7 @@ export function MessageCenter({
   const insertMention=(item)=>setForm(current=>({...current,body:`${current.body}${current.body&&!current.body.endsWith(' ')?' ':''}@${item.displayName} `}));
   const remove=async(ids)=>{if(!ids.length||!confirm(`למחוק ${ids.length===1?'את ההודעה':`${ids.length} הודעות`} מהתצוגה שלך?`))return;try{await api('/messages',{method:'DELETE',body:JSON.stringify({ids})});setSelected([]);setNotice('ההודעות שנבחרו נמחקו');load()}catch(error){setNotice(error.message)}};
   return (
+    <ModalPortal>
     <div className="message-backdrop" onMouseDown={onClose}>
       <aside
         className="message-center"
@@ -167,5 +169,6 @@ export function MessageCenter({
         </div>
       </aside>
     </div>
+    </ModalPortal>
   );
 }

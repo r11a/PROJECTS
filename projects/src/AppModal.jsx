@@ -2,21 +2,34 @@ import { useEffect, useId } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
+let openPortalCount = 0;
+let pageOverflowBeforeFirstPortal = "";
+
 export function ModalPortal({ children }) {
+  useEffect(() => {
+    if (openPortalCount === 0) {
+      pageOverflowBeforeFirstPortal = document.body.style.overflow;
+    }
+    openPortalCount += 1;
+    document.body.style.overflow = "hidden";
+    return () => {
+      openPortalCount = Math.max(0, openPortalCount - 1);
+      if (openPortalCount === 0) {
+        document.body.style.overflow = pageOverflowBeforeFirstPortal;
+      }
+    };
+  }, []);
   return createPortal(children, document.body);
 }
 
 export function AppModal({ title, subtitle = "", onClose, children, className = "", closeOnBackdrop = true }) {
   const titleId = useId();
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     const onKeyDown = (event) => {
       if (event.key === "Escape") onClose?.();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [onClose]);

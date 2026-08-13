@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.2
+
+- Moved every legacy dialog, Gantt editor, calendar panel, message center and AI panel into a viewport-level portal so page containers can no longer clip them.
+- Rebuilt mobile dialogs as native-feeling bottom sheets with a slide-up transition, grab handle, fixed header, top-right close control, internally scrolling content and safe-area-aware sticky actions.
+- Added one final modal stylesheet loaded after all feature styles to enforce consistent behavior across desktop, tablet, mobile and Home Assistant Ingress.
+
 ## 0.17.1
 
 - Fixed Home Assistant add-on builds by fully locking the PowerPoint generator and all of its transitive npm dependencies for clean `npm ci` installations.

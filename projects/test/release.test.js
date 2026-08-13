@@ -22,3 +22,26 @@ test('all AI data dependencies exist in ordered migrations', async () => {
     assert.ok(schema.includes(token),`missing AI schema dependency: ${token}`);
   }
 });
+
+test('every legacy overlay is portaled above page containers', async () => {
+  const files = await Promise.all([
+    'App.jsx', 'Operational.jsx', 'FormsWorkspace.jsx', 'GanttTimeline.jsx',
+    'Messages.jsx', 'AiChat.jsx',
+  ].map((name) => readFile(new URL(`../src/${name}`, import.meta.url), 'utf8')));
+  const source = files.join('\n');
+  for (const token of [
+    'ops-modal-backdrop', 'modal-backdrop', 'cg-dialog-backdrop',
+    'message-backdrop', 'ai-chat-backdrop',
+  ]) {
+    assert.ok(source.includes(token), `missing overlay coverage: ${token}`);
+  }
+  for (const file of files) {
+    if (/className=.*(?:modal-backdrop|dialog-backdrop|message-backdrop|ai-chat-backdrop)/s.test(file)) {
+      assert.match(file, /ModalPortal/, 'overlay file must use ModalPortal');
+    }
+  }
+  const modalCss = await readFile(new URL('../src/modal-system.css', import.meta.url), 'utf8');
+  assert.match(modalCss, /body > :is\(\.modal-backdrop/);
+  assert.match(modalCss, /overflow-y: auto !important/);
+  assert.match(modalCss, /-webkit-overflow-scrolling: touch/);
+});

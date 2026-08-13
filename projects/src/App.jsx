@@ -83,6 +83,7 @@ import {
 import { FormsWorkspace } from "./FormsWorkspace";
 import { MasterDataWorkspace } from "./MasterDataWorkspace";
 import { AddressAutocomplete } from "./AddressAutocomplete";
+import { ModalPortal } from "./AppModal";
 import packageJson from "../package.json";
 import {
   FinanceWorkspace,
@@ -113,6 +114,7 @@ import "./contacts.css";
 import "./messages.css";
 import "./ai-chat.css";
 import "./commercial-gantt.css";
+import "./modal-system.css";
 import projectsMark from "./assets/projects-mark.svg";
 
 const money = new Intl.NumberFormat("he-IL", {
@@ -2194,6 +2196,7 @@ function ProjectsPage({
         <BoardView projects={visibleProjects} openProject={openProject} />
       )}
       {deleteTarget && (
+        <ModalPortal>
         <div className="ops-modal-backdrop" onMouseDown={() => !deleting && setDeleteTarget(null)}>
           <div className="ops-modal compact permanent-delete-modal" onMouseDown={(event) => event.stopPropagation()}>
             <div className="ops-modal-title">
@@ -2210,6 +2213,7 @@ function ProjectsPage({
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );
@@ -3152,6 +3156,7 @@ function NewProjectModal({
   );
   if (step === 1)
     return (
+      <ModalPortal>
       <div className="modal-backdrop" onMouseDown={onClose}>
         <div
           className="modal project-wizard"
@@ -3322,8 +3327,10 @@ function NewProjectModal({
           </form>
         </div>
       </div>
+      </ModalPortal>
     );
   return (
+    <ModalPortal>
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div
         className="modal project-wizard"
@@ -3617,6 +3624,7 @@ function NewProjectModal({
         </form>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

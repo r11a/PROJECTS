@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Camera, Check, CheckCircle2, ClipboardCheck, Download, FileText, FormInput, Pencil, Plus, Save, Search, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
+import { ModalPortal } from './AppModal';
 
 const statusMeta = {
   draft: { label: 'טיוטה', tone: 'draft' },
@@ -60,8 +61,8 @@ export function FormsWorkspace({ api, apiRoot, user, setNotice }) {
     <div className="forms-summary"><Summary icon={ClipboardCheck} label="תבניות פעילות" value={activeTemplates.length} /><Summary icon={FileText} label="טפסים שנשמרו" value={data.records.length} /><Summary icon={CheckCircle2} label="הושלמו ואושרו" value={data.records.filter((record) => record.status !== 'draft').length} /></div>
     <div className="forms-command panel"><nav><button className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>תבניות</button><button className={tab === 'records' ? 'active' : ''} onClick={() => setTab('records')}>טפסים שמולאו</button><button className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>קבצים ותמונות</button></nav><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש בטפסים, לקוחות ופרויקטים..." /></label>{tab === 'records' && <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">כל הסטטוסים</option><option value="draft">טיוטה</option><option value="completed">הושלם</option><option value="approved">אושר</option></select>}</div>
     {loading ? <div className="forms-loading panel">טוען נתונים...</div> : tab === 'templates' ? <TemplateGrid templates={visibleTemplates} canManage={canManage} canFill={canFill} onEdit={setTemplateEditor} onFill={(template) => setRecordEditor({ template })} onDelete={removeTemplate} api={api} reload={load} setNotice={setNotice} /> : tab === 'records' ? <RecordList records={data.records} onOpen={(record) => setRecordEditor({ record, template: data.templates.find((item) => item.id === record.templateId) })} /> : <FilesHub files={data.files} clients={data.clients} projects={data.projects} apiRoot={apiRoot} canUpload={canFill} uploading={uploading} onUpload={uploadFile} />}
-    {templateEditor && <TemplateEditor initial={templateEditor.id ? templateEditor : null} api={api} onClose={() => setTemplateEditor(null)} onSaved={() => { setTemplateEditor(null); load(); }} setNotice={setNotice} user={user} onDelete={removeTemplate} />}
-    {recordEditor && <RecordEditor initial={recordEditor.record || null} initialTemplate={recordEditor.template} templates={activeTemplates} clients={data.clients} projects={data.projects} api={api} user={user} onClose={() => setRecordEditor(null)} onSaved={() => { setRecordEditor(null); load(); }} onDelete={removeRecord} setNotice={setNotice} />}
+    {templateEditor && <ModalPortal><TemplateEditor initial={templateEditor.id ? templateEditor : null} api={api} onClose={() => setTemplateEditor(null)} onSaved={() => { setTemplateEditor(null); load(); }} setNotice={setNotice} user={user} onDelete={removeTemplate} /></ModalPortal>}
+    {recordEditor && <ModalPortal><RecordEditor initial={recordEditor.record || null} initialTemplate={recordEditor.template} templates={activeTemplates} clients={data.clients} projects={data.projects} api={api} user={user} onClose={() => setRecordEditor(null)} onSaved={() => { setRecordEditor(null); load(); }} onDelete={removeRecord} setNotice={setNotice} /></ModalPortal>}
   </div>;
 }
 

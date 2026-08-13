@@ -1,5 +1,6 @@
 import { Component, useEffect, useRef, useState } from "react";
 import { CircleHelp, Eraser, Send, Sparkles, X } from "lucide-react";
+import { ModalPortal } from "./AppModal";
 
 const helpGroups = [
   { title:"פרויקטים", examples:["אילו פרויקטים דורשים תשומת לב?","תן לי תמונת מצב של הפרויקטים הפעילים","אילו פרויקטים נמצאים בשלב התקנות?"] },
@@ -78,6 +79,7 @@ export function AiChat({ apiRoot, onClose }) {
   const useExample = (example) => { setQuestion(example); setHelpOpen(false); };
 
   return (
+    <ModalPortal>
     <div className="ai-chat-backdrop" onMouseDown={onClose}>
       <aside className="ai-chat" onMouseDown={(event)=>event.stopPropagation()} dir="rtl">
         <header>
@@ -106,6 +108,7 @@ export function AiChat({ apiRoot, onClose }) {
         <footer>הסוכן עשוי לטעות. בהחלטות חשובות יש לאמת את הנתונים במסך המקור.</footer>
       </aside>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -115,6 +118,6 @@ export class AiChatBoundary extends Component {
   componentDidCatch(error) { console.error("PROJECTS AI chat UI failed",error); }
   render() {
     if (!this.state.failed) return this.props.children;
-    return <div className="ai-chat-backdrop"><aside className="ai-chat-fallback" dir="rtl"><Sparkles size={28}/><h3>לא ניתן להציג כרגע את חלון הסוכן</h3><p>הממשק הראשי ממשיך לפעול. סגרו את החלון ונסו לפתוח אותו מחדש.</p><button type="button" onClick={this.props.onClose}>סגירה</button></aside></div>;
+    return <ModalPortal><div className="ai-chat-backdrop"><aside className="ai-chat-fallback" dir="rtl"><Sparkles size={28}/><h3>לא ניתן להציג כרגע את חלון הסוכן</h3><p>הממשק הראשי ממשיך לפעול. סגרו את החלון ונסו לפתוח אותו מחדש.</p><button type="button" onClick={this.props.onClose}>סגירה</button></aside></div></ModalPortal>;
   }
 }
