@@ -847,6 +847,7 @@ function App() {
               setStageFilter={setStageFilter}
               openProject={openProject}
               api={api}
+              user={user}
               setNotice={setNotice}
             />
           )}
@@ -1787,6 +1788,7 @@ function ProjectsPage({
   setStageFilter,
   openProject,
   api,
+  user,
   setNotice,
 }) {
   const [view, setView] = useState("table");
@@ -1794,6 +1796,9 @@ function ProjectsPage({
   const [showArchived, setShowArchived] = useState(false);
   const [archivedProjects, setArchivedProjects] = useState([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteForm, setDeleteForm] = useState({ confirmation: "", password: "" });
+  const [deleting, setDeleting] = useState(false);
   const [manager, setManager] = useState("");
   const [priority, setPriority] = useState("");
   const [flagged, setFlagged] = useState(false);
@@ -1809,6 +1814,29 @@ function ProjectsPage({
       setNotice(error.message);
     } finally {
       setArchiveLoading(false);
+    }
+  };
+  const beginPermanentDelete = (project) => {
+    if (!window.confirm(`זהו אישור ראשון למחיקה לצמיתות של "${project.name}". להמשיך?`)) return;
+    setDeleteForm({ confirmation: "", password: "" });
+    setDeleteTarget(project);
+  };
+  const permanentDelete = async (event) => {
+    event.preventDefault();
+    if (!deleteTarget || deleteForm.confirmation.trim().toUpperCase() !== deleteTarget.serialCode.toUpperCase()) return;
+    setDeleting(true);
+    try {
+      await api(`/projects/${encodeURIComponent(deleteTarget.id)}/permanent`, {
+        method: "DELETE",
+        body: JSON.stringify(deleteForm),
+      });
+      setArchivedProjects((items) => items.filter((item) => item.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      setNotice("הפרויקט וכל הנתונים המשויכים אליו נמחקו לצמיתות");
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setDeleting(false);
     }
   };
   const sourceProjects = showArchived
@@ -2002,7 +2030,7 @@ function ProjectsPage({
                       <div>
                         <strong>{project.name}</strong>
                         <span>
-                          {project.id} · {project.location}
+                          {project.id} · {project.serialCode} · {project.location}
                         </span>
                         {showArchived && (
                           <small className="archived-date">
@@ -2053,16 +2081,10 @@ function ProjectsPage({
                     </strong>
                   </td>
                   <td>
-                    <button
-                      className="round-more"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openProject(project);
-                      }}
-                      title="פתיחת פרויקט"
-                    >
-                      <MoreHorizontal size={18} />
-                    </button>
+                    <div className="archive-row-actions">
+                      {showArchived && user.role === "admin" && <button className="archive-delete" onClick={(event) => { event.stopPropagation(); beginPermanentDelete(project); }} title="מחיקה לצמיתות"><Trash2 size={17} /></button>}
+                      <button className="round-more" onClick={(e) => { e.stopPropagation(); openProject(project); }} title="פתיחת פרויקט"><MoreHorizontal size={18} /></button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -2078,6 +2100,24 @@ function ProjectsPage({
         </div>
       ) : (
         <BoardView projects={visibleProjects} openProject={openProject} />
+      )}
+      {deleteTarget && (
+        <div className="ops-modal-backdrop" onMouseDown={() => !deleting && setDeleteTarget(null)}>
+          <div className="ops-modal compact permanent-delete-modal" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="ops-modal-title">
+              <div><span>אישור שני · Administrator בלבד</span><h2>מחיקה לצמיתות</h2><p>לא ניתן לשחזר פעולה זו מגיבוי שטרם נוצר.</p></div>
+              <button onClick={() => setDeleteTarget(null)} disabled={deleting}><X size={18} /></button>
+            </div>
+            <form onSubmit={permanentDelete}>
+              <div className="permanent-delete-warning"><AlertTriangle size={22} /><div><strong>{deleteTarget.name}</strong><p>הפרויקט, המשימות, התשלומים, המסמכים, הטפסים והיסטוריית לוח השנה שלו יימחקו.</p></div></div>
+              <div className="ops-form-grid">
+                <label className="wide">הקלידו את המספר הסידורי: <b>{deleteTarget.serialCode}</b><input className="permanent-delete-code" autoFocus required value={deleteForm.confirmation} onChange={(event) => setDeleteForm({ ...deleteForm, confirmation: event.target.value })} placeholder={deleteTarget.serialCode} /></label>
+                <label className="wide">סיסמת Administrator של PROJECTS<input type="password" required autoComplete="current-password" value={deleteForm.password} onChange={(event) => setDeleteForm({ ...deleteForm, password: event.target.value })} /></label>
+              </div>
+              <div className="ops-modal-actions"><button type="button" className="ops-secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>ביטול</button><button className="danger permanent-delete-confirm" disabled={deleting || deleteForm.confirmation.trim().toUpperCase() !== deleteTarget.serialCode.toUpperCase() || !deleteForm.password}>{deleting ? "מוחק..." : "מחיקה סופית"}</button></div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

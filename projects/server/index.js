@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pg from 'pg';
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { seedProjects } from '../src/data.js';
 import { createOperationalRouter } from './operational.js';
@@ -13,6 +13,7 @@ import { createManagementRouter } from './management.js';
 import { createOperationsRouter } from './operations.js';
 import { createGeocoder } from './geocoder.js';
 import { createBackupRouter } from './backup.js';
+import { createAiRouter } from './ai.js';
 
 const { Pool, Client } = pg;
 const DATA_DIR = process.env.PROJECTS_DATA_DIR || '/data';
@@ -111,7 +112,7 @@ function withoutArabic(value = '') {
 
 function projectFromRow(row) {
   return {
-    id: row.id, name: row.name, client: row.client, location: row.location, address: withoutArabic(row.address),
+    id: row.id, serialCode:row.serial_code, name: row.name, client: row.client, location: row.location, address: withoutArabic(row.address),
     lat: Number(row.lat), lng: Number(row.lng), stage: row.stage, progress: Number(row.progress),
     manager: row.manager, ownerInitials: row.owner_initials, value: Number(row.value), paid: Number(row.paid),
     due: row.due, priority: row.priority, flag: row.flag, systems: row.systems || [],
@@ -475,6 +476,43 @@ app.patch('/api/projects/:id/archive', authenticate, requireRoles('admin', 'mana
   response.json({ project: projectFromRow(result.rows[0]) });
 });
 
+app.delete('/api/projects/:id/permanent', authenticate, requireRoles('admin'), async (request, response) => {
+  const password = String(request.body.password || '');
+  const confirmation = String(request.body.confirmation || '').trim();
+  const account = await pool.query(`SELECT password_hash FROM users WHERE active=TRUE AND password_hash IS NOT NULL
+    AND (id=$1 OR (role='admin' AND username IS NOT NULL)) ORDER BY CASE WHEN id=$1 THEN 0 ELSE 1 END LIMIT 1`, [request.user.id]);
+  if (!account.rowCount || !(await bcrypt.compare(password, account.rows[0].password_hash))) {
+    return response.status(401).json({ error: 'סיסמת מנהל המערכת אינה נכונה' });
+  }
+  const db = await pool.connect();
+  let project;
+  let storedFiles = [];
+  try {
+    await db.query('BEGIN');
+    const projectResult = await db.query('SELECT id,serial_code,name,client_id,archived_at FROM projects WHERE id=$1 FOR UPDATE', [request.params.id]);
+    project = projectResult.rows[0];
+    if (!project) { await db.query('ROLLBACK'); return response.status(404).json({ error:'הפרויקט לא נמצא' }); }
+    if (!project.archived_at) { await db.query('ROLLBACK'); return response.status(409).json({ error:'ניתן למחוק לצמיתות רק פרויקט שנמצא בארכיון' }); }
+    if (confirmation.toUpperCase() !== project.serial_code.toUpperCase()) { await db.query('ROLLBACK'); return response.status(400).json({ error:'המספר הסידורי שהוקלד אינו תואם' }); }
+    const files = await db.query('SELECT stored_name FROM client_files WHERE project_id=$1 OR form_record_id IN (SELECT id FROM form_records WHERE project_id=$1)', [project.id]);
+    storedFiles = files.rows.map((item)=>item.stored_name).filter((name)=>path.basename(name) === name);
+    await db.query('DELETE FROM client_files WHERE project_id=$1 OR form_record_id IN (SELECT id FROM form_records WHERE project_id=$1)', [project.id]);
+    await db.query('DELETE FROM site_inspections WHERE project_id=$1', [project.id]);
+    await db.query('DELETE FROM form_records WHERE project_id=$1', [project.id]);
+    await db.query('DELETE FROM projects WHERE id=$1', [project.id]);
+    await db.query('DELETE FROM calendar_history WHERE project_id=$1', [project.id]);
+    await db.query('COMMIT');
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  } finally {
+    db.release();
+  }
+  await Promise.all(storedFiles.map((name)=>unlink(path.join(DATA_DIR,'uploads','clients',name)).catch(()=>{})));
+  await audit(request,'delete','project',project.id,{ name:project.name, serialCode:project.serial_code, permanent:true, archivedAt:project.archived_at });
+  response.status(204).end();
+});
+
 app.get('/api/users', authenticate, requireRoles('admin'), async (_request, response) => {
   const result = await pool.query('SELECT * FROM users ORDER BY created_at');
   response.json({ users: result.rows.map(publicUser) });
@@ -524,6 +562,7 @@ app.delete('/api/users/:id', authenticate, requireRoles('admin'), async (request
 });
 
 app.use('/api', await createBackupRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR, appVersion:APP_VERSION }));
+app.use('/api', await createAiRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR }));
 app.use('/api', await createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR, geocoder }));
 app.use('/api', createFormsRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));

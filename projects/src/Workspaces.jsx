@@ -18,6 +18,8 @@ import {
   X,
 } from "lucide-react";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -73,6 +75,9 @@ const stageNames = {
   handover: "לקראת מסירה",
   completed: "הושלם",
 };
+const contractorStageNames = { waiting:"בהמתנה",infrastructure:"סלילת תשתיות",drywall_paint:"עבודות גבס וצבע",carpentry:"הרכבות נגרות",finishing:"עבודות גמר",stopped:"בעצירה" };
+const projectSizeNames = { small:"קטן",medium:"בינוני",large:"גדול" };
+const deadlineNames = { overdue:"באיחור",today:"היום",week:"7 ימים",later:"בהמשך",none:"ללא תאריך" };
 let currentTaskOptions = [];
 
 function EmptyState({ icon: Icon, title, text, action, onAction }) {
@@ -952,7 +957,7 @@ export function ReportsWorkspace({ api, setNotice }) {
   const [saveToProject, setSaveToProject] = useState(false);
   const [generating, setGenerating] = useState(false);
   const reportRef = useRef(null);
-  const loadReports = () => {
+  const loadReports = (silent = false) => {
     setReportError("");
     return Promise.all([api("/reports/overview"), api("/projects")])
       .then(([overview, projectData]) => {
@@ -961,11 +966,21 @@ export function ReportsWorkspace({ api, setNotice }) {
       })
       .catch((error) => {
         setReportError(error.message);
-        setNotice(error.message);
+        if (!silent) setNotice(error.message);
       });
   };
   useEffect(() => {
     loadReports();
+  }, []);
+  useEffect(() => {
+    let timer;
+    const live = (event) => {
+      if (!["projects","tasks","project_payments","project_equipment","equipment_catalog","client_files","professionals"].includes(event.detail?.table)) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => loadReports(true), 180);
+    };
+    window.addEventListener("projects:live-change", live);
+    return () => { clearTimeout(timer); window.removeEventListener("projects:live-change", live); };
   }, []);
   const prepareProjectReport = async (nextProjectId) => {
     setProjectId(nextProjectId);
@@ -1068,6 +1083,14 @@ export function ReportsWorkspace({ api, setNotice }) {
     ...item,
     label: stageNames[item.stage] || "שלב לא מוגדר",
   }));
+  const palette = ["#6957df", "#2987e6", "#12a594", "#e29b38", "#d95984", "#587fd8", "#8d63d9"];
+  const sizeData = (data.projectSizes || []).map((item) => ({ ...item, label:projectSizeNames[item.size] || item.size }));
+  const deadlineData = ["overdue","today","week","later","none"].map((key) => ({ key, label:deadlineNames[key], count:Number(data.deadlines?.find((item)=>item.bucket===key)?.count || 0) }));
+  const contractorData = (data.contractorStages || []).map((item) => ({ ...item, label:contractorStageNames[item.stage] || item.stage }));
+  const componentData = (data.components || []).map((item) => ({ ...item, quantity:Number(item.quantity), projects:Number(item.projects) }));
+  const monthlyMap = new Map();
+  (data.monthly || []).forEach((item) => { const row=monthlyMap.get(item.month)||{month:item.month,paid:0,pending:0}; row[item.status === "paid" ? "paid" : "pending"] += Number(item.amount); monthlyMap.set(item.month,row); });
+  const monthlyData = [...monthlyMap.values()].slice(-12).map((item)=>({ ...item, label:new Date(`${item.month}-01T12:00:00`).toLocaleDateString("he-IL",{month:"short",year:"2-digit"}) }));
   return (
     <div className="ops-page reports-page">
       <section className="ops-hero compact-work-hero">
@@ -1110,6 +1133,7 @@ export function ReportsWorkspace({ api, setNotice }) {
           </b>
         </span>
       </div>
+      <section className="report-category-head"><div><span>01</span><h3>מצב הפרויקטים</h3></div><p>שלבי ביצוע, גודל הפרויקטים והתקדמות הקבלן.</p></section>
       <div className="reports-grid">
         <div className="panel report-panel">
           <h3>פרויקטים לפי שלב</h3>
@@ -1122,6 +1146,9 @@ export function ReportsWorkspace({ api, setNotice }) {
                 innerRadius={62}
                 outerRadius={95}
                 paddingAngle={4}
+                isAnimationActive
+                animationDuration={950}
+                animationEasing="ease-out"
               >
                 {localizedStageData.map((_, i) => (
                   <Cell key={i} fill={stageColors[i % stageColors.length]} />
@@ -1161,11 +1188,27 @@ export function ReportsWorkspace({ api, setNotice }) {
                 labelFormatter={(label) => `מנהל: ${label}`}
                 contentStyle={{ direction: "rtl", textAlign: "right" }}
               />
-              <Bar dataKey="progress" fill="#6957df" radius={[5, 5, 5, 5]} />
+              <Bar dataKey="progress" fill="#6957df" radius={[7, 7, 7, 7]} isAnimationActive animationDuration={950} animationEasing="ease-out" />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
+      <div className="reports-grid three-up">
+        <div className="panel report-panel report-compact"><h3>חלוקה לפי גודל פרויקט</h3>{sizeData.length ? <><ResponsiveContainer width="100%" height={210}><PieChart><Pie data={sizeData} dataKey="count" nameKey="label" innerRadius={50} outerRadius={78} paddingAngle={4} isAnimationActive animationDuration={1000} animationEasing="ease-out">{sizeData.map((_,index)=><Cell key={index} fill={palette[index%palette.length]}/>)}</Pie><Tooltip formatter={(value)=>[value,"פרויקטים"]} contentStyle={{direction:"rtl"}}/></PieChart></ResponsiveContainer><div className="report-legend">{sizeData.map((item,index)=><span key={item.size}><i style={{background:palette[index%palette.length]}}/>{item.label}<b>{item.count}</b></span>)}</div></> : <div className="chart-empty">אין נתוני גודל</div>}</div>
+        <div className="panel report-panel report-wide"><h3>התקדמות הקבלן</h3>{contractorData.length ? <ResponsiveContainer width="100%" height={250}><BarChart data={contractorData} margin={{top:10,right:8,left:8,bottom:20}}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="label" tick={{fontSize:11}} interval={0} angle={-12}/><YAxis allowDecimals={false}/><Tooltip formatter={(value)=>[value,"פרויקטים"]} contentStyle={{direction:"rtl"}}/><Bar dataKey="count" radius={[8,8,2,2]} isAnimationActive animationBegin={120} animationDuration={900} animationEasing="ease-out">{contractorData.map((_,index)=><Cell key={index} fill={palette[(index+2)%palette.length]}/>)}</Bar></BarChart></ResponsiveContainer> : <div className="chart-empty">אין נתוני קבלן</div>}</div>
+      </div>
+      <section className="report-category-head"><div><span>02</span><h3>מערכות וטכנולוגיות</h3></div><p>אילו מערכות ורכיבים נמצאים בפרויקטים ובאיזו כמות.</p></section>
+      <div className="reports-grid systems-reports">
+        <div className="panel report-panel"><h3>מערכות מובילות לפי פרויקטים</h3>{data.systems?.length ? <ResponsiveContainer width="100%" height={310}><BarChart data={data.systems} layout="vertical" margin={{right:10,left:12}}><CartesianGrid strokeDasharray="3 3" horizontal={false}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" orientation="right" width={125} tick={{fontSize:11}}/><Tooltip formatter={(value)=>[value,"פרויקטים"]} contentStyle={{direction:"rtl"}}/><Bar dataKey="projects" fill="#6957df" radius={[7,7,7,7]} isAnimationActive animationBegin={120} animationDuration={1000} animationEasing="ease-out"/></BarChart></ResponsiveContainer> : <div className="chart-empty">עדיין לא שויכו מערכות לפרויקטים</div>}</div>
+        <div className="panel report-panel"><h3>כמויות רכיבים מובילים</h3>{componentData.length ? <ResponsiveContainer width="100%" height={310}><BarChart data={componentData} margin={{top:8,right:8,left:8,bottom:55}}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" interval={0} angle={-35} textAnchor="end" tick={{fontSize:10}}/><YAxis allowDecimals={false}/><Tooltip formatter={(value,name)=>[value,name==="quantity"?"כמות":"פרויקטים"]} contentStyle={{direction:"rtl"}}/><Bar dataKey="quantity" fill="#12a594" radius={[7,7,2,2]} isAnimationActive animationBegin={180} animationDuration={1000} animationEasing="ease-out"/></BarChart></ResponsiveContainer> : <div className="chart-empty">עדיין לא הוגדרו כמויות רכיבים</div>}</div>
+      </div>
+      <section className="report-category-head"><div><span>03</span><h3>ביצוע ועומסים</h3></div><p>משימות קרובות, חריגות ועומס מנהלי הפרויקטים.</p></section>
+      <div className="reports-grid execution-reports">
+        <div className="panel report-panel"><h3>בריאות מועדי המשימות</h3><ResponsiveContainer width="100%" height={260}><BarChart data={deadlineData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="label" tick={{fontSize:11}}/><YAxis allowDecimals={false}/><Tooltip formatter={(value)=>[value,"משימות"]} contentStyle={{direction:"rtl"}}/><Bar dataKey="count" radius={[7,7,2,2]} isAnimationActive animationBegin={150} animationDuration={900} animationEasing="ease-out">{deadlineData.map((item,index)=><Cell key={item.key} fill={item.key==="overdue"?"#d95968":item.key==="today"?"#e29b38":palette[index%palette.length]}/>)}</Bar></BarChart></ResponsiveContainer></div>
+        <div className="panel report-panel"><h3>מסמכים לפי סוג</h3>{data.documents?.length ? <><ResponsiveContainer width="100%" height={220}><PieChart><Pie data={data.documents} dataKey="count" nameKey="category" innerRadius={48} outerRadius={76} paddingAngle={3} isAnimationActive animationBegin={120} animationDuration={1000} animationEasing="ease-out">{data.documents.map((_,index)=><Cell key={index} fill={palette[index%palette.length]}/>)}</Pie><Tooltip formatter={(value)=>[value,"מסמכים"]} contentStyle={{direction:"rtl"}}/></PieChart></ResponsiveContainer><div className="report-legend compact">{data.documents.map((item,index)=><span key={item.category}><i style={{background:palette[index%palette.length]}}/>{item.category}<b>{item.count}</b></span>)}</div></> : <div className="chart-empty">אין מסמכים לסיכום</div>}</div>
+      </div>
+      <section className="report-category-head"><div><span>04</span><h3>כספים וגבייה</h3></div><p>מגמת תשלומים שהתקבלו מול תשלומים שטרם נגבו.</p></section>
+      <div className="panel report-panel report-finance-trend"><h3>מגמת גבייה חודשית</h3>{monthlyData.length ? <ResponsiveContainer width="100%" height={300}><AreaChart data={monthlyData} margin={{top:10,right:12,left:12,bottom:5}}><defs><linearGradient id="paidGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#12a594" stopOpacity={0.45}/><stop offset="95%" stopColor="#12a594" stopOpacity={0.03}/></linearGradient><linearGradient id="pendingGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#e29b38" stopOpacity={0.35}/><stop offset="95%" stopColor="#e29b38" stopOpacity={0.02}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="label"/><YAxis tickFormatter={(value)=>`${Math.round(value/1000)}K`}/><Tooltip formatter={(value,name)=>[money.format(value),name==="paid"?"נגבה":"ממתין"]} contentStyle={{direction:"rtl"}}/><Area type="monotone" dataKey="paid" stroke="#12a594" strokeWidth={3} fill="url(#paidGradient)" isAnimationActive animationDuration={1100} animationEasing="ease-out"/><Area type="monotone" dataKey="pending" stroke="#e29b38" strokeWidth={2} fill="url(#pendingGradient)" isAnimationActive animationBegin={140} animationDuration={1100} animationEasing="ease-out"/></AreaChart></ResponsiveContainer> : <div className="chart-empty">אין תשלומים עם תאריך להצגת מגמה</div>}</div>
       <div className="panel report-table">
         <h3>ביצועים לפי מנהל פרויקט</h3>
         <table>

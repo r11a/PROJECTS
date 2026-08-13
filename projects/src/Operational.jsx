@@ -19,12 +19,14 @@ import {
   FileText,
   Copy,
   Eye,
+  ExternalLink,
   Filter,
   Flag,
   FolderOpen,
   HardHat,
   History,
   LayoutGrid,
+  KeyRound,
   Link2,
   List,
   Mail,
@@ -78,6 +80,7 @@ const actionNames = {
   restore_requested: "בקשת שחזור",
   snooze: "דחיית התראה",
   dismiss: "ביטול התראה",
+  test: "בדיקת חיבור",
 };
 const categoryNames = {
   stage: "שלבים",
@@ -2918,6 +2921,7 @@ export function OperationalSettings({
     ["fields", "שדות מותאמים", Settings2],
     ["audit", "Audit Log", History],
     ["backup", "גיבוי ובריאות", Database],
+    ["ai", "סוכן AI", Sparkles],
   ];
   const tabs = [
     ["appearance", "מראה", Palette],
@@ -3015,6 +3019,154 @@ export function OperationalSettings({
           setNotice={setNotice}
         />
       )}
+      {tab === "ai" && <AiSettings api={api} setNotice={setNotice} />}
+    </div>
+  );
+}
+
+function AiSettings({ api, setNotice }) {
+  const [settings, setSettings] = useState(null);
+  const [selectedProvider, setSelectedProvider] = useState("gemini");
+  const [apiKeys, setApiKeys] = useState({ gemini: "", openai: "" });
+  const [busy, setBusy] = useState("");
+  const load = async () => {
+    try {
+      const result = await api("/ai/settings");
+      setSettings(result);
+      setSelectedProvider(result.activeProvider || "gemini");
+    } catch (error) {
+      setNotice(error.message);
+    }
+  };
+  useEffect(() => {
+    load();
+  }, []);
+  if (!settings)
+    return (
+      <section className="panel ai-loading">
+        <RefreshCw className="spin" size={18} /> טוען הגדרות AI...
+      </section>
+    );
+  const provider = settings.providers[selectedProvider];
+  const updateProvider = (changes) =>
+    setSettings({
+      ...settings,
+      providers: {
+        ...settings.providers,
+        [selectedProvider]: { ...provider, ...changes },
+      },
+    });
+  const persist = async (extra = {}) => {
+    const result = await api("/ai/settings", {
+      method: "PATCH",
+      body: JSON.stringify({
+        provider: selectedProvider,
+        activeProvider: settings.activeProvider,
+        model: provider.model,
+        enabled: provider.enabled,
+        apiKey: apiKeys[selectedProvider],
+        monthlyBudgetUsd: settings.monthlyBudgetUsd,
+        readOnly: settings.readOnly,
+        ...extra,
+      }),
+    });
+    setSettings(result);
+    setApiKeys({ ...apiKeys, [selectedProvider]: "" });
+    return result;
+  };
+  const save = async () => {
+    setBusy("save");
+    try {
+      await persist();
+      setNotice(`הגדרות ${provider.name} נשמרו בהצלחה`);
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setBusy("");
+    }
+  };
+  const test = async () => {
+    setBusy("test");
+    try {
+      if (apiKeys[selectedProvider]) await persist();
+      const result = await api(`/ai/providers/${selectedProvider}/test`, {
+        method: "POST",
+        body: "{}",
+      });
+      setNotice(result.message);
+      await load();
+    } catch (error) {
+      setNotice(error.message);
+      await load();
+    } finally {
+      setBusy("");
+    }
+  };
+  const clearKey = async () => {
+    if (!window.confirm(`למחוק את מפתח ${provider.name} השמור?`)) return;
+    setBusy("clear");
+    try {
+      await persist({ enabled: false, clearApiKey: true });
+      setNotice("המפתח נמחק בצורה מאובטחת");
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setBusy("");
+    }
+  };
+  return (
+    <div className="ai-settings-layout">
+      <section className="panel ai-provider-panel">
+        <header className="ai-heading">
+          <span><Sparkles size={23} /></span>
+          <div>
+            <h3>מנוע ה-AI של PROJECTS</h3>
+            <p>בחרו ספק, מודל ומגבלת עלות. ניתן לעבור ספק בכל עת בלי לשנות את המערכת.</p>
+          </div>
+          <span className={`ai-status ${provider.configured && provider.lastTestStatus === "success" ? "ready" : ""}`}>
+            <i />
+            {provider.configured ? provider.lastTestStatus === "success" ? "חיבור תקין" : "מפתח נשמר" : "טרם הוגדר"}
+          </span>
+        </header>
+        <div className="ai-provider-switch">
+          {Object.values(settings.providers).map((item) => (
+            <button key={item.provider} className={selectedProvider === item.provider ? "active" : ""} onClick={() => setSelectedProvider(item.provider)}>
+              <strong>{item.name}</strong><small>{item.configured ? "מוגדר" : "לא מוגדר"}</small>
+            </button>
+          ))}
+        </div>
+        <div className="ai-key-card">
+          <div className="ai-key-title"><KeyRound size={19} /><div><strong>מפתח API</strong><small>המפתח מוצפן בצד השרת ולעולם אינו מוצג מחדש.</small></div></div>
+          <input type="password" autoComplete="new-password" value={apiKeys[selectedProvider]} onChange={(event) => setApiKeys({ ...apiKeys, [selectedProvider]: event.target.value })} placeholder={provider.configured ? "מפתח שמור — הזינו רק כדי להחליף" : "הדביקו כאן את המפתח"} />
+          <div className="ai-key-actions">
+            <a className="ops-secondary" href={provider.keyUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} /> יצירת מפתח אצל {provider.name}</a>
+            <a href={provider.docsUrl} target="_blank" rel="noreferrer">הוראות רשמיות</a>
+            {provider.configured && <button className="ai-clear-key" onClick={clearKey} disabled={Boolean(busy)}>מחיקת מפתח</button>}
+          </div>
+        </div>
+        <div className="ai-model-heading"><div><h3>בחירת מודל</h3><p>הרשימה כוללת מודלים יציבים ורלוונטיים לסוכן PROJECTS בלבד.</p></div><span>{provider.models.length} אפשרויות</span></div>
+        <div className="ai-model-grid">
+          {provider.models.map((model) => (
+            <button key={model.id} className={provider.model === model.id ? "active" : ""} onClick={() => updateProvider({ model: model.id })}>
+              <span className="ai-model-radio"><i /></span>
+              <div><strong>{model.name}</strong><code>{model.id}</code><p>{model.description}</p><footer><b>{model.recommendation}</b><span>{model.cost}</span></footer></div>
+            </button>
+          ))}
+        </div>
+      </section>
+      <aside className="panel ai-control-panel">
+        <header><ShieldCheck size={22} /><div><h3>שליטה ובטיחות</h3><p>ברירות מחדל שמונעות הפתעות בעלות ובפעולות.</p></div></header>
+        <label className="ai-field">ספק פעיל<select value={settings.activeProvider} onChange={(event) => setSettings({ ...settings, activeProvider: event.target.value })}>{Object.values(settings.providers).map((item) => <option key={item.provider} value={item.provider}>{item.name}</option>)}</select></label>
+        <label className="ai-field">תקרת תקציב חודשית (USD)<input type="number" min="0" max="100000" value={settings.monthlyBudgetUsd} onChange={(event) => setSettings({ ...settings, monthlyBudgetUsd: Number(event.target.value) })} /><small>תקרת תוכנה; אכיפה בפועל תתווסף עם הפעלת הסוכן.</small></label>
+        <label className="setting-toggle ai-toggle"><span><b>הפעלת {provider.name}</b><small>מאפשרת להשתמש בספק לאחר בדיקת החיבור.</small></span><input type="checkbox" checked={provider.enabled} onChange={(event) => updateProvider({ enabled: event.target.checked })} /><i /></label>
+        <label className="setting-toggle ai-toggle"><span><b>מצב קריאה בלבד</b><small>הסוכן יענה וינתח, אך לא ישנה נתונים.</small></span><input type="checkbox" checked={settings.readOnly !== false} onChange={(event) => setSettings({ ...settings, readOnly: event.target.checked })} /><i /></label>
+        {provider.lastTestedAt && <div className={`ai-last-test ${provider.lastTestStatus}`}><CheckCircle2 size={17} /><div><strong>{provider.lastTestStatus === "success" ? "בדיקה אחרונה הצליחה" : "בדיקה אחרונה נכשלה"}</strong><small>{new Date(provider.lastTestedAt).toLocaleString("he-IL")}{provider.lastTestError ? ` · ${provider.lastTestError}` : ""}</small></div></div>}
+        <footer>
+          <button className="ops-secondary" onClick={test} disabled={Boolean(busy) || (!provider.configured && !apiKeys[selectedProvider])}>{busy === "test" ? <RefreshCw className="spin" size={16} /> : <Zap size={16} />} בדיקת חיבור</button>
+          <button className="ops-primary" onClick={save} disabled={Boolean(busy)}>{busy === "save" ? <RefreshCw className="spin" size={16} /> : <Save size={16} />} שמירה</button>
+        </footer>
+        <p className="ai-foundation-note"><Sparkles size={15} /> מסך זה מכין את ספק ה-AI. הצ'אט והרשאות הגישה למידע יופעלו בשלב הסוכן עצמו.</p>
+      </aside>
     </div>
   );
 }

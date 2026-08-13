@@ -58,7 +58,8 @@ export async function createBackupRouter({ pool, authenticate, requireRoles, aud
       for (const folder of ['uploads','branding']) {
         try { await cp(path.join(dataDir,folder), path.join(filesDir,folder), { recursive:true }); } catch (error) { if (error.code !== 'ENOENT') throw error; }
       }
-      const manifest = { product:'PROJECTS', version:appVersion, formatVersion:1, createdAt:new Date().toISOString(), automatic, includes:['postgresql','uploads','branding'] };
+      try { await cp(path.join(dataDir,'ai.secret'), path.join(filesDir,'ai.secret')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      const manifest = { product:'PROJECTS', version:appVersion, formatVersion:1, createdAt:new Date().toISOString(), automatic, includes:['postgresql','uploads','branding','ai-encryption-key'] };
       await writeFile(path.join(temporary,'manifest.json'), JSON.stringify(manifest,null,2));
       await execFileAsync('tar', ['-czf',path.join(destination,name),'-C',temporary,'manifest.json','database.dump','files']);
       await prune(destination, policy.retention);

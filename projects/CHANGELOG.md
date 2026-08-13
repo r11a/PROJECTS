@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.5
+
+- Added secure Gemini and OpenAI provider configuration with encrypted server-side API keys.
+- Added curated current model presets, cost guidance, direct key-creation links and one-click provider switching.
+- Added real connection tests, last-test status, read-only safety mode and a configurable monthly budget guardrail.
+- Included the AI encryption key in full PROJECTS backup packages so restored credentials remain usable.
+- Added administrator-only permanent project deletion from the archive with two-step confirmation, serial-code verification, server-side password re-authentication and Audit Log coverage.
+- Added immutable unique eight-character alphanumeric serial codes to every existing and new project; permanent deletion now verifies this serial code.
+- Expanded live analytics into structured project, systems, execution, workload, documents and finance sections with responsive dynamic charts and honest empty states.
+
 ## 0.11.4
 
 - Fixed the project media picker layout on desktop and mobile and hid native file-input controls.

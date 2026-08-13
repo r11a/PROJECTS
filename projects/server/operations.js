@@ -181,17 +181,29 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
         return fallback;
       }
     };
-    const [stages, tasks, finance, managers, monthly] = await Promise.all([
-      reportQuery('stages', 'SELECT stage,COUNT(*)::int count,COALESCE(SUM(value),0)::numeric value FROM projects GROUP BY stage ORDER BY count DESC', []),
+    const [stages, tasks, finance, managers, monthly, systems, components, projectSizes, contractorStages, deadlines, documents] = await Promise.all([
+      reportQuery('stages', 'SELECT stage,COUNT(*)::int count,COALESCE(SUM(value),0)::numeric value FROM projects WHERE archived_at IS NULL GROUP BY stage ORDER BY count DESC', []),
       reportQuery('tasks', 'SELECT status,COUNT(*)::int count FROM tasks GROUP BY status', []),
       reportQuery('finance', 'SELECT COALESCE(SUM(value),0)::numeric total,COALESCE(SUM(paid),0)::numeric paid,COALESCE(SUM(value-paid),0)::numeric AS "open" FROM projects', [{ total: 0, paid: 0, open: 0 }]),
       reportQuery('managers', `SELECT COALESCE(NULLIF(pr.display_name,''),NULLIF(p.manager,''),'ללא מנהל') name,COUNT(*)::int projects,COALESCE(ROUND(AVG(p.progress)),0)::int progress
-        FROM projects p LEFT JOIN professionals pr ON pr.id=p.manager_professional_id
+        FROM projects p LEFT JOIN professionals pr ON pr.id=p.manager_professional_id WHERE p.archived_at IS NULL
         GROUP BY pr.id,pr.display_name,p.manager ORDER BY COUNT(*) DESC`, []),
       reportQuery('monthly', `SELECT to_char(date_trunc('month',COALESCE(paid_at,due_date)::timestamp),'YYYY-MM') month,COALESCE(SUM(amount),0)::numeric amount,status
-        FROM project_payments WHERE COALESCE(paid_at,due_date) IS NOT NULL GROUP BY 1,status ORDER BY 1`, []),
+        FROM project_payments WHERE status<>'cancelled' AND COALESCE(paid_at,due_date) IS NOT NULL GROUP BY 1,status ORDER BY 1`, []),
+      reportQuery('systems', `SELECT system name,COUNT(*)::int projects FROM projects p CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(p.systems,'[]'::jsonb)) system
+        WHERE p.archived_at IS NULL GROUP BY system ORDER BY projects DESC,name LIMIT 12`, []),
+      reportQuery('components', `SELECT c.name,COALESCE(SUM(e.quantity),0)::numeric quantity,COUNT(DISTINCT e.project_id)::int projects
+        FROM project_equipment e JOIN equipment_catalog c ON c.id=e.catalog_item_id JOIN projects p ON p.id=e.project_id
+        WHERE p.archived_at IS NULL GROUP BY c.id,c.name ORDER BY quantity DESC,c.name LIMIT 12`, []),
+      reportQuery('projectSizes', `SELECT COALESCE(project_size,'medium') size,COUNT(*)::int count FROM projects WHERE archived_at IS NULL GROUP BY project_size ORDER BY count DESC`, []),
+      reportQuery('contractorStages', `SELECT COALESCE(contractor_progress,'waiting') stage,COUNT(*)::int count FROM projects WHERE archived_at IS NULL GROUP BY contractor_progress ORDER BY count DESC`, []),
+      reportQuery('deadlines', `SELECT bucket,COUNT(*)::int count FROM (SELECT CASE
+        WHEN due_date<CURRENT_DATE THEN 'overdue' WHEN due_date=CURRENT_DATE THEN 'today' WHEN due_date<=CURRENT_DATE+7 THEN 'week'
+        WHEN due_date IS NULL THEN 'none' ELSE 'later' END bucket FROM tasks WHERE status NOT IN ('done','cancelled')) items GROUP BY bucket`, []),
+      reportQuery('documents', `SELECT COALESCE(NULLIF(f.category,''),'אחר') category,COUNT(*)::int count FROM client_files f
+        LEFT JOIN projects p ON p.id=f.project_id WHERE f.project_id IS NULL OR p.archived_at IS NULL GROUP BY f.category ORDER BY count DESC LIMIT 10`, []),
     ]);
-    response.json({ stages, tasks, finance: finance[0] || { total: 0, paid: 0, open: 0 }, managers, monthly });
+    response.json({ stages, tasks, finance: finance[0] || { total: 0, paid: 0, open: 0 }, managers, monthly, systems, components, projectSizes, contractorStages, deadlines, documents });
   });
 
   return router;

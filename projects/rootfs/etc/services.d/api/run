@@ -52,6 +52,10 @@ while true; do
       mkdir -p /data/branding
       cp -a "$restore_staging/files/branding/." /data/branding/
     fi
+    if [ "$full_restore" -eq 1 ] && [ -s "$restore_staging/files/ai.secret" ]; then
+      cp "$restore_staging/files/ai.secret" /data/ai.secret
+      chmod 600 /data/ai.secret
+    fi
     rm -rf /data/restore-staging
     rm -f /data/restore.request
     echo "Database restore completed"
