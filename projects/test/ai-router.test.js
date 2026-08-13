@@ -11,6 +11,7 @@ class AiPool {
     this.global={ activeProvider:'gemini',monthlyBudgetUsd:10,readOnly:true };
     this.providers=[];
     this.usage=[];
+    this.jobs=new Map();
   }
   async query(sql,params=[]) {
     const text=String(sql).replace(/\s+/g,' ').trim();
@@ -34,6 +35,38 @@ class AiPool {
     }
     if (text.startsWith('INSERT INTO ai_usage_log')) { this.usage.push(params);return { rows:[] }; }
     if (text.startsWith('SELECT COALESCE(SUM(estimated_cost_usd),0)::numeric spent')) return { rows:[{ spent:this.usage.reduce((sum,item)=>sum+Number(item[7] || 0),0) }] };
+    if (text.startsWith('DELETE FROM ai_chat_jobs')) return { rows:[],rowCount:0 };
+    if (text.startsWith("SELECT 1 FROM ai_chat_jobs WHERE user_id=$1 AND status IN")) {
+      const active=[...this.jobs.values()].find((item)=>item.user_id===params[0] && ['pending','working'].includes(item.status));
+      return { rows:active ? [{ '?column?':1 }] : [],rowCount:active ? 1 : 0 };
+    }
+    if (text.startsWith('INSERT INTO ai_chat_jobs')) {
+      const [id,user_id,question,history,provider,model]=params;
+      this.jobs.set(id,{ id,user_id,status:'pending',question,history:JSON.parse(history),provider,model,answer:'',error:'',generated_at:null,updated_at:new Date() });
+      return { rows:[],rowCount:1 };
+    }
+    if (text.startsWith("UPDATE ai_chat_jobs SET status='working'")) {
+      const job=this.jobs.get(params[0]);
+      const staleWorking=job?.status==='working' && Date.now()-new Date(job.updated_at).getTime()>20_000;
+      if (!job || (job.status!=='pending' && !staleWorking)) return { rows:[],rowCount:0 };
+      job.status='working';job.updated_at=new Date();
+      return { rows:[{ ...job }],rowCount:1 };
+    }
+    if (text.startsWith("UPDATE ai_chat_jobs SET status='complete'")) {
+      const job=this.jobs.get(params[0]);
+      Object.assign(job,{ status:'complete',answer:params[1],error:'',generated_at:new Date(),updated_at:new Date() });
+      return { rows:[],rowCount:1 };
+    }
+    if (text.startsWith("UPDATE ai_chat_jobs SET status='error'")) {
+      const job=this.jobs.get(params[0]);
+      Object.assign(job,{ status:'error',error:params[1],updated_at:new Date() });
+      return { rows:[],rowCount:1 };
+    }
+    if (text.startsWith('SELECT id,user_id,status,answer,error,provider,model,generated_at FROM ai_chat_jobs')) {
+      const job=this.jobs.get(params[0]);
+      const allowed=job && job.user_id===params[1];
+      return { rows:allowed ? [{ ...job }] : [],rowCount:allowed ? 1 : 0 };
+    }
     return { rows:[] };
   }
 }
@@ -87,6 +120,17 @@ test('AI router completes settings, provider test, async chat polling and usage 
   const repeatedPoll=await originalFetch(`${base}/ai/chat/${jobId}`);
   assert.equal(repeatedPoll.status,200);
   assert.equal((await repeatedPoll.json()).answer,'מצב הגבייה תקין');
+
+  const recoveredJobId='persisted-after-restart';
+  pool.jobs.set(recoveredJobId,{ id:recoveredJobId,user_id:7,status:'working',question:'סכם פרויקטים',history:[],provider:'gemini',model:'gemini-3.5-flash-lite',answer:'',error:'',generated_at:null,updated_at:new Date(Date.now()-60_000) });
+  let recovered;
+  for (let attempt=0;attempt<20;attempt+=1) {
+    const poll=await originalFetch(`${base}/ai/chat/${recoveredJobId}`);
+    recovered=await poll.json();
+    if (poll.status===200) break;
+    await new Promise((resolve)=>setTimeout(resolve,10));
+  }
+  assert.equal(recovered.answer,'מצב הגבייה תקין');
 
   pool.global.monthlyBudgetUsd=0.000001;
   const budgetResponse=await originalFetch(`${base}/ai/chat`,{ method:'POST',headers:{ 'content-type':'application/json' },body:JSON.stringify({ question:'שאלה נוספת',history:[] }) });

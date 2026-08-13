@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.2
+
+- Replaced volatile in-memory AI chat jobs with durable PostgreSQL-backed jobs.
+- Added automatic recovery of interrupted AI work after an Add-on web-process restart, while preserving per-user isolation.
+- Persisted completed answers and sanitized errors for ten minutes so polling remains idempotent across Ingress and Cloudflare retries.
+- Added automatic expiry indexes and cleanup for old chat jobs.
+- Added a regression test that resumes a persisted working job after a simulated process interruption.
+
 ## 0.12.1
 
 - Made completed AI chat jobs idempotent for ten minutes so Home Assistant Ingress or Cloudflare retries cannot consume and lose a response.

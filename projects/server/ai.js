@@ -313,13 +313,11 @@ export function chatPrompt({ question, history, context }) {
 export async function createAiRouter({ pool, authenticate, requireRoles, audit, dataDir }) {
   const router = express.Router();
   const encryptionKey = await getEncryptionKey(dataDir);
-  const chatJobs = new Map();
+  const runningChatJobs = new Set();
   router.use(authenticate);
 
-  const cleanChatJobs = () => {
-    const expiry=Date.now()-10*60*1000;
-    for (const [id,job] of chatJobs) if ((job.completedAt || job.createdAt)<expiry) chatJobs.delete(id);
-  };
+  const cleanChatJobs = () => pool.query(`DELETE FROM ai_chat_jobs
+    WHERE expires_at<NOW() OR created_at<NOW()-INTERVAL '1 day'`);
 
   const chatError = (error) => ({
     error:error.name === 'TimeoutError'
@@ -358,6 +356,46 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     const global = { activeProvider:'gemini', monthlyBudgetUsd:10, ...(globalResult.rows[0]?.value || {}),readOnly:true };
     const rows = Object.fromEntries(providerResult.rows.map((row)=>[row.provider,row]));
     return { ...global, monthUsageUsd:spent, providers:Object.fromEntries(Object.keys(PROVIDERS).map((provider)=>[provider,publicProvider(rows[provider],provider)])) };
+  }
+
+  async function runChatJob(jobId) {
+    if (runningChatJobs.has(jobId)) return;
+    runningChatJobs.add(jobId);
+    let job;
+    try {
+      const claimed=await pool.query(`UPDATE ai_chat_jobs SET status='working',updated_at=NOW()
+        WHERE id=$1 AND (status='pending' OR (status='working' AND updated_at<NOW()-INTERVAL '20 seconds'))
+        RETURNING *`,[jobId]);
+      job=claimed.rows[0];
+      if (!job) return;
+      const providerResult=await pool.query(`SELECT provider,enabled,model,api_key_encrypted
+        FROM ai_provider_settings WHERE provider=$1`,[job.provider]);
+      const selected=providerResult.rows[0];
+      const definition=PROVIDERS[job.provider];
+      if (!definition || !selected?.enabled || !selected.api_key_encrypted) {
+        throw Object.assign(new Error('הסוכן אינו מוכן. יש לבדוק את הגדרות ספק ה-AI.'),{ publicMessage:'הסוכן אינו מוכן. יש לבדוק את הגדרות ספק ה-AI.' });
+      }
+      const context=await buildChatContext(pool,job.question);
+      const answer=(await generateProviderText(
+        job.provider,
+        job.model || selected.model,
+        decrypt(selected.api_key_encrypted,encryptionKey),
+        chatPrompt({ question:job.question,history:job.history,context }),
+        { onUsage:usageRecorder({ user:{ id:job.user_id } },job.provider,job.model || selected.model,'chat') },
+      )).trim();
+      if (!answer) throw new Error('AI provider returned an empty answer');
+      await pool.query(`UPDATE ai_chat_jobs SET status='complete',answer=$2,error='',generated_at=NOW(),updated_at=NOW(),
+        expires_at=NOW()+INTERVAL '10 minutes' WHERE id=$1`,[jobId,answer.slice(0,6000)]);
+    } catch (error) {
+      console.error('AI chat failed',job?.provider || 'unknown',error.message);
+      const failure=chatError(error);
+      try {
+        await pool.query(`UPDATE ai_chat_jobs SET status='error',error=$2,updated_at=NOW(),
+          expires_at=NOW()+INTERVAL '10 minutes' WHERE id=$1`,[jobId,failure.error]);
+      } catch (updateError) { console.error('AI chat failure persistence failed',updateError.message); }
+    } finally {
+      runningChatJobs.delete(jobId);
+    }
   }
 
   router.get('/ai/insights', async (request, response) => {
@@ -421,44 +459,31 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     if (!definition || !selected?.enabled || !selected.api_key_encrypted) {
       return response.status(409).json({ error:'הסוכן אינו מוכן. יש להפעיל ספק ולשמור מפתח API תחת הגדרות ומערכת > סוכן AI.' });
     }
-    cleanChatJobs();
-    const activeJob=[...chatJobs.values()].find((job)=>job.userId===String(request.user.id) && job.status==='working');
-    if (activeJob) return response.status(409).json({ error:'שאלה קודמת עדיין בעיבוד. המתינו לתשובה לפני שליחת שאלה נוספת.' });
+    await cleanChatJobs();
+    const activeJob=await pool.query(`SELECT 1 FROM ai_chat_jobs WHERE user_id=$1 AND status IN ('pending','working') LIMIT 1`,[request.user.id]);
+    if (activeJob.rowCount) return response.status(409).json({ error:'שאלה קודמת עדיין בעיבוד. המתינו לתשובה לפני שליחת שאלה נוספת.' });
     try { await enforceBudget(global); }
     catch (error) { return response.status(error.statusCode || 402).json({ error:error.publicMessage || error.message }); }
     const jobId=randomBytes(18).toString('base64url');
-    const job={ id:jobId,userId:String(request.user.id),status:'working',createdAt:Date.now() };
-    chatJobs.set(jobId,job);
-    response.status(202).json({ jobId,status:'working' });
-
-    const user={ ...request.user };
     const history=Array.isArray(request.body?.history) ? request.body.history : [];
-    void (async ()=>{
-      try {
-        const context = await buildChatContext(pool,question);
-        const answer = (await generateProviderText(
-          global.activeProvider,
-          selected.model,
-          decrypt(selected.api_key_encrypted,encryptionKey),
-          chatPrompt({ question, history, context }),
-          { onUsage:usageRecorder({ user },global.activeProvider,selected.model,'chat') },
-        )).trim();
-        if (!answer) throw new Error('AI provider returned an empty answer');
-        Object.assign(job,{ status:'complete',answer:answer.slice(0,6000),provider:global.activeProvider,providerName:definition.name,model:selected.model,generatedAt:new Date().toISOString(),completedAt:Date.now() });
-      } catch (error) {
-        console.error('AI chat failed',global.activeProvider,error.message);
-        Object.assign(job,{ status:'error',...chatError(error),completedAt:Date.now() });
-      }
-    })();
+    await pool.query(`INSERT INTO ai_chat_jobs(id,user_id,status,question,history,provider,model)
+      VALUES($1,$2,'pending',$3,$4::jsonb,$5,$6)`,[jobId,request.user.id,question,JSON.stringify(history),global.activeProvider,selected.model]);
+    response.status(202).json({ jobId,status:'working' });
+    void runChatJob(jobId);
   });
 
   router.get('/ai/chat/:jobId', async (request,response) => {
-    cleanChatJobs();
-    const job=chatJobs.get(request.params.jobId);
-    if (!job || job.userId!==String(request.user.id)) return response.status(404).json({ error:'בקשת השיחה אינה זמינה עוד' });
-    if (job.status==='working') return response.status(202).json({ status:'working' });
+    await cleanChatJobs();
+    const result=await pool.query(`SELECT id,user_id,status,answer,error,provider,model,generated_at
+      FROM ai_chat_jobs WHERE id=$1 AND user_id=$2`,[request.params.jobId,request.user.id]);
+    const job=result.rows[0];
+    if (!job) return response.status(404).json({ error:'בקשת השיחה אינה זמינה עוד' });
+    if (job.status==='pending' || job.status==='working') {
+      void runChatJob(job.id);
+      return response.status(202).json({ status:'working' });
+    }
     if (job.status==='error') return response.status(422).json({ error:job.error });
-    response.json({ answer:job.answer,provider:job.provider,providerName:job.providerName,model:job.model,generatedAt:job.generatedAt });
+    response.json({ answer:job.answer,provider:job.provider,providerName:PROVIDERS[job.provider]?.name || job.provider,model:job.model,generatedAt:job.generated_at });
   });
 
   router.get('/ai/settings', requireRoles('admin'), async (_request, response) => response.json(await getSettings()));
