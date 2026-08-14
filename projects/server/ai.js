@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { buildOperationalInsights } from './insights.js';
+import { buildLiveSystemKnowledge } from './aiKnowledge.js';
 
 const INSIGHT_CACHE_TTL = 30 * 60 * 1000;
 const INSIGHT_REFRESH_COOLDOWN = 5 * 60 * 1000;
@@ -213,9 +214,9 @@ function insightPrompt(snapshot) {
 ${JSON.stringify(snapshot)}`;
 }
 
-export async function buildChatContext(pool, question) {
+export async function buildChatContext(pool, question, user = { role:'admin',id:null }) {
   const normalized = String(question || '').toLowerCase();
-  const wantsHelp = /(איך|איפה|כיצד).*(יוצר|מפיק|מגדיר|משתמש|מעלה|משתף|מוסיף|עורך|מוחק|פותח)|עזרה|מדריך|how to|where.*setting|help|create|export/.test(normalized);
+  const wantsHelp = /(איך|איפה|כיצד).*(יוצר|מפיק|מגדיר|משתמש|מעלה|משתף|מוסיף|עורך|מוחק|פותח)|מה.*(עושה|המטרה)|הסבר|טאב|פעולה|עזרה|מדריך|how to|where.*setting|help|create|export/.test(normalized);
   const wantsProjects = /פרויקט|לקוח|כתובת|שלב|התקדמות|project|client/.test(normalized);
   const wantsTasks = /משימ|איחור|לבצע|תאריך|יומן|לוח שנה|task|calendar/.test(normalized);
   const wantsFinance = /כספ|תשלום|גבייה|יתרה|שקל|חשבונ|payment|finance/.test(normalized);
@@ -288,6 +289,7 @@ export async function buildChatContext(pool, question) {
     ],
     aiSettings:'הגדרות הספק, המודל, מפתח ה-API והתקציב נמצאות תחת הגדרות ומערכת > סוכן AI.',
   };
+  context.systemKnowledge = await buildLiveSystemKnowledge(pool,question,user);
   return context;
 }
 
@@ -302,6 +304,10 @@ export function chatPrompt({ question, history, context }) {
 אתה במצב קריאה בלבד: אל תטען שביצעת שינוי, מחיקה, שליחה או שמירה.
 
 מבנה המערכת: תמונת מצב; לוח שנה; פרויקטים ומפה; לקוחות; אנשי מקצוע; מערכות ורכיבים; טפסים ומסמכים; תשלומים וגבייה; משימות ואבני דרך; דוחות וניתוחים; הגדרות. הגדרות ספק AI נמצאות תחת הגדרות ומערכת > סוכן AI.
+
+קטלוג היכולות, סכמת המערכת, מצב הרשומות והשינויים האחרונים נבנו מחדש בזמן השאלה ונמצאים ב-systemKnowledge. השתמש בהם כמקור האמת למבנה העדכני ולשינויים במערכת.
+בשאלת עזרה השתמש ב-systemKnowledge.helpGuide: הסבר תחילה את מטרת המסך או הפעולה, אחר כך את דרך העבודה בצעדים, ולבסוף הרשאות, קשרים והערות חשובות אם הם קיימים. אל תמציא כפתור או פעולה שאינם מופיעים במדריך.
+אל תחשוף סודות, סיסמאות, מפתחות, טוקנים או מידע שאינו כלול בהקשר המורשה למשתמש.
 
 היסטוריית השיחה: ${JSON.stringify(safeHistory)}
 נתונים רלוונטיים ועדכניים: ${JSON.stringify(context)}
@@ -436,14 +442,17 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
         RETURNING *`,[jobId]);
       job=claimed.rows[0];
       if (!job) return;
-      const providerResult=await pool.query(`SELECT provider,enabled,model,api_key_encrypted
-        FROM ai_provider_settings WHERE provider=$1`,[job.provider]);
+      const [providerResult,userResult]=await Promise.all([
+        pool.query(`SELECT provider,enabled,model,api_key_encrypted FROM ai_provider_settings WHERE provider=$1`,[job.provider]),
+        pool.query('SELECT id,display_name,role FROM users WHERE id=$1',[job.user_id]),
+      ]);
       const selected=providerResult.rows[0];
       const definition=PROVIDERS[job.provider];
       if (!definition || !selected?.enabled || !selected.api_key_encrypted) {
         throw Object.assign(new Error('הסוכן אינו מוכן. יש לבדוק את הגדרות ספק ה-AI.'),{ publicMessage:'הסוכן אינו מוכן. יש לבדוק את הגדרות ספק ה-AI.' });
       }
-      const context=await buildChatContext(pool,job.question);
+      const jobUser=userResult.rows[0] || { id:job.user_id,role:'user',display_name:'' };
+      const context=await buildChatContext(pool,job.question,{ ...jobUser,displayName:jobUser.display_name });
       const answer=(await generateProviderText(
         job.provider,
         job.model || selected.model,
@@ -542,7 +551,7 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
       const definition=PROVIDERS[global.activeProvider];
       if (!definition || !selected?.enabled || !selected.api_key_encrypted) throw Object.assign(new Error('הסוכן אינו מוכן'),{ publicMessage:'הסוכן אינו מוכן. יש להפעיל ספק ולשמור מפתח API תחת הגדרות ומערכת > סוכן AI.' });
       await enforceBudget(global);
-      const context=await buildChatContext(pool,question);
+      const context=await buildChatContext(pool,question,request.user);
       const history=Array.isArray(request.body?.history) ? request.body.history : [];
       const answer=(await generateProviderText(global.activeProvider,selected.model,decrypt(selected.api_key_encrypted,encryptionKey),chatPrompt({ question,history,context }),{
         onUsage:usageRecorder(request,global.activeProvider,selected.model,'chat'),

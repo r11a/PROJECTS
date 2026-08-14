@@ -20,6 +20,8 @@ Premium project management for smart-home professionals, packaged as a Home Assi
 - Configurable catalogs, labels, flags and custom fields
 - Live day/week/month/detailed-month/year calendar with project filtering
 - Automatic operational insights and aggregated overdue-task snoozing
+- Permission-aware AI chat with live system context, detailed in-product help and Hebrew voice dictation
+- Personalized My Work priority hub for assigned tasks, blockers and messages
 - Home Assistant Ingress
 - Standalone authenticated web interface
 

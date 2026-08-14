@@ -116,6 +116,7 @@ import "./contacts.css";
 import "./messages.css";
 import "./task-center.css";
 import "./ai-chat.css";
+import "./ai-chat-voice.css";
 import "./commercial-gantt.css";
 import "./modal-system.css";
 import "./productivity.css";

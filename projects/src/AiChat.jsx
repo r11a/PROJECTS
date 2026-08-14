@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState } from "react";
-import { CircleHelp, Eraser, Send, Sparkles, X } from "lucide-react";
+import { CircleHelp, Eraser, Mic, Send, Sparkles, X } from "lucide-react";
 import { ModalPortal } from "./AppModal";
 
 const helpGroups = [
@@ -7,7 +7,9 @@ const helpGroups = [
   { title:"משימות ולוח שנה", examples:["אילו משימות באיחור?","מה צריך לבצע בשבוע הקרוב?","אצל מי יש עומס משימות?"] },
   { title:"כספים וגבייה", examples:["מה היתרה הכוללת לגבייה?","באילו פרויקטים יתרת הגבייה הגבוהה ביותר?","סכם לי את מצב הגבייה"] },
   { title:"מערכות וצוות", examples:["אילו מערכות מותקנות הכי הרבה?","מי מנהל את הפרויקטים הפעילים?","כמה פרויקטים כוללים מצלמות?"] },
-  { title:"עזרה בתוכנה", examples:["איך יוצרים פרויקט חדש?","איפה מגדירים שיתוף לוח שנה?","איך מפיקים דוח PDF?"] },
+  { title:"מדריך מסכים ופעולות", examples:["מה המטרה של מסך העבודה שלי ואיך משתמשים בו?","הסבר לי בפירוט מה עושה כל טאב בתוך פרויקט","מה אפשר לבצע במסך משימות ואבני דרך?","איך עובדים נכון עם לוח הגאנט?"] },
+  { title:"הגדרות והרשאות", examples:["הסבר לי את כל הטאבים במסך הגדרות ומערכת","מה ההבדל בין משתמש לאיש מקצוע?","איפה מגדירים שיתוף לוח שנה ל-Outlook?","איך מגדירים תיקיית NAS למסמכים?"] },
+  { title:"פעולות נפוצות", examples:["איך יוצרים פרויקט חדש שלב אחר שלב?","איך מפיקים ושומרים דוח PDF בפרויקט?","איך מדווחים שעות עבודה?","איך יוצרים תלות בין משימות?"] },
 ];
 
 export function AiChat({ apiRoot, onClose }) {
@@ -15,7 +17,10 @@ export function AiChat({ apiRoot, onClose }) {
   const [question,setQuestion] = useState("");
   const [busy,setBusy] = useState(false);
   const [helpOpen,setHelpOpen] = useState(false);
+  const [listening,setListening] = useState(false);
   const threadRef = useRef(null);
+  const recognitionRef = useRef(null);
+  useEffect(()=>()=>recognitionRef.current?.abort(),[]);
   useEffect(()=>{
     const thread = threadRef.current;
     if (!thread) return undefined;
@@ -77,6 +82,32 @@ export function AiChat({ apiRoot, onClose }) {
     } finally { setBusy(false); }
   };
   const useExample = (example) => { setQuestion(example); setHelpOpen(false); };
+  const toggleVoice = () => {
+    if (listening) { recognitionRef.current?.stop();return; }
+    const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if (!Recognition) {
+      setMessages((current)=>[...current,{role:"error",text:"הדפדפן הזה אינו תומך כרגע בהקלדה קולית. אפשר להשתמש ב-Chrome או Edge מעודכנים, או במקלדת הקולית של הטלפון."}]);
+      return;
+    }
+    const recognition=new Recognition();
+    const existing=question.trim();
+    recognition.lang="he-IL";
+    recognition.continuous=false;
+    recognition.interimResults=true;
+    recognition.maxAlternatives=1;
+    recognition.onstart=()=>setListening(true);
+    recognition.onresult=(event)=>{
+      let transcript="";
+      for(let index=event.resultIndex;index<event.results.length;index+=1) transcript+=event.results[index][0]?.transcript||"";
+      setQuestion([existing,transcript.trim()].filter(Boolean).join(" "));
+    };
+    recognition.onerror=(event)=>{
+      if (!["aborted","no-speech"].includes(event.error)) setMessages((current)=>[...current,{role:"error",text:event.error==="not-allowed"?"לא התקבלה הרשאה למיקרופון. אשרו גישה למיקרופון בהגדרות הדפדפן ונסו שוב.":"לא הצלחתי לזהות את הקול. אפשר לנסות שוב או להקליד את השאלה."}]);
+    };
+    recognition.onend=()=>{setListening(false);recognitionRef.current=null;};
+    recognitionRef.current=recognition;
+    recognition.start();
+  };
 
   return (
     <ModalPortal>
@@ -89,23 +120,25 @@ export function AiChat({ apiRoot, onClose }) {
           <button type="button" onClick={onClose} title="סגירה"><X size={21}/></button>
         </header>
         {helpOpen && <section className="ai-chat-help">
-          <div><strong>מה אפשר לשאול?</strong><small>לחיצה על דוגמה תעביר אותה לשורת השאלה. אפשר לנסח גם באופן חופשי.</small></div>
+          <div><strong>עזרה חכמה ומדריך מלא למערכת</strong><small>הסוכן מכיר את מטרת כל מסך, טאב ופעולה, את סדר העבודה ואת הקשרים בין המודולים. לחיצה על דוגמה תעביר אותה לשורת השאלה.</small></div>
           {helpGroups.map((group)=><article key={group.title}><h4>{group.title}</h4><div>{group.examples.map((example)=><button type="button" key={example} onClick={()=>useExample(example)}>{example}</button>)}</div></article>)}
-          <p><b>טיפ:</b> לקבלת תשובה מדויקת ציינו פרויקט, תקופה או תחום. לדוגמה: “מה המשימות הפתוחות בפרויקט משפחת כהן בשבועיים הקרובים?”</p>
+          <p><b>טיפ:</b> אפשר לבקש מדריך צעד-אחר-צעד, הסבר על מסך מסוים או תשובה מתוך הנתונים החיים. לדוגמה: “הסבר לי איך לנהל ביקורת אתר בפרויקט” או “מה המשימות הפתוחות בפרויקט משפחת כהן בשבועיים הקרובים?”</p>
         </section>}
         <div className="ai-chat-thread" ref={threadRef}>
           {messages.map((message,index)=><article key={index} className={message.role}>
             {message.role !== "user" && <span><Sparkles size={15}/></span>}
             <div><p>{message.text}</p>{message.meta && <small>{message.meta}</small>}</div>
           </article>)}
+          {listening && <article className="assistant voice-listening"><span><Mic size={15}/></span><div><strong>מאזין…</strong><i/><i/><i/><i/><i/></div></article>}
           {busy && <article className="assistant thinking"><span><Sparkles size={15}/></span><div><i/><i/><i/></div></article>}
         </div>
         <form onSubmit={ask}>
           <button type="button" className="ai-chat-clear" onClick={()=>setMessages((current)=>current.slice(0,1))} title="ניקוי השיחה"><Eraser size={17}/></button>
+          <button type="button" className={`ai-chat-mic ${listening?"listening":""}`} onClick={toggleVoice} disabled={busy} title={listening?"סיום ההאזנה":"שאלה בקול"}><Mic size={18}/></button>
           <textarea value={question} onChange={(event)=>setQuestion(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();ask();}}} placeholder="שאלו על פרויקט, משימה, גבייה או שימוש במערכת..." rows="1" maxLength="1500"/>
           <button className="ai-chat-send" disabled={busy||!question.trim()} title="שליחה"><Send size={18}/></button>
         </form>
-        <footer>הסוכן עשוי לטעות. בהחלטות חשובות יש לאמת את הנתונים במסך המקור.</footer>
+        <footer>הנתונים נטענים מחדש בכל שאלה בהתאם להרשאות שלך. הסוכן עשוי לטעות; בהחלטות חשובות יש לאמת במסך המקור.</footer>
       </aside>
     </div>
     </ModalPortal>

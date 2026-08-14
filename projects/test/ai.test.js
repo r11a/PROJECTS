@@ -10,25 +10,28 @@ import {
   providerError,
   testProvider,
 } from '../server/ai.js';
+import { PRODUCT_HELP_GUIDE, buildLiveSystemKnowledge } from '../server/aiKnowledge.js';
 
 test('project overview SQL filters AVG before ROUND', async () => {
   const queries=[];
   const pool={ query:async (sql)=>{ queries.push(String(sql));return { rows:[] }; } };
   const context=await buildChatContext(pool,'project client task payment manager system');
-  assert.deepEqual(Object.keys(context),['overview','projects','clients','tasks','finance','professionals','projectSystems','systems']);
+  assert.deepEqual(Object.keys(context),['overview','projects','clients','tasks','finance','professionals','projectSystems','systems','systemKnowledge']);
   assert.match(queries[0],/ROUND\(AVG\(progress\) FILTER \(WHERE archived_at IS NULL\)\)/);
   assert.doesNotMatch(queries[0],/ROUND\(AVG\(progress\)\) FILTER/);
-  assert.equal(queries.length,8);
   assert.match(queries[6],/jsonb_array_elements_text/);
+  assert.equal(context.systemKnowledge.freshness,'נבנה מחדש מבסיס הנתונים בזמן השאלה');
 });
 
 test('software help uses the product guide without loading unrelated project records', async () => {
   const queries=[];
   const pool={ query:async (sql)=>{ queries.push(String(sql));return { rows:[] }; } };
   const context=await buildChatContext(pool,'איך יוצרים פרויקט חדש?');
-  assert.deepEqual(Object.keys(context),['overview','help']);
-  assert.equal(queries.length,1);
+  assert.deepEqual(Object.keys(context),['overview','help','systemKnowledge']);
+  assert.equal(queries.some((sql)=>/FROM projects WHERE archived_at IS NULL ORDER BY updated_at/.test(sql)),false);
   assert.match(context.help.createProject.join(' '),/שלב 1/);
+  assert.equal(context.systemKnowledge.helpGuide[0].area,'פרויקטים');
+  assert.match(context.systemKnowledge.helpGuide[0].purpose,/מחזור החיים/);
   assert.match(chatPrompt({ question:'איך יוצרים פרויקט חדש?',history:[],context }),/פרויקט חדש/);
 });
 
@@ -64,8 +67,40 @@ test('context routing only loads the requested domain plus overview', async () =
   const queries=[];
   const pool={ query:async (sql)=>{ queries.push(String(sql));return { rows:[] }; } };
   const context=await buildChatContext(pool,'Which tasks are overdue?');
-  assert.deepEqual(Object.keys(context),['overview','tasks']);
-  assert.equal(queries.length,2);
+  assert.deepEqual(Object.keys(context),['overview','tasks','systemKnowledge']);
+  assert.equal(queries.some((sql)=>/SELECT serial_code,name,client,address/.test(sql)),false);
+});
+
+test('live system knowledge is rebuilt, permission-aware and strips secrets', async () => {
+  const queries=[];
+  const pool={query:async(sql,parameters=[])=>{
+    const text=String(sql);queries.push({text,parameters});
+    if(text.includes('pg_stat_user_tables')) return {rows:[{table_name:'projects',approximate_records:8},{table_name:'ai_provider_settings',approximate_records:2}]};
+    if(text.includes('FROM audit_log')) return {rows:[{action:'update',details:{password:'hidden',nested:{apiKey:'hidden',safe:'visible'}}}]};
+    if(text.includes('information_schema.columns')) return {rows:[{table_name:'projects',columns:['id','name','external_token']},{table_name:'calendar_feed_tokens',columns:['token']}]};
+    if(text.includes('FROM app_settings')) return {rows:[{key:'ai',value:{activeProvider:'gemini',monthlyBudgetUsd:5,apiKey:'secret'}}]};
+    return {rows:[]};
+  }};
+  const admin=await buildLiveSystemKnowledge(pool,'הסבר לי את כל המערכת וההגדרות',{id:1,displayName:'מנהל',role:'admin'});
+  assert.deepEqual(admin.dataInventory,[{table_name:'projects',approximate_records:8}]);
+  assert.deepEqual(admin.liveSchema,[{table_name:'projects',columns:['id','name']}]);
+  assert.deepEqual(admin.settings[0].value,{activeProvider:'gemini',monthlyBudgetUsd:5,readOnly:true});
+  assert.deepEqual(admin.recentChanges[0].details,{password:'[מוסתר]',nested:{apiKey:'[מוסתר]',safe:'visible'}});
+  const before=queries.length;
+  const regular=await buildLiveSystemKnowledge(pool,'הסבר לי את כל המערכת וההגדרות',{id:7,displayName:'עובד',role:'user'});
+  assert.equal(regular.settings,undefined);
+  assert.equal(regular.liveSchema,undefined);
+  assert.equal(regular.capabilities.some((item)=>item.area==='הגדרות ומערכת'),false);
+  assert.equal(queries.slice(before).some(({text})=>text.includes('FROM app_settings')),false);
+  assert.equal(queries.slice(before).some(({text,parameters})=>text.includes('a.user_id=$1')&&parameters[0]===7),true);
+});
+
+test('help guide documents every primary workspace and personal work purpose', () => {
+  const areas=new Set(PRODUCT_HELP_GUIDE.map((item)=>item.area));
+  for(const area of ['תמונת מצב','העבודה שלי','לוח שנה','פרויקטים','לקוחות','אנשי מקצוע','מערכות ורכיבים','טפסים ומסמכים','תשלומים וגבייה','משימות ואבני דרך','לוח גאנט','בקרת ביצוע','דוחות וניתוחים','הודעות','הגדרות ומערכת']) assert.equal(areas.has(area),true,area);
+  const myWork=PRODUCT_HELP_GUIDE.find((item)=>item.area==='העבודה שלי');
+  assert.match(myWork.purpose,/מרכז העבודה האישי/);
+  assert.ok(myWork.actions.length>=4);
 });
 
 test('chat history excludes UI errors and remains bounded', () => {

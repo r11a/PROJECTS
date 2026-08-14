@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.21.0
+
+- Rebuilt AI chat context on every question from live, permission-aware application data, users, audit activity, settings metadata and schema inventory while excluding credentials and tokens.
+- Added a comprehensive Hebrew help catalog that explains the purpose, actions, tabs, permissions and connections of every primary workspace.
+- Expanded the chat Help panel with guided questions for screens, settings and common workflows.
+- Personalized My Work with the signed-in user's name and a clearer explanation of its role as the user's priority hub.
+- Added Hebrew voice dictation with a responsive listening animation, permission guidance, dark-mode styling and reduced-motion accessibility.
+
 ## 0.20.2
 
 - Stabilized critical browser navigation when overdue-task alerts are shown.

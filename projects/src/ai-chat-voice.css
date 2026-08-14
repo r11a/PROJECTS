@@ -1,0 +1,71 @@
+.ai-chat > form {
+  grid-template-columns: 36px 36px minmax(0, 1fr) 40px;
+}
+
+.ai-chat-mic {
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  color: #6957df;
+  background: #f0edff;
+}
+
+.ai-chat-mic.listening {
+  color: #fff;
+  background: #d34b5f;
+  animation: ai-mic-pulse 1.2s ease-in-out infinite;
+}
+
+.ai-chat-mic:disabled { opacity: .45; }
+
+.ai-chat-thread article.voice-listening > div {
+  min-width: 150px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #6554cf;
+  background: linear-gradient(135deg, #fff, #f2efff);
+  border-color: #dcd5ff;
+}
+
+.ai-chat-thread article.voice-listening strong {
+  margin-inline-end: 8px;
+  font-size: 12px;
+}
+
+.ai-chat-thread article.voice-listening i {
+  width: 3px;
+  height: 12px;
+  border-radius: 4px;
+  background: currentColor;
+  animation: ai-voice-wave .8s ease-in-out infinite alternate;
+}
+
+.ai-chat-thread article.voice-listening i:nth-of-type(2) { animation-delay: -.55s; }
+.ai-chat-thread article.voice-listening i:nth-of-type(3) { animation-delay: -.3s; }
+.ai-chat-thread article.voice-listening i:nth-of-type(4) { animation-delay: -.65s; }
+.ai-chat-thread article.voice-listening i:nth-of-type(5) { animation-delay: -.15s; }
+
+@keyframes ai-mic-pulse {
+  50% { box-shadow: 0 0 0 7px #d34b5f22; }
+}
+
+@keyframes ai-voice-wave {
+  to { height: 27px; opacity: .55; }
+}
+
+.theme-dark .ai-chat-mic { color: #d8d0ff; background: #363240; }
+.theme-dark .ai-chat-mic.listening { color: #fff; background: #ba3f53; }
+.theme-dark .ai-chat-thread article.voice-listening > div {
+  color: #d8d0ff;
+  background: linear-gradient(135deg, #292b2e, #302c3c);
+  border-color: #514969;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-mic.listening,
+  .ai-chat-thread article.voice-listening i { animation: none; }
+}
