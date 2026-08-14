@@ -74,12 +74,24 @@ export function createProductivityRouter({ pool, authenticate, requireRoles, aud
   router.use(authenticate);
 
   router.get('/my-work', async (request,response)=>{
-    const tasks=await pool.query(`SELECT t.*,p.name project_name,COALESCE(assignee.display_name,u.display_name) assignee_name,owner.display_name owner_name,
-      dependency.title dependency_title FROM tasks t LEFT JOIN projects p ON p.id=t.project_id
+    const tasks=await pool.query(`WITH identity_ids AS (
+      SELECT id FROM users WHERE id=$1 OR merged_into_user_id=$1
+    )
+      SELECT t.*,p.name project_name,COALESCE(assignee.display_name,u.display_name) assignee_name,owner.display_name owner_name,
+      dependency.title dependency_title,
+      CASE
+        WHEN t.assignee_id IN (SELECT id FROM identity_ids) OR assignee.linked_user_id IN (SELECT id FROM identity_ids) THEN 'assignee'
+        WHEN owner.linked_user_id IN (SELECT id FROM identity_ids) THEN 'owner'
+        WHEN manager.linked_user_id IN (SELECT id FROM identity_ids) THEN 'manager'
+        ELSE 'related'
+      END relevance FROM tasks t LEFT JOIN projects p ON p.id=t.project_id
       LEFT JOIN professionals assignee ON assignee.id=t.assignee_professional_id LEFT JOIN users u ON u.id=t.assignee_id
       LEFT JOIN professionals owner ON owner.id=t.owner_professional_id LEFT JOIN tasks dependency ON dependency.id=t.dependency_task_id
-      WHERE t.status IN ${ACTIVE_TASKS} AND (t.assignee_id=$1 OR assignee.linked_user_id=$1 OR owner.linked_user_id=$1
-        OR EXISTS(SELECT 1 FROM project_professionals pp JOIN professionals member ON member.id=pp.professional_id WHERE pp.project_id=t.project_id AND member.linked_user_id=$1))
+      LEFT JOIN professionals manager ON manager.id=p.manager_professional_id
+      WHERE t.status IN ${ACTIVE_TASKS} AND (t.assignee_id IN (SELECT id FROM identity_ids)
+        OR assignee.linked_user_id IN (SELECT id FROM identity_ids)
+        OR owner.linked_user_id IN (SELECT id FROM identity_ids)
+        OR manager.linked_user_id IN (SELECT id FROM identity_ids))
       ORDER BY t.critical DESC,(t.due_date<CURRENT_DATE) DESC,t.due_date,t.priority DESC LIMIT 250`,[request.user.id]);
     const messages=await pool.query(`SELECT m.id,m.subject,m.body,m.linked_url,m.created_at,s.display_name sender_name FROM user_messages m JOIN users s ON s.id=m.sender_id WHERE m.recipient_id=$1 AND m.read_at IS NULL AND NOT ($1=ANY(m.hidden_for)) ORDER BY m.created_at DESC LIMIT 20`,[request.user.id]);
     const today=new Date().toISOString().slice(0,10);

@@ -1,0 +1,4 @@
+.ai-chat-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.ai-chat-actions button{min-height:31px;padding:5px 9px;display:flex;align-items:center;gap:5px;border:1px solid #dcd6fa;border-radius:9px;color:#5545bd;background:#f4f1ff;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
+.ai-chat-actions button:hover{border-color:#8b7be5;background:#ebe6ff}
+.theme-dark .ai-chat-actions button{color:#ddd7ff;border-color:#50496e;background:#383348}

@@ -26,7 +26,7 @@ test('automation engine is connected to real lifecycle events and overdue schedu
 });
 
 test('personal work and voice chat expose resilient user-facing controls',async()=>{
-  const [workspace,chat,voiceStyles]=await Promise.all([read('src/ProductivityWorkspace.jsx'),read('src/AiChat.jsx'),read('src/ai-chat-voice.css')]);
+  const [workspace,chat,voiceStyles,engine,app]=await Promise.all([read('src/ProductivityWorkspace.jsx'),read('src/AiChat.jsx'),read('src/ai-chat-voice.css'),read('server/productivity.js'),read('src/App.jsx')]);
   assert.match(workspace,/user\?\.displayName\|\|user\?\.username/);
   assert.match(workspace,/מרכז העבודה של \{personalName\}/);
   assert.match(chat,/SpeechRecognition\|\|window\.webkitSpeechRecognition/);
@@ -34,6 +34,15 @@ test('personal work and voice chat expose resilient user-facing controls',async(
   assert.match(chat,/מאזין…/);
   assert.match(chat,/מדריך מסכים ופעולות/);
   assert.match(voiceStyles,/prefers-reduced-motion/);
+  assert.match(engine,/merged_into_user_id=\$1/);
+  assert.match(engine,/assignee\.linked_user_id IN \(SELECT id FROM identity_ids\)/);
+  assert.match(engine,/owner\.linked_user_id IN \(SELECT id FROM identity_ids\)/);
+  assert.match(engine,/manager\.linked_user_id IN \(SELECT id FROM identity_ids\)/);
+  assert.doesNotMatch(engine,/EXISTS\(SELECT 1 FROM project_professionals pp JOIN professionals member/);
+  assert.match(workspace,/relevanceLabels/);
+  assert.match(chat,/destinationsFor\(text\)/);
+  assert.match(chat,/ai-chat-actions/);
+  assert.match(app,/onNavigate=\{\(target\)=>/);
 });
 
 test('primary navigation cannot drift away from the AI help catalog',async()=>{

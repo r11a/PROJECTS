@@ -1,0 +1,9 @@
+.focus-task-main>span{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.task-relevance{padding:2px 7px;border-radius:999px;color:#5f6680;background:#f0f1f5;font-size:10px;font-style:normal}
+.task-relevance.assignee{color:#4f42b6;background:#eeebff}
+.task-relevance.owner{color:#176f65;background:#e5f6f2}
+.task-relevance.manager{color:#9a6216;background:#fff3dd}
+.theme-dark .task-relevance{color:#e2e4ec;background:#373a40}
+.theme-dark .task-relevance.assignee{color:#d9d2ff;background:#40396a}
+.theme-dark .task-relevance.owner{color:#bcebe3;background:#244a45}
+.theme-dark .task-relevance.manager{color:#ffe0a8;background:#554326}

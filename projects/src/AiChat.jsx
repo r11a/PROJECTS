@@ -1,6 +1,24 @@
 import { Component, useEffect, useRef, useState } from "react";
-import { CircleHelp, Eraser, Mic, Send, Sparkles, X } from "lucide-react";
+import { ArrowLeft, CircleHelp, Eraser, Mic, Send, Sparkles, X } from "lucide-react";
 import { ModalPortal } from "./AppModal";
+import "./ai-chat-actions.css";
+
+const helpDestinations = [
+  { page:"my-work",label:"פתח את העבודה שלי",pattern:/העבודה שלי|סדר היום|עדיפויות אישיות/i },
+  { page:"calendar",label:"פתח לוח שנה",pattern:/לוח שנה|אירוע|Outlook|תאריך/i },
+  { page:"gantt",label:"פתח לוח גאנט",pattern:/גאנט|ציר זמן|נתיב קריטי/i },
+  { page:"tasks",label:"פתח משימות ואבני דרך",pattern:/משימ|אבני דרך|אבן דרך|תלות|אחראי|מבצע/i },
+  { page:"reports",label:"פתח דוחות וניתוחים",pattern:/דוח|PDF|מצגת|סטטיסטיקה|ניתוח/i },
+  { page:"settings",label:"פתח הגדרות ומערכת",pattern:/הגדר|הרשא|משתמש|Audit|גיבוי|NAS|סוכן AI/i },
+  { page:"forms",label:"פתח טפסים ומסמכים",pattern:/טופס|מסמך|קובץ|תמונה|וידאו/i },
+  { page:"finance",label:"פתח תשלומים וגבייה",pattern:/תשלום|גבייה|יתרה|תקציב|כספ/i },
+  { page:"catalog",label:"פתח מערכות ורכיבים",pattern:/מערכות ורכיבים|קטלוג|רכיב|KNX|מצלמ/i },
+  { page:"professionals",label:"פתח אנשי מקצוע",pattern:/אנשי מקצוע|טכנאי|אדריכל|חשמלאי|ספק/i },
+  { page:"clients",label:"פתח לקוחות",pattern:/לקוח|לקוחות|Priority/i },
+  { page:"projects",label:"פתח פרויקטים",pattern:/פרויקט|פרויקטים|אשף|ארכיון/i },
+  { page:"dashboard",label:"פתח תמונת מצב",pattern:/תמונת מצב|דשבורד|תובנות/i },
+];
+const destinationsFor=(question)=>helpDestinations.filter((item)=>item.pattern.test(question)).slice(0,2).map(({page,label})=>({page,label}));
 
 const helpGroups = [
   { title:"פרויקטים", examples:["אילו פרויקטים דורשים תשומת לב?","תן לי תמונת מצב של הפרויקטים הפעילים","אילו פרויקטים נמצאים בשלב התקנות?"] },
@@ -12,7 +30,7 @@ const helpGroups = [
   { title:"פעולות נפוצות", examples:["איך יוצרים פרויקט חדש שלב אחר שלב?","איך מפיקים ושומרים דוח PDF בפרויקט?","איך מדווחים שעות עבודה?","איך יוצרים תלות בין משימות?"] },
 ];
 
-export function AiChat({ apiRoot, onClose }) {
+export function AiChat({ apiRoot, onClose, onNavigate }) {
   const [messages,setMessages] = useState([{ role:"assistant", text:"שלום, אני הסוכן החכם של PROJECTS. אפשר לשאול אותי על פרויקטים, משימות, גבייה, מערכות או על השימוש בתוכנה." }]);
   const [question,setQuestion] = useState("");
   const [busy,setBusy] = useState(false);
@@ -76,7 +94,7 @@ export function AiChat({ apiRoot, onClose }) {
     setBusy(true);
     try {
       const result=await streamAnswer(text,history);
-      setMessages((current)=>[...current,{ role:"assistant",text:result.answer,meta:`${result.providerName} · ${result.model}` }]);
+      setMessages((current)=>[...current,{ role:"assistant",text:result.answer,meta:`${result.providerName} · ${result.model}`,actions:destinationsFor(text) }]);
     } catch (error) {
       setMessages((current)=>[...current,{ role:"error",text:error.message,meta:"אפשר לבדוק את החיבור תחת הגדרות ומערכת › סוכן AI" }]);
     } finally { setBusy(false); }
@@ -127,7 +145,7 @@ export function AiChat({ apiRoot, onClose }) {
         <div className="ai-chat-thread" ref={threadRef}>
           {messages.map((message,index)=><article key={index} className={message.role}>
             {message.role !== "user" && <span><Sparkles size={15}/></span>}
-            <div><p>{message.text}</p>{message.meta && <small>{message.meta}</small>}</div>
+            <div><p>{message.text}</p>{message.actions?.length>0&&<nav className="ai-chat-actions">{message.actions.map((action)=><button type="button" key={action.page} onClick={()=>onNavigate?.(action.page)}>{action.label}<ArrowLeft size={14}/></button>)}</nav>}{message.meta && <small>{message.meta}</small>}</div>
           </article>)}
           {listening && <article className="assistant voice-listening"><span><Mic size={15}/></span><div><strong>מאזין…</strong><i/><i/><i/><i/><i/></div></article>}
           {busy && <article className="assistant thinking"><span><Sparkles size={15}/></span><div><i/><i/><i/></div></article>}

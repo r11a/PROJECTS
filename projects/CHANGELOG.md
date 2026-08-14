@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.21.2
+
+- Corrected My Work relevance so direct performers and owners see assigned tasks even when another person manages the project.
+- Limited manager-wide visibility to the actual project manager instead of exposing every project task to every team member.
+- Included merged Web and Home Assistant identities when resolving personal assignments and added visible performer, owner and manager relevance badges.
+- Added contextual navigation buttons to AI help answers so users can open the relevant PROJECTS workspace directly from the chat.
+
 ## 0.21.1
 
 - Fixed AI Help questions crashing when PostgreSQL returned schema column aggregates as encoded text instead of a JavaScript array.

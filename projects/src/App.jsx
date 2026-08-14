@@ -1218,7 +1218,7 @@ function App() {
           onOpenLinked={openMessageLink}
         />
       )}
-      {aiChatOpen && <AiChatBoundary onClose={() => setAiChatOpen(false)}><AiChat apiRoot={apiRoot} onClose={() => setAiChatOpen(false)} /></AiChatBoundary>}
+      {aiChatOpen && <AiChatBoundary onClose={() => setAiChatOpen(false)}><AiChat apiRoot={apiRoot} onClose={() => setAiChatOpen(false)} onNavigate={(target)=>{setAiChatOpen(false);setSelectedProject(null);setPage(target);setSidebarOpen(false)}} /></AiChatBoundary>}
       {notice && (
         <div className="toast">
           <CheckCircle2 size={19} />
