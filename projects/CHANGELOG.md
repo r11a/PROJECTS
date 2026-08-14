@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.20.2
+
+- Stabilized critical browser navigation when overdue-task alerts are shown.
+- Corrected the project-template browser check to verify generated tasks through the active operations API.
+
 ## 0.20.1
 
 - Made Playwright authentication deterministic by waiting for login and password API responses before continuing.

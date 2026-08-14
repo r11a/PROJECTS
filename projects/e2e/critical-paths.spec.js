@@ -2,17 +2,28 @@ import { test, expect } from '@playwright/test';
 
 const hardenedPassword = 'Projects-CI-2026!';
 
+async function closeBlockingAlerts(page) {
+  const alertBackdrop = page.locator('.alert-backdrop');
+  if (await alertBackdrop.isVisible().catch(() => false)) {
+    await alertBackdrop.locator('.alert-center > header button').click();
+    await expect(alertBackdrop).toBeHidden();
+  }
+}
+
 async function webLogin(page, password = hardenedPassword) {
   await page.context().clearCookies();
   await page.goto('/');
   await page.locator('input[autocomplete="username"]').fill('admin');
   await page.locator('input[autocomplete="current-password"]').fill(password);
+  const insightsResponse = page.waitForResponse((candidate) => candidate.url().includes('/api/ai/insights'));
   const [response] = await Promise.all([
     page.waitForResponse((candidate) => candidate.url().includes('/api/auth/login') && candidate.request().method() === 'POST'),
     page.locator('form button[type="submit"], form button').last().click(),
   ]);
   expect(response.ok()).toBeTruthy();
   await expect(page.locator('.sidebar')).toBeVisible();
+  await insightsResponse;
+  await closeBlockingAlerts(page);
 }
 
 test.describe.serial('PROJECTS critical paths', () => {
@@ -74,7 +85,9 @@ test.describe.serial('PROJECTS critical paths', () => {
     const created = await page.request.post('/api/projects', { data:{ name, clientId:clients.clients[0].id, templateId:templates.templates[0].id, startDate:'2026-08-01' } });
     expect(created.ok()).toBeTruthy();
     const project = (await created.json()).project;
-    const tasks = await (await page.request.get(`/api/tasks?projectId=${encodeURIComponent(project.id)}`)).json();
+    const tasksResponse = await page.request.get(`/api/operations/tasks?projectId=${encodeURIComponent(project.id)}`);
+    expect(tasksResponse.ok()).toBeTruthy();
+    const tasks = await tasksResponse.json();
     expect(tasks.tasks.length).toBeGreaterThan(0);
   });
 
