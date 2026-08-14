@@ -77,7 +77,7 @@ test('live system knowledge is rebuilt, permission-aware and strips secrets', as
     const text=String(sql);queries.push({text,parameters});
     if(text.includes('pg_stat_user_tables')) return {rows:[{table_name:'projects',approximate_records:8},{table_name:'ai_provider_settings',approximate_records:2}]};
     if(text.includes('FROM audit_log')) return {rows:[{action:'update',details:{password:'hidden',nested:{apiKey:'hidden',safe:'visible'}}}]};
-    if(text.includes('information_schema.columns')) return {rows:[{table_name:'projects',columns:['id','name','external_token']},{table_name:'calendar_feed_tokens',columns:['token']}]};
+    if(text.includes('information_schema.columns')) return {rows:[{table_name:'projects',columns:'["id","name","external_token"]'},{table_name:'calendar_feed_tokens',columns:'{"token"}'}]};
     if(text.includes('FROM app_settings')) return {rows:[{key:'ai',value:{activeProvider:'gemini',monthlyBudgetUsd:5,apiKey:'secret'}}]};
     return {rows:[]};
   }};

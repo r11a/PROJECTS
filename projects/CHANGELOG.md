@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.21.1
+
+- Fixed AI Help questions crashing when PostgreSQL returned schema column aggregates as encoded text instead of a JavaScript array.
+- Switched schema discovery to JSON aggregation and added defensive normalization for PostgreSQL JSON and array-text formats.
+
 ## 0.21.0
 
 - Rebuilt AI chat context on every question from live, permission-aware application data, users, audit activity, settings metadata and schema inventory while excluding credentials and tokens.

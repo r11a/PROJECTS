@@ -93,6 +93,17 @@ function sanitizeSettings(rows) {
   });
 }
 
+function normalizeColumns(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed=JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed;
+  } catch { /* PostgreSQL array text is handled below. */ }
+  if (value.startsWith('{') && value.endsWith('}')) return value.slice(1,-1).split(',').map((item)=>item.replace(/^"|"$/g,'').trim()).filter(Boolean);
+  return [];
+}
+
 export async function buildLiveSystemKnowledge(pool, question, user = { role:'admin',id:null }) {
   const isAdmin = user?.role === 'admin';
   const broad = isBroadQuestion(question);
@@ -130,11 +141,11 @@ export async function buildLiveSystemKnowledge(pool, question, user = { role:'ad
   if (helpOrMeta) knowledge.helpGuide = selectHelpGuide(question,isAdmin,broad);
 
   if (helpOrMeta && isAdmin) {
-    const schema = await safeQuery(pool, `SELECT table_name,array_agg(column_name ORDER BY ordinal_position) columns
+    const schema = await safeQuery(pool, `SELECT table_name,json_agg(column_name ORDER BY ordinal_position) columns
       FROM information_schema.columns WHERE table_schema='public'
       GROUP BY table_name ORDER BY table_name`);
     knowledge.liveSchema = schema.filter((item)=>!SENSITIVE_TABLES.has(item.table_name))
-      .map((item)=>({ ...item,columns:item.columns.filter((column)=>!/(password|secret|token|api_key)/i.test(column)) }));
+      .map((item)=>({ ...item,columns:normalizeColumns(item.columns).filter((column)=>!/(password|secret|token|api_key)/i.test(column)) }));
   }
 
   if (isAdmin && (broad || wants(question,'settings'))) {
