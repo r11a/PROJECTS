@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.20.1
+
+- Made Playwright authentication deterministic by waiting for login and password API responses before continuing.
+- Isolated cookies between critical browser paths and made the initial-password test safe when retried against an already-hardened container.
+- Added explicit authenticated-response assertions before project-template fixtures are accessed.
+
 ## 0.20.0
 
 - Promoted the Home Assistant add-on from experimental to stable after a focused hardening pass.
