@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.24.2
+
+- Completed the fresh-install demo project seed defaults for the finance schema.
+- Serialized finance breakdown seed data consistently as JSONB.
+
 ## 0.24.1
 
 - Fixed fresh Add-on startup when demo projects are enabled by supplying required project appearance defaults.

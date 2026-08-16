@@ -229,13 +229,14 @@ async function seedDemoProjects() {
     const seededProject = {
       projectSize:'medium', contractorProgress:'waiting', documentFolder:'', projectClassification:'private_house',
       projectIcon:'', projectColor:'#6957df',
+      financeMode:'total', paymentTerms:'', depositAmount:0, depositPaid:false, financeBreakdown:[],
       installationHoursTarget:0, programmingHoursTarget:0,
       ...project, stage:legacyStages[project.stage] || project.stage,
     };
     seededProject.progress = STAGE_PROGRESS[seededProject.stage] ?? seededProject.progress;
     const values = projectColumns.map((column) => {
       const inputKey = Object.keys(inputToColumn).find((key) => inputToColumn[key] === column);
-      if (column === 'systems') return JSON.stringify(seededProject[inputKey] || []);
+      if (column === 'systems' || column === 'finance_breakdown') return JSON.stringify(seededProject[inputKey] || []);
       if (column === 'installation_hours_target' || column === 'programming_hours_target') {
         return Math.max(0, Number(seededProject[inputKey]) || 0);
       }

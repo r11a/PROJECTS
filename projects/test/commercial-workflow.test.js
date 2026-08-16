@@ -63,4 +63,6 @@ test('catalog colors inherit from the system type and commercial layouts stay is
 test('fresh add-on demo seed satisfies required project appearance columns',async()=>{
   const server=await read('server/index.js');
   assert.match(server,/projectIcon:'', projectColor:'#6957df'/);
+  assert.match(server,/financeMode:'total', paymentTerms:'', depositAmount:0, depositPaid:false, financeBreakdown:\[\]/);
+  assert.match(server,/column === 'systems' \|\| column === 'finance_breakdown'/);
 });
