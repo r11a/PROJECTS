@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.22.1
+
+- Hardened the PWA and standalone app shell cache policy so a mobile device fetches the current release after an add-on upgrade.
+
 ## 0.22.0
 
 - Added supervisor and fully custom read/write permission profiles, including independent finance visibility.

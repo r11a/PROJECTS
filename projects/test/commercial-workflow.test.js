@@ -30,7 +30,7 @@ test('mobile forms prevent focus zoom and document viewers use the dynamic viewp
 
 test('add-on entry document is never cached across upgrades',async()=>{
   const nginx=await read('rootfs/etc/nginx/http.d/projects.conf');
-  assert.match(nginx,/Cache-Control "no-cache, no-store, must-revalidate"/);
+  assert.match(nginx,/Cache-Control "no-store, no-cache, must-revalidate, max-age=0"/);
   assert.match(nginx,/location \/assets\//);
   assert.match(nginx,/immutable/);
 });
@@ -39,7 +39,7 @@ test('release versions stay synchronized',async()=>{
   const manifest=JSON.parse(await read('package.json'));
   const config=await read('config.yaml');
   const docker=await read('Dockerfile');
-  assert.equal(manifest.version,'0.22.0');
-  assert.match(config,/version: "0\.22\.0"/);
-  assert.match(docker,/io\.hass\.version="0\.22\.0"/);
+  assert.equal(manifest.version,'0.22.1');
+  assert.match(config,/version: "0\.22\.1"/);
+  assert.match(docker,/io\.hass\.version="0\.22\.1"/);
 });
