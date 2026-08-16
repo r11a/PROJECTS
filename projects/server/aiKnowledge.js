@@ -218,7 +218,7 @@ export async function buildLiveSystemKnowledge(pool, question, user = { role:'ad
   if (broad || wants(question,'governance')) {
     knowledge.governance = {
       templates:await safeQuery(pool, 'SELECT name,description,classification,active,updated_at FROM project_templates ORDER BY updated_at DESC LIMIT 25'),
-      automations:await safeQuery(pool, `SELECT r.name,r.trigger_type,r.active,r.updated_at,
+      automations:await safeQuery(pool, `SELECT r.name,r.trigger_type,r.trigger_types,r.active,r.updated_at,
         (SELECT MAX(ar.created_at) FROM automation_runs ar WHERE ar.rule_id=r.id) last_run_at
         FROM automation_rules r ORDER BY r.updated_at DESC LIMIT 25`),
       baselines:await safeQuery(pool, `SELECT b.label,b.created_at,p.name project_name FROM project_baselines b

@@ -1,17 +1,109 @@
 import express from 'express';
 
 const ACTIVE_TASKS = "('open','in_progress')";
+const AUTOMATION_TRIGGER_TYPES = ["project_created","project_stage_changed","task_created","task_status_changed","task_overdue"];
 const asObject = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 const asArray = (value) => Array.isArray(value) ? value : [];
+const toBoolean = (value) => value === true || value === 'true' || value === 1 || value === '1';
+const normalizeTriggerTypes = (raw) => {
+  const list = asArray(raw);
+  const deduped = [];
+  const bucket = new Set();
+  for (const rawValue of list) {
+    const value = String(rawValue || "").trim();
+    if (!AUTOMATION_TRIGGER_TYPES.includes(value) || bucket.has(value)) continue;
+    bucket.add(value);
+    deduped.push(value);
+  }
+  if (!deduped.length && String(raw).trim()) {
+    const value = String(raw).trim();
+    if (AUTOMATION_TRIGGER_TYPES.includes(value)) deduped.push(value);
+  }
+  return deduped.length ? deduped : ["task_overdue"];
+};
+const normalizeConditionValue = (value) => (value === null || value === undefined ? "" : String(value).trim());
+const evaluateCondition = (condition = {}, context = {}) => {
+  const field = String(condition.field || "").trim();
+  if (!field) return false;
+  const operator = String(condition.operator || "equals");
+  const currentRaw = context[field];
+  const expectedRaw = condition.value;
+  const current = normalizeConditionValue(currentRaw);
+  const expected = normalizeConditionValue(expectedRaw);
+
+  if (operator === "blank") return current.length === 0;
+  if (operator === "not_blank") return current.length > 0;
+
+  if (operator === "contains") return current.includes(expected);
+  if (operator === "not_contains") return !current.includes(expected);
+  if (operator === "not_equals") return current !== expected;
+  return current === expected;
+};
+const evaluateConditionGroup = (group = {}, context = {}) => {
+  const logic = group.logic === "OR" ? "OR" : "AND";
+  const list = asArray(group.conditions);
+  if (!list.length) return false;
+  if (logic === "OR") return list.some((condition) => evaluateCondition(condition, context));
+  return list.every((condition) => evaluateCondition(condition, context));
+};
+const evaluateRuleConditions = (conditions, context = {}) => {
+  if (!conditions || typeof conditions !== "object") return true;
+
+  // Backward compatibility: old records stored as flat object.
+  if (!Array.isArray(conditions.groups)) {
+    const flat = asObject(conditions);
+    return Object.entries(flat).every(([key, value]) => {
+      if (value === undefined || value === null || String(value).trim() === "") return true;
+      return evaluateCondition({ field: key, operator: "equals", value }, context);
+    });
+  }
+
+  const logic = conditions.logic === "AND" ? "AND" : "OR";
+  if (logic === "OR") return conditions.groups.some((group) => evaluateConditionGroup(group, context));
+  return conditions.groups.every((group) => evaluateConditionGroup(group, context));
+};
+const mapAutomationConditionsForSave = (input = {}) => {
+  const raw = asObject(input);
+  const groups = asArray(raw.groups).map((group, groupIndex) => ({
+    logic: group?.logic === "OR" ? "OR" : "AND",
+    conditions: asArray(group.conditions)
+      .filter((item) => item && item.field !== "")
+      .map((condition, index) => ({
+        id: condition.id || `${groupIndex}-${index}`,
+        field: String(condition.field || "status"),
+        operator: String(condition.operator || "equals"),
+        value: condition.value ?? "",
+        order: Number.isFinite(Number(condition.order)) ? Number(condition.order) : index,
+      })),
+  })).filter((group) => group.conditions.length > 0);
+  return {
+    logic: raw.logic === "AND" ? "AND" : "OR",
+    groups: groups.length ? groups : [{ logic: "AND", conditions: [{ field: "status", operator: "equals", value: "open", order: 0 }] }],
+  };
+};
+const mapAutomationActionsForSave = (input = []) => asArray(input).map((action, index) => ({
+  id: action.id || `${Date.now()}-${index}`,
+  type: action.type || "create_task",
+  title: action.title || "",
+  description: action.description || "",
+  dueDays: Number(action.dueDays) || 0,
+  priority: action.priority || "normal",
+  critical: toBoolean(action.critical),
+  taskType: action.taskType || "task",
+  subject: action.subject || "",
+  body: action.body || "",
+  linkedUrl: action.linkedUrl || "",
+  order: Number.isFinite(Number(action.order)) ? Number(action.order) : index,
+}));
 
 export async function executeAutomations({ pool, triggerType, entityType, entityId, context = {}, userId = null }) {
-  const rules = await pool.query('SELECT * FROM automation_rules WHERE active=TRUE AND trigger_type=$1 ORDER BY id', [triggerType]);
+  const rules = await pool.query(
+    "SELECT * FROM automation_rules WHERE active=TRUE AND (trigger_type=$1 OR COALESCE(trigger_types,'[]'::jsonb) ? $1) ORDER BY id",
+    [triggerType],
+  );
   for (const rule of rules.rows) {
-    const conditions = asObject(rule.conditions);
-    if (conditions.stage && conditions.stage !== context.stage) continue;
-    if (conditions.fromStage && conditions.fromStage !== context.fromStage) continue;
-    if (conditions.status && conditions.status !== context.status) continue;
-    if (conditions.fromStatus && conditions.fromStatus !== context.fromStatus) continue;
+    const conditions = mapAutomationConditionsForSave(rule.conditions);
+    if (!evaluateRuleConditions(conditions, context)) continue;
     const db = await pool.connect();
     try {
       await db.query('BEGIN');
@@ -44,7 +136,8 @@ export function startAutomationScheduler({ pool }) {
     const overdue = await pool.query(`SELECT t.id,t.project_id,t.title FROM tasks t
       WHERE t.status IN ${ACTIVE_TASKS} AND t.due_date<CURRENT_DATE
       AND NOT EXISTS(SELECT 1 FROM automation_runs ar JOIN automation_rules r ON r.id=ar.rule_id
-        WHERE r.trigger_type='task_overdue' AND ar.entity_type='task' AND ar.entity_id=t.id::text
+        WHERE (r.trigger_type='task_overdue' OR COALESCE(r.trigger_types,'[]'::jsonb) ? 'task_overdue')
+          AND ar.entity_type='task' AND ar.entity_id=t.id::text
         AND ar.created_at::date=CURRENT_DATE)`);
     for (const task of overdue.rows) await executeAutomations({ pool,triggerType:'task_overdue',entityType:'task',entityId:task.id,context:{ projectId:task.project_id,title:task.title,status:'overdue' } });
   };
@@ -135,8 +228,47 @@ export function createProductivityRouter({ pool, authenticate, requireRoles, aud
     } catch(error){await db.query('ROLLBACK');throw error;} finally {db.release();}
   });
   router.get('/automation-rules',requireRoles('admin','manager'),async(_request,response)=>{const [rules,runs]=await Promise.all([pool.query('SELECT * FROM automation_rules ORDER BY active DESC,created_at DESC'),pool.query(`SELECT r.*,a.name rule_name FROM automation_runs r LEFT JOIN automation_rules a ON a.id=r.rule_id ORDER BY r.created_at DESC LIMIT 30`)]);response.json({rules:rules.rows,runs:runs.rows});});
-  router.post('/automation-rules',requireRoles('admin','manager'),async(request,response)=>{const result=await pool.query(`INSERT INTO automation_rules(name,trigger_type,conditions,actions,created_by) VALUES($1,$2,$3,$4,$5) RETURNING *`,[String(request.body.name||'').trim(),request.body.triggerType,JSON.stringify(asObject(request.body.conditions)),JSON.stringify(asArray(request.body.actions)),request.user.id]);response.status(201).json({rule:result.rows[0]});});
-  router.patch('/automation-rules/:id',requireRoles('admin','manager'),async(request,response)=>{const result=await pool.query(`UPDATE automation_rules SET name=COALESCE($1,name),active=COALESCE($2,active),conditions=COALESCE($3,conditions),actions=COALESCE($4,actions),updated_at=NOW() WHERE id=$5 RETURNING *`,[request.body.name||null,typeof request.body.active==='boolean'?request.body.active:null,request.body.conditions?JSON.stringify(request.body.conditions):null,request.body.actions?JSON.stringify(request.body.actions):null,request.params.id]);response.json({rule:result.rows[0]});});
+  router.post('/automation-rules',requireRoles('admin','manager'),async(request,response)=>{
+    const triggerTypes = normalizeTriggerTypes(request.body.triggerTypes || request.body.triggerType || request.body.trigger_type);
+    const conditions = mapAutomationConditionsForSave(request.body.conditions);
+    const actions = mapAutomationActionsForSave(request.body.actions);
+    const result=await pool.query(
+      `INSERT INTO automation_rules(name,trigger_type,trigger_types,conditions,actions,created_by)
+       VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [
+        String(request.body.name||'').trim(),
+        triggerTypes[0],
+        JSON.stringify(triggerTypes),
+        JSON.stringify(conditions),
+        JSON.stringify(actions),
+        request.user.id,
+      ],
+    );
+    response.status(201).json({rule:result.rows[0]});
+  });
+  router.patch('/automation-rules/:id',requireRoles('admin','manager'),async(request,response)=>{
+    const triggerTypes = request.body.triggerTypes || request.body.triggerType || request.body.trigger_type;
+    const normalizedTriggerTypes = triggerTypes === undefined ? null : normalizeTriggerTypes(triggerTypes);
+    const update = [];
+    const values = [];
+    let index = 1;
+    if (request.body.name !== undefined) { update.push(`name=$${index++}`); values.push(String(request.body.name||'').trim()); }
+    if (normalizedTriggerTypes) {
+      update.push(`trigger_type=$${index++}`, `trigger_types=$${index++}`);
+      values.push(normalizedTriggerTypes[0], JSON.stringify(normalizedTriggerTypes));
+    }
+    if (request.body.conditions !== undefined) { update.push(`conditions=$${index++}`); values.push(JSON.stringify(mapAutomationConditionsForSave(request.body.conditions))); }
+    if (request.body.actions !== undefined) { update.push(`actions=$${index++}`); values.push(JSON.stringify(mapAutomationActionsForSave(request.body.actions))); }
+    if (typeof request.body.active === 'boolean') { update.push(`active=$${index++}`); values.push(request.body.active); }
+    if (!update.length) return response.status(400).json({ error: '×©× ×§×”×“××•×ª ×‘×™× ×•×¡ ××•×™× ×” ×œ×”×™×•×ª ×‘×¡×™×¡×™' });
+    update.push('updated_at=NOW()');
+    values.push(request.params.id);
+    const result=await pool.query(
+      `UPDATE automation_rules SET ${update.join(', ')} WHERE id=$${index} RETURNING *`,
+      values,
+    );
+    response.json({rule:result.rows[0]});
+  });
   router.delete('/automation-rules/:id',requireRoles('admin'),async(request,response)=>{await pool.query('DELETE FROM automation_rules WHERE id=$1',[request.params.id]);response.status(204).end();});
 
   router.get('/portfolio-health',async(_request,response)=>{const result=await pool.query(`SELECT p.id,p.name,p.stage,p.progress,p.manager,p.installation_hours_target installation_target,p.programming_hours_target programming_target,

@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS automation_rules (
   id BIGSERIAL PRIMARY KEY,
   name TEXT NOT NULL CHECK (btrim(name) <> ''),
   trigger_type TEXT NOT NULL CHECK (trigger_type IN ('project_created','project_stage_changed','task_created','task_status_changed','task_overdue')),
+  trigger_types JSONB NOT NULL DEFAULT '[]'::jsonb,
   conditions JSONB NOT NULL DEFAULT '{}'::jsonb,
   actions JSONB NOT NULL DEFAULT '[]'::jsonb,
   active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -97,8 +98,11 @@ CREATE TABLE IF NOT EXISTS project_change_requests (
 CREATE INDEX IF NOT EXISTS saved_views_user_workspace_idx ON saved_views(user_id,workspace);
 CREATE INDEX IF NOT EXISTS project_template_tasks_template_idx ON project_template_tasks(template_id,position);
 CREATE INDEX IF NOT EXISTS automation_rules_trigger_idx ON automation_rules(trigger_type,active);
+CREATE INDEX IF NOT EXISTS automation_rules_trigger_types_gin_idx ON automation_rules USING gin (trigger_types);
 CREATE INDEX IF NOT EXISTS project_baselines_project_idx ON project_baselines(project_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS project_changes_project_idx ON project_change_requests(project_id,status,created_at DESC);
+
+UPDATE automation_rules SET trigger_types = jsonb_build_array(trigger_type) WHERE trigger_types = '[]'::jsonb OR trigger_types IS NULL;
 
 INSERT INTO project_templates(name,description,classification,installation_hours_target,programming_hours_target,folder_structure)
 VALUES
