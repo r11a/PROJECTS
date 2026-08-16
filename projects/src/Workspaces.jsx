@@ -467,13 +467,26 @@ export function TasksWorkspace({
     return () => clearTimeout(timer);
   }, [load]);
   useEffect(() => {
-    if (!initialTaskId || !tasks.length) return;
-    const item = tasks.find((task) => String(task.id) === String(initialTaskId));
-    if (!item) return;
-    setTab("tasks");
-    setEditor({ kind: "task", item });
-    if (typeof onInitialTaskOpened === "function") onInitialTaskOpened();
-  }, [initialTaskId, tasks, onInitialTaskOpened]);
+    if (!initialTaskId || loading) return;
+    const normalizedId = String(initialTaskId);
+    const task = tasks.find((item) => String(item.id) === normalizedId);
+    if (task) {
+      setTab("tasks");
+      setEditor({ kind: "task", item: task });
+      if (typeof onInitialTaskOpened === "function") onInitialTaskOpened();
+      return;
+    }
+    const milestone = milestones.find(
+      (item) => String(item.id) === normalizedId,
+    );
+    if (milestone) {
+      setTab("milestones");
+      setEditor({ kind: "milestone", item: milestone });
+      if (typeof onInitialTaskOpened === "function") onInitialTaskOpened();
+    } else if (typeof onInitialTaskOpened === "function") {
+      onInitialTaskOpened();
+    }
+  }, [initialTaskId, tasks, milestones, loading, onInitialTaskOpened]);
   useEffect(() => {
     const openScheduleItem = (event) => {
       const id = event.detail?.id;

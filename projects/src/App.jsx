@@ -1086,9 +1086,14 @@ function App() {
               setNotice={setNotice}
               onOpenEvent={(event) => {
                 const linkedProject = projects.find((item) => String(item.id) === String(event.projectId));
+                const eventId = String(
+                  event.sourceId || String(event.id || "").replace(/^[^-]+-/, "") || "",
+                );
+                const isScheduledEvent = ["task", "milestone"].includes(event.type);
                 if (!linkedProject) return setNotice("הפרויקט המקושר לא נמצא");
+                setLinkedTaskId(isScheduledEvent ? eventId : "");
                 openProject(linkedProject);
-                if (["task", "milestone"].includes(event.type)) window.setTimeout(() => window.dispatchEvent(new CustomEvent("projects:open-schedule-item", { detail: { id: event.sourceId, type: event.type } })), 0);
+                if (isScheduledEvent && eventId) window.setTimeout(() => window.dispatchEvent(new CustomEvent("projects:open-schedule-item", { detail: { id: eventId, type: event.type } })), 0);
               }}
             />
           )}

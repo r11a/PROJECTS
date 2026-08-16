@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.24.4
+
+- Calendar event deep-link now opens the linked task/milestone directly inside the project overview (not only project summary), including task and milestone fallback handling.
+
 ## 0.24.3
 
 - Broadened project edit permission model so non-manager users with `projects: write` and configured supervisor/technician roles can edit project data when allowed.
