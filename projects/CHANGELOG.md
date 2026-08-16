@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.24.1
+
+- Fixed fresh Add-on startup when demo projects are enabled by supplying required project appearance defaults.
+
 ## 0.24.0
 
 - Added configurable Friday/Saturday scheduling rules shared by Calendar and Gantt.

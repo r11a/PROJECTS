@@ -228,6 +228,7 @@ async function seedDemoProjects() {
     const legacyStages = { planning:'waiting',installation:'installation_b',programming:'activation_programming',handover:'finishes',completed:'post_delivery' };
     const seededProject = {
       projectSize:'medium', contractorProgress:'waiting', documentFolder:'', projectClassification:'private_house',
+      projectIcon:'', projectColor:'#6957df',
       installationHoursTarget:0, programmingHoursTarget:0,
       ...project, stage:legacyStages[project.stage] || project.stage,
     };

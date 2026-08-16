@@ -59,3 +59,8 @@ test('catalog colors inherit from the system type and commercial layouts stay is
   assert.match(workspaces,/finance-dashboard-grid-single/);
   assert.doesNotMatch(workspaces,/finance-project-summary/);
 });
+
+test('fresh add-on demo seed satisfies required project appearance columns',async()=>{
+  const server=await read('server/index.js');
+  assert.match(server,/projectIcon:'', projectColor:'#6957df'/);
+});
