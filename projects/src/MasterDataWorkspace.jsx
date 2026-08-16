@@ -33,6 +33,7 @@ import {
   Users,
 } from "lucide-react";
 import { AppModal } from "./AppModal";
+import "./professional-projects.css";
 
 const emptyProfessional = {
   displayName: "",
@@ -92,6 +93,7 @@ export function MasterDataWorkspace({
   const [equipment, setEquipment] = useState([]);
   const [query, setQuery] = useState("");
   const [professionalForm, setProfessionalForm] = useState(null);
+  const [professionalProjects, setProfessionalProjects] = useState(null);
   const [equipmentForm, setEquipmentForm] = useState(null);
   const [roleForm, setRoleForm] = useState(false);
   const [priorityScanOpen, setPriorityScanOpen] = useState(false);
@@ -125,7 +127,7 @@ export function MasterDataWorkspace({
   }, []);
   const refresh = async () => {
     await load();
-    await onDataChanged?.();
+    if (typeof onDataChanged === "function") await onDataChanged();
   };
   useEffect(() => {
     load();
@@ -229,6 +231,14 @@ export function MasterDataWorkspace({
           apiRoot={apiRoot}
           customFields={professionalFields}
           user={user}
+          onOpenProjects={async (professional) => {
+            try {
+              const result = await api(`/professionals/${professional.id}/projects`);
+              setProfessionalProjects({ professional, projects: result.projects || [] });
+            } catch (error) {
+              setNotice(error.message);
+            }
+          }}
           onEdit={(item) =>
             setProfessionalForm({
               ...item,
@@ -318,6 +328,23 @@ export function MasterDataWorkspace({
           }}
         />
       )}
+      {professionalProjects && (
+        <Modal
+          title={`הפרויקטים של ${professionalProjects.professional.displayName}`}
+          subtitle="כל הפרויקטים שבהם איש המקצוע משויך כמנהל או כחבר צוות"
+          onClose={() => setProfessionalProjects(null)}
+        >
+          <div className="professional-projects-dialog">
+            {professionalProjects.projects.length ? professionalProjects.projects.map((project) => (
+              <article key={project.id}>
+                <div><strong>{project.name}</strong><small>{project.location || "ללא כתובת"}</small></div>
+                <span>{project.archived_at ? "בארכיון" : project.stage || "ללא שלב"}</span>
+                <b>{Number(project.progress || 0)}%</b>
+              </article>
+            )) : <EmptyState icon={BriefcaseBusiness} title="אין פרויקטים משויכים" text="איש המקצוע עדיין לא שויך לפרויקט." />}
+          </div>
+        </Modal>
+      )}
       {equipmentForm && (
         <EquipmentEditor
           value={equipmentForm}
@@ -402,7 +429,7 @@ export function MasterDataWorkspace({
   );
 }
 
-function ProfessionalsGrid({ items, user, onEdit, onDelete,view='grid',apiRoot,customFields=[] }) {
+function ProfessionalsGrid({ items, user, onEdit, onDelete, onOpenProjects,view='grid',apiRoot,customFields=[] }) {
   if (!items.length)
     return (
       <EmptyState
@@ -417,6 +444,9 @@ function ProfessionalsGrid({ items, user, onEdit, onDelete,view='grid',apiRoot,c
         <article
           className={`professional-card ${!item.active ? "inactive" : ""}`}
           key={item.id}
+          onClick={(event) => {
+            if (!event.target.closest("button,a,input,select")) onOpenProjects?.(item);
+          }}
         >
           <header>
             <span
@@ -472,10 +502,10 @@ function ProfessionalsGrid({ items, user, onEdit, onDelete,view='grid',apiRoot,c
             {customFields.filter(field=>item.customValues?.[field.fieldKey]!==undefined&&item.customValues?.[field.fieldKey]!==''&&item.customValues?.[field.fieldKey]!==false).map(field=><div key={field.id}><dt>{field.label}</dt><dd>{field.fieldType==='boolean'?'כן':String(item.customValues[field.fieldKey])}</dd></div>)}
           </dl>
           <footer>
-            <span className="professional-project-load" title={`${item.projectCount} פרויקטים משויכים`}>
+            <button type="button" className="professional-project-load" title={`${item.projectCount} פרויקטים משויכים`} onClick={() => onOpenProjects?.(item)}>
               <i style={{width:`${Math.min(100,Number(item.projectCount||0)*14)}%`}}/>
               <b>{item.projectCount} פרויקטים</b> · {item.clientCount} לקוחות
-            </span>
+            </button>
             {["admin", "manager"].includes(user.role) && (
               <button onClick={() => onEdit(item)}>
                 <Pencil size={15} />
@@ -530,7 +560,7 @@ function ProfessionalEditor({ value, roles, users, customFields=[], onClose, onS
             }
           />
         </label>
-        <label>שם משפחה<input required value={form.lastName} onChange={event=>setForm({...form,lastName:event.target.value,displayName:[form.firstName,event.target.value].filter(Boolean).join(' ')})}/></label>
+        <label>שם משפחה<input value={form.lastName} onChange={event=>setForm({...form,lastName:event.target.value,displayName:[form.firstName,event.target.value].filter(Boolean).join(' ')})}/></label>
         <label>
           שיוך ארגוני
           <select
@@ -712,7 +742,7 @@ function EquipmentTree({ items, apiRoot, user, onEdit, onDelete, onDuplicate }) 
           </span>
         </div>;
   };
-  return <div className="equipment-category-grid">{categories.map(category=>{const categoryColor=category.color||"#6957df";const systems=items.filter(item=>item.itemType==="system"&&String(item.parentId)===String(category.id));return <details className="equipment-category panel" key={category.id} open style={{"--category-color":categoryColor}}><summary><span className="catalog-category-icon" style={{background:categoryColor}}>{category.iconImageStoredName?<img src={`${apiRoot}/equipment-catalog/${category.id}/icon`} alt=""/>:<Boxes size={20}/>}</span><div><strong>{category.name}</strong><small>{systems.length} מערכות · פתיחה לעריכה וניהול</small></div><button type="button" onClick={event=>{event.preventDefault();onEdit(category)}}><Pencil size={15}/></button></summary><div className="equipment-head"><span>מערכת / מוצר / התקן / רכיב</span><span>סוג</span><span>יצרן / דגם</span><span>מק״ט Priority</span><span>סטטוס</span><span/></div>{systems.map(system=><div className="catalog-system-group" key={system.id} style={{"--equipment-color":categoryColor}}>{renderItem(system, categoryColor)}{items.filter(item=>item.itemType==="component"&&String(item.parentId)===String(system.id)).map(component=>renderItem(component, categoryColor))}</div>)}</details>})}</div>;
+  return <div className="equipment-category-grid">{categories.map(category=>{const categoryColor=category.color||"#6957df";const systems=items.filter(item=>item.itemType==="system"&&String(item.parentId)===String(category.id));return <details className="equipment-category panel" key={category.id} style={{"--category-color":categoryColor}}><summary><span className="catalog-category-icon" style={{background:categoryColor}}>{category.iconImageStoredName?<img src={`${apiRoot}/equipment-catalog/${category.id}/icon`} alt=""/>:<Boxes size={20}/>}</span><div><strong>{category.name}</strong><small>{systems.length} מערכות · פתיחה לעריכה וניהול</small></div><button type="button" onClick={event=>{event.preventDefault();onEdit(category)}}><Pencil size={15}/></button></summary><div className="equipment-head"><span>מערכת / מוצר / התקן / רכיב</span><span>סוג</span><span>יצרן / דגם</span><span>מק״ט Priority</span><span>סטטוס</span><span/></div>{systems.map(system=><div className="catalog-system-group" key={system.id} style={{"--equipment-color":categoryColor}}>{renderItem(system, categoryColor)}{items.filter(item=>item.itemType==="component"&&String(item.parentId)===String(system.id)).map(component=>renderItem(component, categoryColor))}</div>)}</details>})}</div>;
 }
 
 function EquipmentEditor({ value, items, onClose, onSave }) {

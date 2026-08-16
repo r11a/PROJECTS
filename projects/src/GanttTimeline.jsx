@@ -28,6 +28,15 @@ const zooms = {
 };
 const clampScale = (value) => Math.min(2.2, Math.max(0.55, Math.round(value * 20) / 20));
 const touchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+const readWorkCalendar = () => {
+  const fallback = { includeFriday: false, includeSaturday: false };
+  try { return { ...fallback, ...JSON.parse(localStorage.getItem("projects:work-calendar") || "{}") }; }
+  catch { return fallback; }
+};
+const isBlockedWorkday = (value, workCalendar) => {
+  const day = new Date(value).getDay();
+  return (day === 5 && !workCalendar.includeFriday) || (day === 6 && !workCalendar.includeSaturday);
+};
 
 export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onScheduleChange, users = [], title = "לוח גאנט", compact = false }) {
   const [zoom, setZoom] = useState("week");
@@ -39,6 +48,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   const [dragging, setDragging] = useState(false);
   const [schedulePreview, setSchedulePreview] = useState({});
   const [scheduleDialog, setScheduleDialog] = useState(null);
+  const [workCalendar, setWorkCalendar] = useState(readWorkCalendar);
   const scrollRef = useRef(null);
   const pendingShift = useRef(0);
   const pinch = useRef(null);
@@ -117,6 +127,11 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   const changeScale = (delta) => setScale((current) => clampScale(current + delta));
   useEffect(() => () => {
     if (longPress.current) clearTimeout(longPress.current);
+  }, []);
+  useEffect(() => {
+    const refresh = () => setWorkCalendar(readWorkCalendar());
+    window.addEventListener("projects:work-calendar-changed", refresh);
+    return () => window.removeEventListener("projects:work-calendar-changed", refresh);
   }, []);
   const openScheduleDialog = (item, extra = {}) => setScheduleDialog({
     item,
@@ -227,6 +242,10 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     event.preventDefault();
     if (!scheduleDialog) return;
     if (scheduleDialog.startDate > scheduleDialog.dueDate) return;
+    if (isBlockedWorkday(`${scheduleDialog.startDate}T12:00:00`, workCalendar) || isBlockedWorkday(`${scheduleDialog.dueDate}T12:00:00`, workCalendar)) {
+      alert("לא ניתן לתזמן משימה ביום שאינו יום עבודה. ניתן לשנות זאת בהגדרות המערכת.");
+      return;
+    }
     await onScheduleChange?.(scheduleDialog.item, { startDate:scheduleDialog.startDate, dueDate:scheduleDialog.dueDate, color:scheduleDialog.color, critical:scheduleDialog.critical, mentionUserIds:scheduleDialog.mentionUserIds });
     setScheduleDialog(null);
   };
@@ -276,6 +295,10 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
           <div className="cg-canvas" style={{ width: canvasWidth }}>
             <div className="cg-ruler">{ticks.map((tick) => <span key={tick.value} style={{ left: tick.left }}>{dateLabel(tick.value, zoom === "day")}</span>)}</div>
             <div className="cg-body" style={{ height: bodyHeight, "--grid": `${config.tickDays * pixelsPerDay}px` }}>
+              {Array.from({ length: canvasDays }, (_, index) => {
+                const value = rangeStart + index * DAY;
+                return isBlockedWorkday(value, workCalendar) ? <i className="cg-non-working-day" key={value} style={{ left: index * pixelsPerDay, width: pixelsPerDay }} /> : null;
+              })}
               {todayLeft >= 0 && todayLeft <= canvasWidth && <div className="cg-today-line" style={{ left: todayLeft }}><span>היום</span></div>}
               <svg className="cg-dependencies" width={canvasWidth} height={bodyHeight} viewBox={`0 0 ${canvasWidth} ${bodyHeight}`} preserveAspectRatio="none"><defs><marker id="cg-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>{dependencies.map((line) => <path key={line.key} d={line.d} markerEnd="url(#cg-arrow)" />)}</svg>
               {rows.map((row) => {

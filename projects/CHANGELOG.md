@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.24.0
+
+- Added configurable Friday/Saturday scheduling rules shared by Calendar and Gantt.
+- Added task start/end time and all-day scheduling with Israel-local date handling.
+- Added project-manager edit enforcement and collection-stage safety warnings.
+- Added a 30-day administrator recycle bin for tasks, milestones and payments.
+- Improved contractor progress, calendar deep links, professional project links, persistent task filters and runtime stability.
+
 ## 0.23.4
 
 - ייצוב רענון הרקע במסכי משימות, העבודה שלי ואנשי מקצוע ללא הבהוב או לולאת טעינה.

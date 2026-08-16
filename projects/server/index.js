@@ -600,6 +600,28 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
     await db.query('BEGIN');
     const current = await db.query('SELECT * FROM projects WHERE id=$1 FOR UPDATE', [request.params.id]);
     if (!current.rowCount) { await db.query('ROLLBACK'); return response.status(404).json({ error: 'Project not found' }); }
+    if (request.user.role !== 'admin') {
+      const assigned = await db.query(`SELECT 1 FROM professionals
+        WHERE id=$1 AND linked_user_id=$2 AND active=TRUE`, [current.rows[0].manager_professional_id, request.user.id]);
+      if (!assigned.rowCount) {
+        await db.query('ROLLBACK');
+        return response.status(403).json({ error:'רק מנהל הפרויקט המשויך רשאי לערוך את נתוני הפרויקט והמשימות שלו' });
+      }
+    }
+    const collectionRules = { threading:10, installation_a:40, activation_programming:70 };
+    const requestedStage = request.body?.stage;
+    const requiredPercent = collectionRules[requestedStage];
+    const collectedPercent = Number(current.rows[0].value) > 0
+      ? Math.round((Number(current.rows[0].paid || 0) / Number(current.rows[0].value)) * 100)
+      : 0;
+    if (requiredPercent && collectedPercent < requiredPercent && request.body.overrideCollectionWarning !== true) {
+      await db.query('ROLLBACK');
+      return response.status(409).json({
+        error:`הגבייה בפרויקט היא ${collectedPercent}% בלבד. מעבר לשלב זה מומלץ רק לאחר גבייה של ${requiredPercent}% לפחות.`,
+        code:'COLLECTION_STAGE_WARNING', requiredPercent, collectedPercent,
+      });
+    }
+    delete request.body.overrideCollectionWarning;
     if (['admin', 'manager'].includes(request.user.role) && (request.body.clientId || request.body.newClient)) {
       const selectedClient = await resolveProjectClient(db, request.body, current.rows[0]);
       request.body.clientId = selectedClient.id;

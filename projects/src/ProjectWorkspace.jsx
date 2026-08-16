@@ -37,6 +37,7 @@ import { AppModal } from "./AppModal";
 import { ProjectGovernancePanel } from "./ProductivityWorkspace";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { summarizeTimeEntries } from "./features/timeTracking/model";
+import { localDateValue } from "./dateTime";
 
 const money = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -387,6 +388,12 @@ export function ProjectWorkspace({
               }
               style={{ "--range": `${project.progress}%` }}
             />
+          </div>
+          <div>
+            <span>התקדמות קבלן</span>
+            <strong className="contractor-progress-value">
+              {{ finishing: "עבודות גמר", carpentry: "הרכבות נגרות", waiting: "בהמתנה", infrastructure_paving: "סלילת תשתיות", drywall_paint: "עבודות גבס וצבע", stopped: "בעצירה" }[project.contractorProgress] || "בהמתנה"}
+            </strong>
           </div>
           <div>
             <span>בריאות הפרויקט</span>
@@ -743,7 +750,11 @@ export function ProjectWorkspace({
                       {x.role_name} {x.is_primary && "· אחראי ראשי"}
                     </small>
                   </div>
-                  {x.phone && <a href={`tel:${x.phone}`}>{x.phone}</a>}
+                  {x.phone && (
+                    <a className="team-phone-action" href={`tel:${x.phone}`} title={`חיוג אל ${x.display_name}`} aria-label={`חיוג אל ${x.display_name}`}>
+                      <Phone size={16} />
+                    </a>
+                  )}
                   {user.role === "admin" && (
                     <button onClick={() => deleteTeam(x)}>
                       <Trash2 size={15} />
@@ -1591,7 +1602,7 @@ function CommercialProjectGantt({ tasks, milestones, project, projects, professi
       await api(`${base}/${editor.item.id}`, { method: "PATCH", body: JSON.stringify(value) });
       setEditor(null);
       setNotice("המשימה נשמרה בהצלחה");
-      onDataChanged?.();
+      if (typeof onDataChanged === "function") onDataChanged();
     } catch (error) {
       setNotice(error.message);
     }
@@ -1602,8 +1613,8 @@ function CommercialProjectGantt({ tasks, milestones, project, projects, professi
       await api(`${base}/${item.id}`, { method:"PATCH", body:JSON.stringify(item.kind === "task" ? dates : { dueDate:dates.dueDate, color:dates.color }) });
       if(dates.mentionUserIds?.length)await api('/mentions',{method:'POST',body:JSON.stringify({userIds:dates.mentionUserIds,subject:`תיוג במשימה ${item.title}`,body:`תויגת במשימה ${item.title}. התאריכים עודכנו ל-${dates.startDate} עד ${dates.dueDate}.`,linkedUrl:`?project=${encodeURIComponent(project.id)}&task=${encodeURIComponent(item.id)}`})});
       setNotice("תאריכי המשימה עודכנו");
-      await onDataChanged?.();
-    } catch (error) { setNotice(error.message); await onDataChanged?.(); }
+      if (typeof onDataChanged === "function") await onDataChanged();
+    } catch (error) { setNotice(error.message); if (typeof onDataChanged === "function") await onDataChanged(); }
   };
   if (!items.length) return <div className="panel gantt-empty"><Activity size={30} /><h3>לוח הגאנט מוכן</h3><p>הוסיפו למשימות תאריך התחלה וסיום או אבני דרך כדי לבנות את ציר הביצוע.</p></div>;
   return (

@@ -16,7 +16,7 @@ test('document deletion is admin-only soft deletion with a restore route', async
   assert.match(management, /router\.delete\('\/documents\/:id', requireRoles\('admin'\)/);
   assert.match(management, /UPDATE client_files SET deleted_at=NOW\(\),deleted_by=\$2/);
   assert.match(management, /router\.post\('\/documents\/:id\/restore',requireRoles\('admin'\)/);
-  assert.match(management, /INTERVAL '14 days'/);
+  assert.match(management, /INTERVAL '30 days'/);
 });
 
 test('portfolio Gantt exposes critical tasks and dependency connectors', async () => {
@@ -63,7 +63,7 @@ test('Gantt scheduling supports drag, resize, long press duration and persistent
   assert.match(timeline,/Math\.max\(34, exactWidth\)/);
   assert.match(timeline,/source: "drag"/);
   assert.match(timeline,/אישור ושמירה/);
-  assert.match(operations,/critical=\$14,color=\$15/);
+  assert.match(operations,/critical=\$16,color=\$17/);
   assert.match(migration,/ALTER TABLE tasks ADD COLUMN IF NOT EXISTS color/);
 });
 
@@ -113,7 +113,7 @@ test('project time reporting keeps targets in project setup and actual hours in 
   assert.match(projectWorkspace,/דיווח שעות עבודה/);
   assert.doesNotMatch(projectWorkspace,/ProjectModal/);
   assert.match(app,/onChanged=\{refreshCurrentUser\}/);
-  assert.match(app,/onChanged\?\.\(result\.user\)/);
+  assert.match(app,/typeof onChanged === "function"[^\n]*onChanged\(result\.user\)/);
   assert.match(avatarLiveMigration,/CREATE TRIGGER projects_live_change[\s\S]*ON users/);
   assert.match(app,/uploadCurrentUserAvatar/);
   assert.match(server,/post\('\/api\/auth\/avatar'/);

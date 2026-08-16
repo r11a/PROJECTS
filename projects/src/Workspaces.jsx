@@ -39,6 +39,7 @@ import {
 } from "recharts";
 import { AppModal } from "./AppModal";
 import { createMilestoneDraft, createTaskDraft } from "./features/tasks/taskDefaults";
+import { localDateValue } from "./dateTime";
 
 const money = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -225,7 +226,15 @@ export function TaskEditor({
         )}
         {!isMilestone && <label>
           שעת התחלה
-          <input type="time" value={String(form.startTime || form.start_time || "").slice(0,5)} onChange={(e)=>setForm({...form,startTime:e.target.value})}/>
+          <input type="time" disabled={Boolean(form.allDay ?? form.all_day)} value={String(form.startTime || form.start_time || "").slice(0,5)} onChange={(e)=>setForm({...form,startTime:e.target.value})}/>
+        </label>}
+        {!isMilestone && <label>
+          שעת סיום
+          <input type="time" disabled={Boolean(form.allDay ?? form.all_day)} value={String(form.endTime || form.end_time || "").slice(0,5)} onChange={(e)=>setForm({...form,endTime:e.target.value})}/>
+        </label>}
+        {!isMilestone && <label className="check-label task-all-day-toggle">
+          <input type="checkbox" checked={Boolean(form.allDay ?? form.all_day)} onChange={(e)=>setForm({...form,allDay:e.target.checked,startTime:e.target.checked?"":form.startTime,endTime:e.target.checked?"":form.endTime})}/>
+          יום שלם
         </label>}
         <label>
           {isMilestone ? "תאריך יעד" : "תאריך סיום"}
@@ -424,6 +433,8 @@ export function TasksWorkspace({
   const [projectFilter, setProjectFilter] = useState("");
   const [dueFilter, setDueFilter] = useState("");
   const [sortBy, setSortBy] = useState("due_asc");
+  const filterStorageKey = `projects:task-filters:${projectId || "all"}`;
+  const [filtersPinned, setFiltersPinned] = useState(() => localStorage.getItem(`${filterStorageKey}:pinned`) === "1");
   const [editor, setEditor] = useState(null);
   const [loading, setLoading] = useState(true);
   const loadRequest = useRef(0);
@@ -461,8 +472,22 @@ export function TasksWorkspace({
     if (!item) return;
     setTab("tasks");
     setEditor({ kind: "task", item });
-    onInitialTaskOpened?.();
+    if (typeof onInitialTaskOpened === "function") onInitialTaskOpened();
   }, [initialTaskId, tasks, onInitialTaskOpened]);
+  useEffect(() => {
+    const openScheduleItem = (event) => {
+      const id = event.detail?.id;
+      if (!id) return;
+      const kind = event.detail?.type === "milestone" ? "milestone" : "task";
+      const source = kind === "milestone" ? milestones : tasks;
+      const item = source.find((candidate) => String(candidate.id) === String(id));
+      if (!item) return;
+      setTab(kind === "milestone" ? "milestones" : "tasks");
+      setEditor({ kind, item });
+    };
+    window.addEventListener("projects:open-schedule-item", openScheduleItem);
+    return () => window.removeEventListener("projects:open-schedule-item", openScheduleItem);
+  }, [tasks, milestones]);
   useEffect(() => {
     const live = (event) => {
       if (!["tasks", "milestones", "projects", "professionals"].includes(event.detail?.table)) return;
@@ -510,6 +535,25 @@ export function TasksWorkspace({
     setProjectFilter("");
     setDueFilter("");
   };
+  useEffect(() => {
+    if (!filtersPinned) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(filterStorageKey) || "{}");
+      setStatus(saved.status || ""); setPriority(saved.priority || "");
+      setAssigneeId(saved.assigneeId || ""); setManagerId(saved.managerId || "");
+      setProjectFilter(saved.projectFilter || ""); setDueFilter(saved.dueFilter || "");
+      setSortBy(saved.sortBy || "due_asc");
+    } catch { localStorage.removeItem(filterStorageKey); }
+  }, []);
+  useEffect(() => {
+    if (!filtersPinned) return;
+    localStorage.setItem(filterStorageKey, JSON.stringify({status,priority,assigneeId,managerId,projectFilter,dueFilter,sortBy}));
+  }, [filtersPinned,status,priority,assigneeId,managerId,projectFilter,dueFilter,sortBy]);
+  const togglePinnedFilters = () => {
+    const next = !filtersPinned; setFiltersPinned(next);
+    localStorage.setItem(`${filterStorageKey}:pinned`, next ? "1" : "0");
+    if (!next) localStorage.removeItem(filterStorageKey);
+  };
   const canEdit = ["admin", "manager", "technician"].includes(user.role);
   currentTaskOptions = tasks;
   const save = async (value) => {
@@ -524,7 +568,7 @@ export function TasksWorkspace({
       setEditor(null);
       setNotice("הפריט נשמר בהצלחה");
       load({ silent: true });
-      onDataChanged?.();
+      if (typeof onDataChanged === "function") onDataChanged();
     } catch (e) {
       setNotice(e.message);
     }
@@ -535,7 +579,7 @@ export function TasksWorkspace({
       await api(`/operations/${tab}/${item.id}`, { method: "DELETE" });
       setNotice("הפריט נמחק");
       load({ silent: true });
-      onDataChanged?.();
+      if (typeof onDataChanged === "function") onDataChanged();
     } catch (e) {
       setNotice(e.message);
     }
@@ -658,13 +702,14 @@ export function TasksWorkspace({
             {projects.map((project) => <option value={String(project.id)} key={project.id}>{project.name}</option>)}
           </select>}
           <select value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} aria-label="אחראי למשימה">
-            <option value="">כל האחראים</option>
+            <option value="">כל המבצעים</option>
             {professionals.filter((person) => person.active !== false).map((person) => <option value={String(person.id)} key={person.id}>{person.displayName || person.name}</option>)}
           </select>
           {!projectId && <select value={managerId} onChange={(event) => setManagerId(event.target.value)} aria-label="מנהל פרויקט">
             <option value="">כל מנהלי הפרויקט</option>
-            {professionals.filter((person) => person.active !== false && ["project_manager", "מנהל פרויקט"].includes(person.role)).map((person) => <option value={String(person.id)} key={person.id}>{person.displayName || person.name}</option>)}
+            {professionals.filter((person) => person.active !== false && (person.roles || []).some((role) => role.key === "project_manager")).map((person) => <option value={String(person.id)} key={person.id}>{person.displayName || person.name}</option>)}
           </select>}
+          <button type="button" className={filtersPinned ? "filter-pin active" : "filter-pin"} onClick={togglePinnedFilters} title={filtersPinned ? "ביטול זכירת הסינון" : "זכירת הסינון לפעם הבאה"}>📌</button>
           {activeFilterCount > 0 && <button type="button" onClick={clearFilters}>ניקוי סינון</button>}
           <small>{visibleTasks.length} מתוך {tasks.length} משימות</small>
         </section>
@@ -778,7 +823,7 @@ export function TasksWorkspace({
                 ? {
                     projectId,
                     title: "",
-                    startDate: new Date().toISOString().slice(0, 10),
+                    startDate: localDateValue(),
                     dueDate: "",
                     status: editor.kind === "task" ? "open" : "planned",
                     priority: "normal",

@@ -14,6 +14,19 @@ async function syncProjectMetrics(pool, projectId) {
     updated_at=NOW() WHERE p.id=$1`, [projectId]);
 }
 
+async function mayEditProject(pool, request, projectId) {
+  if (request.user.role === 'admin') return true;
+  if (!projectId || request.user.role !== 'manager') return false;
+  const result = await pool.query(`SELECT 1 FROM projects p JOIN professionals pr ON pr.id=p.manager_professional_id
+    WHERE p.id=$1 AND pr.linked_user_id=$2`, [projectId, request.user.id]);
+  return Boolean(result.rowCount);
+}
+
+async function moveToRecycleBin(pool, request, entityType, row, displayName, projectId) {
+  await pool.query(`INSERT INTO recycle_bin(entity_type,entity_id,display_name,project_id,payload,deleted_by)
+    VALUES($1,$2,$3,$4,$5,$6)`, [entityType, String(row.id), displayName || '', projectId || null, JSON.stringify(row), request.user.id]);
+}
+
 export function createOperationsRouter({ pool, authenticate, requireRoles, audit }) {
   const router = express.Router();
   router.use(authenticate);
@@ -21,6 +34,45 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
   router.get('/operations/tasks/count', async (_request, response) => {
     const result = await pool.query("SELECT COUNT(*)::int count FROM tasks WHERE status NOT IN ('done','cancelled')");
     response.json({ count: result.rows[0]?.count || 0 });
+  });
+
+  router.get('/operations/recycle-bin', requireRoles('admin'), async (_request, response) => {
+    await pool.query('DELETE FROM recycle_bin WHERE restored_at IS NULL AND purge_at<=NOW()');
+    const result = await pool.query(`SELECT r.id,r.entity_type,r.entity_id,r.display_name,r.project_id,r.deleted_at,r.purge_at,
+      u.display_name deleted_by_name,p.name project_name
+      FROM recycle_bin r LEFT JOIN users u ON u.id=r.deleted_by LEFT JOIN projects p ON p.id=r.project_id
+      WHERE r.restored_at IS NULL ORDER BY r.deleted_at DESC`);
+    response.json({ items: result.rows });
+  });
+
+  router.post('/operations/recycle-bin/:id/restore', requireRoles('admin'), async (request, response) => {
+    const result = await pool.query('SELECT * FROM recycle_bin WHERE id=$1 AND restored_at IS NULL', [request.params.id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'הפריט אינו נמצא בסל המחזור' });
+    const entry = result.rows[0];
+    const row = entry.payload || {};
+    if (entry.entity_type === 'task') {
+      await pool.query(`INSERT INTO tasks(id,client_id,project_id,title,description,status,priority,assignee_id,assignee_professional_id,owner_professional_id,start_date,due_date,start_time,end_time,all_day,duration_hours,estimated_hours,task_type,dependency_task_id,parent_task_id,critical,color,created_by,created_at,updated_at,completed_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+        ON CONFLICT(id) DO NOTHING`, [row.id,row.client_id,row.project_id,row.title,row.description,row.status,row.priority,row.assignee_id,row.assignee_professional_id,row.owner_professional_id,row.start_date,row.due_date,row.start_time,row.end_time,row.all_day,row.duration_hours,row.estimated_hours,row.task_type,row.dependency_task_id,row.parent_task_id,row.critical,row.color,row.created_by,row.created_at,row.updated_at,row.completed_at]);
+      await syncProjectMetrics(pool, row.project_id);
+    } else if (entry.entity_type === 'milestone') {
+      await pool.query(`INSERT INTO project_milestones(id,project_id,title,due_date,status,progress,owner_professional_id,description,color,created_by,created_at,updated_at,completed_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT(id) DO NOTHING`, [row.id,row.project_id,row.title,row.due_date,row.status,row.progress,row.owner_professional_id,row.description,row.color,row.created_by,row.created_at,row.updated_at,row.completed_at]);
+    } else if (entry.entity_type === 'payment') {
+      await pool.query(`INSERT INTO project_payments(id,project_id,title,amount,due_date,status,paid_at,reference,notes,entry_type,created_by,created_at,updated_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT(id) DO NOTHING`, [row.id,row.project_id,row.title,row.amount,row.due_date,row.status,row.paid_at,row.reference,row.notes,row.entry_type,row.created_by,row.created_at,row.updated_at]);
+      await syncProjectMetrics(pool, row.project_id);
+    } else return response.status(400).json({ error: 'שחזור סוג פריט זה עדיין אינו נתמך' });
+    await pool.query('UPDATE recycle_bin SET restored_at=NOW(),restored_by=$1 WHERE id=$2', [request.user.id, request.params.id]);
+    await audit(request, 'restore', entry.entity_type, String(entry.entity_id), { recycleBinId: entry.id, projectId: entry.project_id });
+    response.status(204).end();
+  });
+
+  router.delete('/operations/recycle-bin/:id', requireRoles('admin'), async (request, response) => {
+    const result = await pool.query('DELETE FROM recycle_bin WHERE id=$1 RETURNING entity_type,entity_id,project_id', [request.params.id]);
+    if (!result.rowCount) return response.status(404).json({ error: 'הפריט אינו נמצא בסל המחזור' });
+    await audit(request, 'purge', result.rows[0].entity_type, String(result.rows[0].entity_id), { recycleBinId: request.params.id, projectId: result.rows[0].project_id });
+    response.status(204).end();
   });
 
   router.get('/operations/tasks', async (request, response) => {
@@ -50,9 +102,11 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     if (request.body.startDate && request.body.startDate > request.body.dueDate) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
     if (request.body.dependencyTaskId) { const dependency=await pool.query("SELECT project_id,status FROM tasks WHERE id=$1",[request.body.dependencyTaskId]); if(!dependency.rowCount||dependency.rows[0].project_id!==request.body.projectId||!['open','in_progress'].includes(dependency.rows[0].status))return response.status(400).json({error:'משימת התלות חייבת להיות פתוחה או בביצוע ובאותו פרויקט'}); }
     if (request.body.parentTaskId) { const parent=await pool.query('SELECT project_id FROM tasks WHERE id=$1',[request.body.parentTaskId]); if(!parent.rowCount||String(parent.rows[0].project_id)!==String(request.body.projectId))return response.status(400).json({error:'משימת האב חייבת להיות באותו פרויקט'}); }
+    if (!(await mayEditProject(pool, request, request.body.projectId))) return response.status(403).json({error:'רק מנהל הפרויקט המשויך רשאי ליצור או לערוך משימות בפרויקט'});
     const durationHours=Math.max(0,Number(request.body.durationHours ?? request.body.estimatedHours)||0);
-    const result = await pool.query(`INSERT INTO tasks(client_id,project_id,title,description,status,priority,assignee_professional_id,owner_professional_id,start_date,due_date,start_time,duration_hours,estimated_hours,task_type,dependency_task_id,parent_task_id,critical,created_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12,$13,$14,$15,$16,$17) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null,request.body.ownerProfessionalId || null, request.body.startDate || request.body.dueDate, request.body.dueDate, request.body.startTime || null, durationHours, request.body.taskType || 'task', request.body.dependencyTaskId || null,request.body.parentTaskId || null,Boolean(request.body.critical), request.user.id]);
+    const allDay=Boolean(request.body.allDay);
+    const result = await pool.query(`INSERT INTO tasks(client_id,project_id,title,description,status,priority,assignee_professional_id,owner_professional_id,start_date,due_date,start_time,end_time,all_day,duration_hours,estimated_hours,task_type,dependency_task_id,parent_task_id,critical,created_by)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,$16,$17,$18,$19) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null,request.body.ownerProfessionalId || null, request.body.startDate || request.body.dueDate, request.body.dueDate, allDay?null:(request.body.startTime || null), allDay?null:(request.body.endTime || null), allDay, durationHours, request.body.taskType || 'task', request.body.dependencyTaskId || null,request.body.parentTaskId || null,Boolean(request.body.critical), request.user.id]);
     await syncProjectMetrics(pool, request.body.projectId);
     await audit(request, 'create', 'task', String(result.rows[0].id), { title, projectId: request.body.projectId });
     await executeAutomations({ pool,triggerType:'task_created',entityType:'task',entityId:result.rows[0].id,context:{ projectId:request.body.projectId,status:result.rows[0].status,title },userId:request.user.id });
@@ -63,6 +117,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const current = await pool.query('SELECT * FROM tasks WHERE id=$1', [request.params.id]);
     if (!current.rowCount) return response.status(404).json({ error: 'המשימה לא נמצאה' });
     const row = current.rows[0];
+    if (!(await mayEditProject(pool, request, row.project_id))) return response.status(403).json({error:'רק מנהל הפרויקט המשויך רשאי לערוך משימות בפרויקט'});
     const status = TASK_STATUSES.includes(request.body.status) ? request.body.status : row.status;
     const dependencyId=Object.prototype.hasOwnProperty.call(request.body,'dependencyTaskId')?(request.body.dependencyTaskId||null):row.dependency_task_id;
     const nextStart = request.body.startDate ?? row.start_date; const nextDue = request.body.dueDate ?? row.due_date;
@@ -73,8 +128,9 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     if(parentTaskId){const parent=await pool.query('SELECT project_id,parent_task_id FROM tasks WHERE id=$1',[parentTaskId]);if(!parent.rowCount||String(parent.rows[0].project_id)!==String(row.project_id)||String(parent.rows[0].parent_task_id||'')===String(request.params.id))return response.status(400).json({error:'שיוך משימת האב אינו תקין או יוצר מעגל'});}
     if (nextStart && nextDue && String(nextStart).slice(0,10) > String(nextDue).slice(0,10)) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
     const durationHours=Math.max(0,Number(request.body.durationHours ?? request.body.estimatedHours ?? row.duration_hours ?? row.estimated_hours)||0);
-    const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,owner_professional_id=$6,start_date=$7,due_date=$8,start_time=$9,duration_hours=$10,estimated_hours=$10,task_type=$11,dependency_task_id=$12,parent_task_id=$13,critical=$14,color=$15,
-      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$16 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id,request.body.ownerProfessionalId ?? row.owner_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, request.body.startTime ?? row.start_time, durationHours, request.body.taskType ?? row.task_type, dependencyId,parentTaskId,request.body.critical ?? row.critical, request.body.color ?? row.color, request.params.id]);
+    const allDay=request.body.allDay ?? row.all_day;
+    const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,owner_professional_id=$6,start_date=$7,due_date=$8,start_time=$9,end_time=$10,all_day=$11,duration_hours=$12,estimated_hours=$12,task_type=$13,dependency_task_id=$14,parent_task_id=$15,critical=$16,color=$17,
+      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$18 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id,request.body.ownerProfessionalId ?? row.owner_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, allDay?null:(request.body.startTime ?? row.start_time), allDay?null:(request.body.endTime ?? row.end_time), allDay, durationHours, request.body.taskType ?? row.task_type, dependencyId,parentTaskId,request.body.critical ?? row.critical, request.body.color ?? row.color, request.params.id]);
     await syncProjectMetrics(pool, row.project_id);
     await audit(request, 'update', 'task', request.params.id, request.body);
     if(status!==row.status) await executeAutomations({ pool,triggerType:'task_status_changed',entityType:'task',entityId:request.params.id,context:{ projectId:row.project_id,status,fromStatus:row.status,title:result.rows[0].title },userId:request.user.id });
@@ -82,6 +138,9 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
   });
 
   router.delete('/operations/tasks/:id', requireRoles('admin'), async (request, response) => {
+    const current=await pool.query('SELECT * FROM tasks WHERE id=$1',[request.params.id]);
+    if(!current.rowCount)return response.status(404).json({error:'המשימה לא נמצאה'});
+    await moveToRecycleBin(pool,request,'task',current.rows[0],current.rows[0].title,current.rows[0].project_id);
     const result = await pool.query('DELETE FROM tasks WHERE id=$1 RETURNING project_id,title', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'המשימה לא נמצאה' });
     await syncProjectMetrics(pool, result.rows[0].project_id);
@@ -116,6 +175,9 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
   });
 
   router.delete('/operations/milestones/:id', requireRoles('admin'), async (request, response) => {
+    const current=await pool.query('SELECT * FROM project_milestones WHERE id=$1',[request.params.id]);
+    if(!current.rowCount)return response.status(404).json({error:'אבן הדרך לא נמצאה'});
+    await moveToRecycleBin(pool,request,'milestone',current.rows[0],current.rows[0].title,current.rows[0].project_id);
     const result = await pool.query('DELETE FROM project_milestones WHERE id=$1 RETURNING title', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'אבן הדרך לא נמצאה' });
     await audit(request, 'delete', 'milestone', request.params.id, { title: result.rows[0].title }); response.status(204).end();
@@ -160,9 +222,12 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
   });
 
   router.delete('/operations/payments/:id', requireRoles('admin'), async (request, response) => {
-    const result = await pool.query('DELETE FROM project_payments WHERE id=$1 RETURNING project_id,title', [request.params.id]);
+    const result = await pool.query('SELECT * FROM project_payments WHERE id=$1', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'התשלום לא נמצא' });
-    await syncProjectMetrics(pool, result.rows[0].project_id); await audit(request, 'delete', 'payment', request.params.id, { title: result.rows[0].title }); response.status(204).end();
+    const row = result.rows[0];
+    await moveToRecycleBin(pool, request, 'payment', row, row.title, row.project_id);
+    await pool.query('DELETE FROM project_payments WHERE id=$1', [request.params.id]);
+    await syncProjectMetrics(pool, row.project_id); await audit(request, 'delete', 'payment', request.params.id, { title: row.title, recycleDays: 30 }); response.status(204).end();
   });
 
   router.get('/projects/:id/workspace', async (request, response) => {

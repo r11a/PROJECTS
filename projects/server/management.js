@@ -196,6 +196,18 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
     response.json({ professionals: result.rows.map(professionalFromRow) });
   });
 
+  router.get('/professionals/:id/projects', async (request, response) => {
+    const result = await pool.query(
+      `SELECT DISTINCT p.id,p.name,p.stage,p.progress,p.location,p.archived_at
+       FROM projects p
+       LEFT JOIN project_professionals pp ON pp.project_id=p.id
+       WHERE p.manager_professional_id=$1 OR pp.professional_id=$1
+       ORDER BY p.archived_at NULLS FIRST,p.name`,
+      [request.params.id],
+    );
+    response.json({ projects: result.rows });
+  });
+
   router.post('/professionals', requireRoles('admin', 'manager'), async (request, response) => {
     const suppliedDisplayName=String(request.body.displayName||'').trim();
     const suppliedParts=suppliedDisplayName.split(/\s+/).filter(Boolean);
@@ -444,7 +456,7 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
   });
 
   router.get('/documents-recycle-bin',requireRoles('admin'),async(_request,response)=>{
-    const expired=await pool.query(`SELECT * FROM client_files WHERE deleted_at<NOW()-INTERVAL '14 days'`);
+    const expired=await pool.query(`SELECT * FROM client_files WHERE deleted_at<NOW()-INTERVAL '30 days'`);
     for(const row of expired.rows){
       const directory=row.storage_area==='clients'?path.join(dataDir,'uploads','clients'):safeStoragePath(row.storage_area,row.storage_path);
       try{await unlink(path.join(directory,row.stored_name));}catch(error){if(error.code!=='ENOENT')throw error;}

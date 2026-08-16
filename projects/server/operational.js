@@ -527,7 +527,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
         ORDER BY h.event_at`, [from, to, projectId]),
       pool.query('SELECT id,name FROM projects ORDER BY name'),
     ]);
-    response.json({ projects: projects.rows, events: result.rows.map((row) => ({ id: `${row.source_type}-${row.source_id}`, title: row.source_type === 'task' && row.project_name && !String(row.title).includes(row.project_name) ? `${row.project_name} — ${row.title}` : row.title, type: row.source_type, status: row.status, startAt: row.event_at, endAt: row.event_end, allDay: row.payload?.allDay ?? true, color: row.color, icon: row.icon, clientId: row.client_id, projectId: row.project_id, projectName: row.project_name, notes: row.payload?.notes || row.payload?.description || '', assigneeName: row.assignee_name, assigneeColor: row.assignee_color, assigneeIcon: row.assignee_icon })) });
+    response.json({ projects: projects.rows, events: result.rows.map((row) => ({ id: `${row.source_type}-${row.source_id}`, sourceId: row.source_id, title: row.source_type === 'task' && row.project_name && !String(row.title).includes(row.project_name) ? `${row.project_name} — ${row.title}` : row.title, type: row.source_type, status: row.status, startAt: row.event_at, endAt: row.event_end, allDay: row.payload?.allDay ?? true, color: row.color, icon: row.icon, clientId: row.client_id, projectId: row.project_id, projectName: row.project_name, notes: row.payload?.notes || row.payload?.description || '', assigneeName: row.assignee_name, assigneeColor: row.assignee_color, assigneeIcon: row.assignee_icon })) });
   });
 
   router.get('/calendar-options', async (_request, response) => {

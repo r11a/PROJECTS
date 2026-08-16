@@ -39,9 +39,9 @@ test('release versions stay synchronized',async()=>{
   const manifest=JSON.parse(await read('package.json'));
   const config=await read('config.yaml');
   const docker=await read('Dockerfile');
-  assert.equal(manifest.version,'0.23.4');
-  assert.match(config,/version: "0\.23\.4"/);
-  assert.match(docker,/io\.hass\.version="0\.23\.4"/);
+  const escapedVersion=manifest.version.replaceAll('.', '\\.');
+  assert.match(config,new RegExp(`version: "${escapedVersion}"`));
+  assert.match(docker,new RegExp(`io\\.hass\\.version="${escapedVersion}"`));
 });
 
 test('catalog colors inherit from the system type and commercial layouts stay isolated',async()=>{

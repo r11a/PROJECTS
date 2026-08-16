@@ -339,7 +339,7 @@ export function AlertCenter({ alerts, api, onSnoozed, onClose, setNotice, onOpen
   );
 }
 
-export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
+export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }) {
   const swipeStart = useRef(null);
   const [cursor, setCursor] = useState(() => new Date());
   const [events, setEvents] = useState([]);
@@ -350,6 +350,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
   const [projects, setProjects] = useState([]);
   const [projectFilter, setProjectFilter] = useState("");
   const [calendarFeed, setCalendarFeed] = useState(null);
+  const [workCalendar, setWorkCalendar] = useState({ includeFriday: false, includeSaturday: false });
   const canCreate = ["admin", "manager"].includes(user.role);
   const year = cursor.getFullYear(),
     month = cursor.getMonth();
@@ -381,6 +382,9 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
           : `${weekDays[0].toLocaleDateString("he-IL", { day: "numeric", month: "short" })} – ${weekDays[6].toLocaleDateString("he-IL", { day: "numeric", month: "short", year: "numeric" })}`;
   const localKey = (date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const isNonWorkingDay = (date) =>
+    (date.getDay() === 5 && !workCalendar.includeFriday) ||
+    (date.getDay() === 6 && !workCalendar.includeSaturday);
   const load = async () => {
     const fromDate =
       view === "year"
@@ -429,6 +433,16 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
   useEffect(() => {
     api("/calendar-feed")
       .then(setCalendarFeed)
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    api("/settings")
+      .then((result) => {
+        const next = { includeFriday: false, includeSaturday: false, ...(result.settings?.workCalendar || {}) };
+        setWorkCalendar(next);
+        localStorage.setItem("projects:work-calendar", JSON.stringify(next));
+        window.dispatchEvent(new Event("projects:work-calendar-changed"));
+      })
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -534,7 +548,10 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
       className="agenda-event"
       key={event.id}
       style={{ "--event": event.assigneeColor || event.color }}
-      onClick={() => setSelectedDay(new Date(event.startAt))}
+      onClick={() => {
+        if (["task", "milestone"].includes(event.type) && typeof onOpenEvent === "function") return onOpenEvent(event);
+        setSelectedDay(new Date(event.startAt));
+      }}
     >
       <span>
         <DynamicIcon name={event.assigneeIcon || event.icon} />
@@ -695,7 +712,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
                 return (
                   <button
                     key={key}
-                    className={`${outside ? "outside" : ""} ${today ? "today" : ""} ${selectedDay && key === localKey(selectedDay) ? "selected" : ""}`}
+                    className={`${outside ? "outside" : ""} ${today ? "today" : ""} ${isNonWorkingDay(day) ? "non-working" : ""} ${selectedDay && key === localKey(selectedDay) ? "selected" : ""}`}
                     onClick={() => setSelectedDay(day)}
                   >
                     <time>{day.getDate()}</time>
@@ -729,7 +746,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
               return (
                 <section
                   key={key}
-                  className={key === localKey(new Date()) ? "today" : ""}
+                  className={`${key === localKey(new Date()) ? "today" : ""} ${isNonWorkingDay(day) ? "non-working" : ""}`}
                 >
                   <header>
                     <span>
@@ -749,7 +766,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
           </div>
         )}
         {view === "day" && (
-          <div className="calendar-day-view">
+          <div className={`calendar-day-view ${isNonWorkingDay(cursor) ? "non-working" : ""}`}>
             <header>
               <strong>{cursor.getDate()}</strong>
               <span>
@@ -851,6 +868,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
       {creating && (
         <CalendarEventModal
           api={api}
+          workCalendar={workCalendar}
           onClose={() => setCreating(false)}
           onDone={() => {
             setCreating(false);
@@ -863,10 +881,12 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
   );
 }
 
-function CalendarEventModal({ api, onClose, onDone, setNotice }) {
+function CalendarEventModal({ api, onClose, onDone, setNotice, workCalendar = {} }) {
+  const now = new Date();
+  const localNow = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   const [form, setForm] = useState({
     title: "",
-    startAt: new Date().toISOString().slice(0, 16),
+    startAt: localNow,
     type: "general",
     notes: "",
     color: "#6957df",
@@ -882,6 +902,11 @@ function CalendarEventModal({ api, onClose, onDone, setNotice }) {
   }, []);
   const submit = async (event) => {
     event.preventDefault();
+    const selectedDate = new Date(form.startAt);
+    if ((selectedDate.getDay() === 5 && !workCalendar.includeFriday) || (selectedDate.getDay() === 6 && !workCalendar.includeSaturday)) {
+      setNotice("היום שנבחר אינו יום עבודה. ניתן לאפשר שישי או שבת בהגדרות המערכת.");
+      return;
+    }
     try {
       await api("/calendar", { method: "POST", body: JSON.stringify(form) });
       setNotice("האירוע נוסף ללוח השנה");
@@ -1074,7 +1099,7 @@ export function ClientsWorkspace({
   const refresh = async () => {
     await loadClients(query, { silent: true });
     if (selectedId) await loadDetail(selectedId);
-    await onDataChanged?.();
+    if (typeof onDataChanged === "function") await onDataChanged();
   };
   const createClient = async (form) => {
     try {
@@ -1085,7 +1110,7 @@ export function ClientsWorkspace({
       setNewOpen(false);
       setNotice("כרטיס הלקוח נוצר בהצלחה");
       await loadClients("");
-      await onDataChanged?.();
+      if (typeof onDataChanged === "function") await onDataChanged();
       await loadDetail(result.client.id);
     } catch (error) {
       setNotice(error.message);
@@ -2894,7 +2919,7 @@ export function OperationalSettings({
     try {
       const result = await api("/settings");
       setData(result);
-      onConfigurationChanged?.(result);
+      if (typeof onConfigurationChanged === "function") onConfigurationChanged(result);
     } catch (error) {
       setNotice(error.message);
     }
@@ -2923,7 +2948,7 @@ export function OperationalSettings({
   const applySavedSetting = (key, value) => {
     const next = { ...data, settings: { ...data.settings, [key]: value } };
     setData(next);
-    onConfigurationChanged?.(next);
+    if (typeof onConfigurationChanged === "function") onConfigurationChanged(next);
   };
   useEffect(() => {
     load();
@@ -2943,11 +2968,13 @@ export function OperationalSettings({
   }, [tab]);
   const adminTabs = [
     ["business", "עסק ומערכת", Building2],
+    ["workCalendar", "ימי עבודה", CalendarDays],
     ["users", "משתמשים והרשאות", ShieldCheck],
     ["storage", "מסמכים ו-Synology", FolderOpen],
     ["catalogs", "קטלוגים ועיצוב", Palette],
     ["fields", "שדות מותאמים", Settings2],
     ["audit", "Audit Log", History],
+    ["recycleBin", "סל מחזור", Trash2],
     ["backup", "גיבוי ובריאות", Database],
     ["ai", "סוכן AI", Sparkles],
     ["productivity", "תבניות ואוטומציות", Zap],
@@ -2995,6 +3022,14 @@ export function OperationalSettings({
         />
       )}
       {tab === "users" && usersPanel}
+      {tab === "workCalendar" && (
+        <WorkCalendarSettings
+          initial={data.settings.workCalendar || { includeFriday: false, includeSaturday: false, timezone: "Asia/Jerusalem" }}
+          api={api}
+          onSaved={applySavedSetting}
+          setNotice={setNotice}
+        />
+      )}
       {tab === "appearance" && (
         <AppearanceSettings
           initialTheme={user.appearanceTheme || "light"}
@@ -3038,6 +3073,9 @@ export function OperationalSettings({
           onClear={clearAudit}
         />
       )}
+      {tab === "recycleBin" && (
+        <RecycleBinSettings api={api} setNotice={setNotice} />
+      )}
       {tab === "backup" && (
         <BackupSettings
           api={api}
@@ -3052,6 +3090,91 @@ export function OperationalSettings({
       {tab === "productivity" && <ProductivitySettings api={api} user={user} setNotice={setNotice} />}
     </div>
   );
+}
+
+function RecycleBinSettings({ api, setNotice }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const loadItems = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await api("/operations/recycle-bin");
+      setItems(result.items || []);
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [api, setNotice]);
+  useEffect(() => { loadItems(); }, [loadItems]);
+  const restore = async (item) => {
+    try {
+      await api(`/operations/recycle-bin/${item.id}/restore`, { method: "POST" });
+      setNotice("הפריט שוחזר בהצלחה");
+      await loadItems();
+    } catch (error) { setNotice(error.message); }
+  };
+  const remove = async (item) => {
+    if (!confirm(`למחוק לצמיתות את „${item.display_name || "הפריט"}”? לא ניתן לבטל פעולה זו.`)) return;
+    try {
+      await api(`/operations/recycle-bin/${item.id}`, { method: "DELETE" });
+      setNotice("הפריט נמחק לצמיתות");
+      await loadItems();
+    } catch (error) { setNotice(error.message); }
+  };
+  const labels = { task: "משימה", milestone: "אבן דרך" };
+  return (
+    <section className="settings-card recycle-settings">
+      <header>
+        <div><h3>סל מחזור</h3><p>פריטים שנמחקו נשמרים 30 יום וניתנים לשחזור.</p></div>
+        <button className="secondary" onClick={loadItems}><RefreshCw size={16}/>רענון</button>
+      </header>
+      {loading ? <p className="settings-empty">טוען פריטים…</p> : !items.length ? (
+        <div className="settings-empty"><Trash2 size={24}/><b>סל המחזור ריק</b></div>
+      ) : (
+        <div className="recycle-list">
+          {items.map((item) => {
+            const days = Math.max(0, Math.ceil((new Date(item.purge_at) - Date.now()) / 86400000));
+            return <article key={item.id}>
+              <div className="recycle-kind"><Trash2 size={17}/><span>{labels[item.entity_type] || item.entity_type}</span></div>
+              <div className="recycle-main"><strong>{item.display_name || `פריט ${item.entity_id}`}</strong><small>{item.project_name || "ללא פרויקט"}</small></div>
+              <div className="recycle-meta"><span>נמחק על ידי {item.deleted_by_name || "משתמש לא ידוע"}</span><time>{new Date(item.deleted_at).toLocaleString("he-IL", { hour12: false })}</time><em>{days} ימים למחיקה</em></div>
+              <div className="recycle-actions"><button onClick={() => restore(item)}><RotateCcw size={16}/>שחזור</button><button className="danger-icon" onClick={() => remove(item)} title="מחיקה לצמיתות"><Trash2 size={16}/></button></div>
+            </article>;
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function WorkCalendarSettings({ initial, api, onSaved, setNotice }) {
+  const [value, setValue] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setValue(initial), [JSON.stringify(initial)]);
+  const save = async (next) => {
+    setValue(next);
+    setSaving(true);
+    try {
+      const result = await api("/settings/workCalendar", { method: "PATCH", body: JSON.stringify(next) });
+      onSaved("workCalendar", result.setting.value);
+      localStorage.setItem("projects:work-calendar", JSON.stringify(result.setting.value));
+      setNotice("הגדרת ימי העבודה נשמרה ליומן וללוחות הגאנט");
+      window.dispatchEvent(new Event("projects:work-calendar-changed"));
+    } catch (error) {
+      setValue(value);
+      setNotice(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return <section className="panel work-calendar-settings">
+    <header><div><h3>שבוע העבודה</h3><p>ראשון–חמישי פעילים תמיד. שישי ושבת יוצגו כימי עבודה רק אם תבחרו בכך.</p></div>{saving&&<RefreshCw className="spin" size={18}/>}</header>
+    <div className="workday-options">
+      <label><span><strong>יום שישי</strong><small>אפשר תכנון משימות ואירועים</small></span><input type="checkbox" checked={Boolean(value.includeFriday)} onChange={(event)=>save({...value,includeFriday:event.target.checked})}/></label>
+      <label><span><strong>יום שבת</strong><small>אפשר תכנון משימות ואירועים</small></span><input type="checkbox" checked={Boolean(value.includeSaturday)} onChange={(event)=>save({...value,includeSaturday:event.target.checked})}/></label>
+    </div>
+  </section>;
 }
 
 function AiSettings({ api, user, setNotice }) {

@@ -93,6 +93,7 @@ import {
 } from "./Workspaces";
 import { ProjectWorkspace } from "./ProjectWorkspace";
 import { MyWorkWorkspace, PortfolioControlWorkspace } from "./ProductivityWorkspace";
+import { localDateValue } from "./dateTime";
 
 const projectClassificationOptions = [
   ["private_house", "בית פרטי"],
@@ -104,6 +105,10 @@ const projectClassificationOptions = [
   ["duplex", "דופלקס"],
 ];
 const projectClassificationLabels = Object.fromEntries(projectClassificationOptions);
+const contractorProgressLabels = {
+  finishing: "עבודות גמר", carpentry: "הרכבות נגרות", waiting: "בהמתנה",
+  infrastructure: "סלילת תשתיות", drywall_paint: "עבודות גבס וצבע", stopped: "בעצירה",
+};
 import { GanttWorkspace } from "./GanttWorkspace";
 import { MessageCenter } from "./Messages";
 import { AiChat, AiChatBoundary } from "./AiChat";
@@ -212,6 +217,7 @@ export async function api(path, options = {}) {
     );
     error.status = response.status;
     error.body = body;
+    error.code = body?.code;
     throw error;
   }
   if (
@@ -627,6 +633,9 @@ function App() {
       setNotice("השינוי נשמר בהצלחה");
       return project;
     } catch (error) {
+      if (error.code === "COLLECTION_STAGE_WARNING" && window.confirm(`${error.message}\n\nהאם לעבור שלב בכל זאת?`)) {
+        return updateProject(id, { ...patch, overrideCollectionWarning: true });
+      }
       setNotice(error.message);
       return null;
     }
@@ -1075,6 +1084,12 @@ function App() {
               apiRoot={apiRoot}
               user={user}
               setNotice={setNotice}
+              onOpenEvent={(event) => {
+                const linkedProject = projects.find((item) => String(item.id) === String(event.projectId));
+                if (!linkedProject) return setNotice("הפרויקט המקושר לא נמצא");
+                openProject(linkedProject);
+                if (["task", "milestone"].includes(event.type)) window.setTimeout(() => window.dispatchEvent(new CustomEvent("projects:open-schedule-item", { detail: { id: event.sourceId, type: event.type } })), 0);
+              }}
             />
           )}
           {page === "my-work" && (
@@ -1365,7 +1380,7 @@ function LoginPage({ onLogin }) {
 function InitialPasswordPage({onChanged}) {
   const [form,setForm]=useState({currentPassword:'',newPassword:'',confirmPassword:''});
   const [error,setError]=useState(''); const [submitting,setSubmitting]=useState(false);
-  const submit=async(event)=>{event.preventDefault();setError('');if(!passwordsMatch(form.newPassword,form.confirmPassword))return setError('הסיסמאות אינן תואמות');setSubmitting(true);try{const result=await api('/auth/password',{method:'POST',body:JSON.stringify(form)});onChanged(result.user)}catch(changeError){setError(changeError.message)}finally{setSubmitting(false)}};
+  const submit=async(event)=>{event.preventDefault();setError('');if(!passwordsMatch(form.newPassword,form.confirmPassword))return setError('הסיסמאות אינן תואמות');setSubmitting(true);try{const result=await api('/auth/password',{method:'POST',body:JSON.stringify(form)});if(typeof onChanged==='function')onChanged(result.user)}catch(changeError){setError(changeError.message)}finally{setSubmitting(false)}};
   return <div className="login-shell" dir="rtl"><div className="login-card"><div className="login-brand"><div className="brand-mark"><img src={projectsMark} alt=""/></div><strong><b>PRO</b>JECTS</strong></div><div className="login-copy"><span>אבטחת החשבון</span><h1>החלפת סיסמה ראשונית</h1><p>לפני תחילת העבודה יש לבחור סיסמה אישית וחזקה.</p></div><form onSubmit={submit}><label>סיסמה נוכחית<input type="password" autoComplete="current-password" required value={form.currentPassword} onChange={event=>setForm({...form,currentPassword:event.target.value})}/></label><label>סיסמה חדשה<input type="password" autoComplete="new-password" minLength="12" required value={form.newPassword} onChange={event=>setForm({...form,newPassword:event.target.value})}/></label><label>אימות סיסמה<input type="password" autoComplete="new-password" minLength="12" required value={form.confirmPassword} onChange={event=>setForm({...form,confirmPassword:event.target.value})}/></label><small>לפחות 12 תווים, אות גדולה, אות קטנה ומספר.</small>{error&&<div className="login-error">{error}</div>}<button className="primary-button" disabled={submitting}>{submitting?'שומר...':'שמירת סיסמה'} <ArrowLeft size={17}/></button></form></div></div>;
 }
 
@@ -1409,7 +1424,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       });
       setNotice("המשתמש נוצר");
       loadUsers();
-      onChanged?.();
+      if (typeof onChanged === "function") onChanged();
     } catch (error) {
       setNotice(error.message);
     }
@@ -1421,7 +1436,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
         body: JSON.stringify(patch),
       });
       loadUsers();
-      onChanged?.(result.user);
+      if (typeof onChanged === "function") onChanged(result.user);
       setNotice("ההרשאה עודכנה");
     } catch (error) {
       setNotice(error.message);
@@ -1434,7 +1449,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       body.set("avatar", file);
       const result = await api(`/users/${id}/avatar`, { method: "POST", body });
       loadUsers();
-      onChanged?.(result.user);
+      if (typeof onChanged === "function") onChanged(result.user);
       setNotice("תמונת המשתמש עודכנה");
     } catch (error) {
       setNotice(error.message);
@@ -1444,7 +1459,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
     try {
       await api(`/users/${id}/avatar`, { method: "DELETE" });
       loadUsers();
-      onChanged?.();
+      if (typeof onChanged === "function") onChanged();
       setNotice("תמונת המשתמש הוסרה");
     } catch (error) {
       setNotice(error.message);
@@ -1455,7 +1470,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
     try {
       await api(`/users/${item.id}`, { method: "DELETE" });
       loadUsers();
-      onChanged?.();
+      if (typeof onChanged === "function") onChanged();
       setNotice("המשתמש נמחק");
     } catch (error) {
       setNotice(error.message);
@@ -1472,7 +1487,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       await api('/users/merge-identities',{ method:'POST',body:JSON.stringify(identityLink) });
       setIdentityLink({ primaryUserId:"",secondaryUserId:"" });
       await loadUsers();
-      onChanged?.();
+      if (typeof onChanged === "function") onChanged();
       setNotice("הזהויות אוחדו בהצלחה לחשבון אחד");
     } catch (error) { setNotice(error.message); } finally { setLinkingIdentity(false); }
   };
@@ -2373,6 +2388,7 @@ function ProjectsPage({
               <tr>
                 <th><button className={projectSort.key==="name"?"active":""} onClick={()=>toggleProjectSort("name")}>פרויקט<ArrowUpDown size={13}/></button></th>
                 <th><button className={projectSort.key==="stage"?"active":""} onClick={()=>toggleProjectSort("stage")}>שלב נוכחי<ArrowUpDown size={13}/></button></th>
+                <th>התקדמות קבלן</th>
                 <th><button className={projectSort.key==="progress"?"active":""} onClick={()=>toggleProjectSort("progress")}>התקדמות<ArrowUpDown size={13}/></button></th>
                 <th><button className={projectSort.key==="manager"?"active":""} onClick={()=>toggleProjectSort("manager")}>מנהל פרויקט<ArrowUpDown size={13}/></button></th>
                 <th><button className={projectSort.key==="milestone"?"active":""} onClick={()=>toggleProjectSort("milestone")}>אבן דרך הבאה<ArrowUpDown size={13}/></button></th>
@@ -2391,7 +2407,7 @@ function ProjectsPage({
                       <div>
                         <strong>{project.name}</strong>
                         <span>
-                          {project.id} · {project.serialCode} · {project.location} · {projectClassificationLabels[project.projectClassification] || "בית פרטי"}
+                          {project.location} · {projectClassificationLabels[project.projectClassification] || "בית פרטי"}
                         </span>
                         {showArchived && (
                           <small className="archived-date">
@@ -2408,6 +2424,7 @@ function ProjectsPage({
                   <td>
                     <StatusBadge stage={project.stage} />
                   </td>
+                  <td><span className="contractor-progress-chip">{contractorProgressLabels[project.contractorProgress] || "בהמתנה"}</span></td>
                   <td>
                     <div className="table-progress">
                       <div>
@@ -3363,7 +3380,7 @@ function NewProjectModal({
     value: "",
     installationHoursTarget: "",
     programmingHoursTarget: "",
-    startDate: new Date().toISOString().slice(0, 10),
+    startDate: localDateValue(),
     targetDate: "",
     selectedEquipment: {},
     templateId: "",

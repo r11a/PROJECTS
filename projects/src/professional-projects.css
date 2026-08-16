@@ -1,0 +1,10 @@
+.professional-card{cursor:pointer}
+.professional-card dd,.professional-card dd a{white-space:normal;overflow-wrap:anywhere;text-overflow:clip}
+.professional-project-load{border:0;cursor:pointer;color:inherit;flex:1}
+.professional-projects-dialog{display:grid;gap:10px}
+.professional-projects-dialog>article{display:grid;grid-template-columns:minmax(0,1fr) auto 56px;align-items:center;gap:14px;padding:14px;border:1px solid #e5e7ef;border-radius:14px}
+.professional-projects-dialog>article div{display:grid;gap:4px}
+.professional-projects-dialog>article small{color:#8a90a2}
+.professional-projects-dialog>article span{padding:5px 9px;border-radius:999px;background:#f2efff;color:#5e4fd2}
+.professional-projects-dialog>article b{text-align:center;color:#5e4fd2}
+@media(max-width:640px){.professional-projects-dialog>article{grid-template-columns:minmax(0,1fr) auto}.professional-projects-dialog>article b{grid-column:2;grid-row:2}}
