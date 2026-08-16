@@ -662,8 +662,8 @@ function EquipmentTree({ items, apiRoot, user, onEdit, onDelete, onDuplicate }) 
       />
     );
   const categories=items.filter(item=>item.itemType==="system_type");
-  const renderItem=(item, inheritedColor = "#6957df") => {
-    const effectiveColor = item.color || inheritedColor;
+  const renderItem=(item, inheritedColor = null) => {
+    const effectiveColor = inheritedColor || item.color || "#6957df";
     return <div className={`equipment-row level-${item.itemType}`} key={item.id} style={{ "--equipment-color": effectiveColor }}>
           <span>
             {item.iconImageStoredName ? (
@@ -698,7 +698,7 @@ function EquipmentTree({ items, apiRoot, user, onEdit, onDelete, onDuplicate }) 
           </span>
         </div>;
   };
-  return <div className="equipment-category-grid">{categories.map(category=>{const systems=items.filter(item=>item.itemType==="system"&&String(item.parentId)===String(category.id));return <details className="equipment-category panel" key={category.id} open><summary><span className="catalog-category-icon" style={{background:category.color}}>{category.iconImageStoredName?<img src={`${apiRoot}/equipment-catalog/${category.id}/icon`} alt=""/>:<Boxes size={20}/>}</span><div><strong>{category.name}</strong><small>{systems.length} מערכות · פתיחה לעריכה וניהול</small></div><button type="button" onClick={event=>{event.preventDefault();onEdit(category)}}><Pencil size={15}/></button></summary><div className="equipment-head"><span>מערכת / מוצר / התקן / רכיב</span><span>סוג</span><span>יצרן / דגם</span><span>מק״ט Priority</span><span>סטטוס</span><span/></div>{systems.map(system=><div className="catalog-system-group" key={system.id}>{renderItem(system, category.color)}{items.filter(item=>item.itemType==="component"&&String(item.parentId)===String(system.id)).map(component=>renderItem({...component,color:category.color}, category.color))}</div>)}</details>})}</div>;
+  return <div className="equipment-category-grid">{categories.map(category=>{const categoryColor=category.color||"#6957df";const systems=items.filter(item=>item.itemType==="system"&&String(item.parentId)===String(category.id));return <details className="equipment-category panel" key={category.id} open style={{"--category-color":categoryColor}}><summary><span className="catalog-category-icon" style={{background:categoryColor}}>{category.iconImageStoredName?<img src={`${apiRoot}/equipment-catalog/${category.id}/icon`} alt=""/>:<Boxes size={20}/>}</span><div><strong>{category.name}</strong><small>{systems.length} מערכות · פתיחה לעריכה וניהול</small></div><button type="button" onClick={event=>{event.preventDefault();onEdit(category)}}><Pencil size={15}/></button></summary><div className="equipment-head"><span>מערכת / מוצר / התקן / רכיב</span><span>סוג</span><span>יצרן / דגם</span><span>מק״ט Priority</span><span>סטטוס</span><span/></div>{systems.map(system=><div className="catalog-system-group" key={system.id} style={{"--equipment-color":categoryColor}}>{renderItem(system, categoryColor)}{items.filter(item=>item.itemType==="component"&&String(item.parentId)===String(system.id)).map(component=>renderItem(component, categoryColor))}</div>)}</details>})}</div>;
 }
 
 function EquipmentEditor({ value, items, onClose, onSave }) {

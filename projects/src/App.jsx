@@ -1494,15 +1494,15 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
             </div>
           </div>
           {users.map((item) => (
-            <article className="user-card" key={item.id}>
-              <div className="user-card-identity">
+            <article className="admin-user-row" key={item.id}>
+              <div className="admin-user-identity">
                 <div
                   className={`avatar user-photo-avatar ${item.avatarImage ? "has-photo" : ""}`}
                   style={{ background: item.avatarColor, color: "#fff", "--avatar-color": item.avatarColor }}
                 >
                   {avatarGlyph(item)}
                 </div>
-                <div className="user-card-details">
+                <div className="admin-user-details">
                   <strong>{item.displayName}</strong>
                   <span>
                     {item.identityTypes?.includes('web') ? `Web: ${item.username}` : "ללא כניסת Web"}{" "}
@@ -1512,7 +1512,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                   <small className="user-last-login">התחברות אחרונה: {item.lastLoginAt ? new Date(item.lastLoginAt).toLocaleString("he-IL") : "טרם התחבר"}</small>
                 </div>
               </div>
-              <div className="user-card-controls">
+              <div className="admin-user-controls">
                 <label className="user-control-field">
                   <span>תפקיד והרשאה</span>
                   <select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>

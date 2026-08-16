@@ -39,7 +39,23 @@ test('release versions stay synchronized',async()=>{
   const manifest=JSON.parse(await read('package.json'));
   const config=await read('config.yaml');
   const docker=await read('Dockerfile');
-  assert.equal(manifest.version,'0.23.1');
-  assert.match(config,/version: "0\.23\.1"/);
-  assert.match(docker,/io\.hass\.version="0\.23\.1"/);
+  assert.equal(manifest.version,'0.23.2');
+  assert.match(config,/version: "0\.23\.2"/);
+  assert.match(docker,/io\.hass\.version="0\.23\.2"/);
+});
+
+test('catalog colors inherit from the system type and commercial layouts stay isolated',async()=>{
+  const catalog=await read('src/MasterDataWorkspace.jsx');
+  const app=await read('src/App.jsx');
+  const workspaces=await read('src/Workspaces.jsx');
+  const styles=await read('src/commercial-ui-extra.css');
+
+  assert.match(catalog,/const effectiveColor = inheritedColor \|\| item\.color \|\| "#6957df"/);
+  assert.match(catalog,/renderItem\(system, categoryColor\)/);
+  assert.match(catalog,/renderItem\(component, categoryColor\)/);
+  assert.match(app,/className="admin-user-row"/);
+  assert.match(styles,/\.admin-user-row\s*\{/);
+  assert.doesNotMatch(styles,/^\.user-card\s*\{/m);
+  assert.match(workspaces,/finance-dashboard-grid-single/);
+  assert.doesNotMatch(workspaces,/finance-project-summary/);
 });

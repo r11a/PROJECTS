@@ -986,7 +986,7 @@ export function FinanceWorkspace({
           <span>{total ? Math.round((paid / total) * 100) : 0}% נגבה</span>
         </div>
       </section>
-      <section className="finance-dashboard-grid">
+      <section className="finance-dashboard-grid finance-dashboard-grid-single">
         <article className="panel finance-chart-card">
           <header><div><span>גבייה לפי פרויקט</span><h3>תמונת מזומן ברורה</h3></div><div className="finance-legend"><span><i className="paid"/>שולם</span><span><i className="balance"/>יתרה</span></div></header>
           {financeProjects.length ? (
@@ -1006,16 +1006,6 @@ export function FinanceWorkspace({
           ) : (
             <EmptyState icon={CreditCard} title="אין נתונים כספיים" text="הגדירו מסגרת כספית או דרישת תשלום לפרויקט." />
           )}
-        </article>
-        <article className="panel finance-project-summary">
-          <header><div><span>פעולות נדרשות</span><h3>הגבייה הקרובה</h3></div></header>
-          {financeProjects.map((item) => (
-            <button type="button" key={item.id} onClick={() => openProject?.(projects.find((project) => String(project.id) === String(item.id)))}>
-              <span><b>{item.name}</b><small>{item.last_paid_at ? `תשלום אחרון: ${dateText(item.last_paid_at)}` : "טרם התקבל תשלום"}</small></span>
-              <strong>{money.format(item.paid)}</strong>
-              <em>{money.format(item.balance)} יתרה</em>
-            </button>
-          ))}
         </article>
       </section>
       <div className="work-toolbar">

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.23.2
+
+- Synchronized every system and component row with its parent system-type color.
+- Isolated the compact user administration table from the sidebar profile card.
+- Removed the duplicate collection actions panel and expanded the primary finance visualization.
+
 ## 0.23.1
 
 - Rebuilt the finance visuals to show each project's paid amount and outstanding balance even when no dated payment schedule exists yet.
