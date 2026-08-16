@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.24.3
+
+- Broadened project edit permission model so non-manager users with `projects: write` and configured supervisor/technician roles can edit project data when allowed.
+
 ## 0.24.2
 
 - Completed the fresh-install demo project seed defaults for the finance schema.
