@@ -1494,81 +1494,60 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
             </div>
           </div>
           {users.map((item) => (
-            <div className="user-row visual-user-row" key={item.id}>
-              <div
-                className={`avatar user-photo-avatar ${item.avatarImage ? "has-photo" : ""}`}
-                style={{ background: item.avatarColor, color: "#fff", "--avatar-color": item.avatarColor }}
-              >
-                {avatarGlyph(item)}
-              </div>
-              <div>
-                <strong>{item.displayName}</strong>
-                <span>
-                  {item.identityTypes?.includes('web') ? `Web: ${item.username}` : "ללא כניסת Web"}{" "}
-                  {item.identityTypes?.includes('ingress') && "· Home Assistant Ingress"}
-                </span>
-                <small className={item.online?"user-online":"user-offline"}>{item.online?"מחובר כעת":item.lastSeenAt?`נראה לאחרונה ${new Date(item.lastSeenAt).toLocaleString("he-IL")}`:"טרם התחבר"}</small>
-                <small className="user-last-login">התחברות אחרונה: {item.lastLoginAt?new Date(item.lastLoginAt).toLocaleString("he-IL"):"טרם התחבר"}</small>
-              </div>
-              <select
-                value={item.role}
-                onChange={(e) => updateUser(item.id, { role: e.target.value })}
-              >
-                {Object.entries(roleLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <label className="finance-access-toggle" title="שליטה נפרדת בחשיפת נתונים כספיים"><input type="checkbox" checked={item.financeAccess!==false} onChange={(event)=>updateUser(item.id,{financeAccess:event.target.checked})}/>צפייה בכספים</label>
-              {item.role==="custom"&&<details className="user-permissions"><summary>הרשאות מפורטות</summary><PermissionMatrix value={item.permissions} onChange={(permissions)=>updateUser(item.id,{permissions})}/></details>}
-              <div className="user-appearance">
-                <input
-                  aria-label="צבע משתמש"
-                  type="color"
-                  value={item.avatarColor}
-                  onChange={(e) =>
-                    updateUser(item.id, { avatarColor: e.target.value })
-                  }
-                />
-                <select
-                  aria-label="אייקון משתמש"
-                  value={item.avatarIcon}
-                  onChange={(e) =>
-                    updateUser(item.id, { avatarIcon: e.target.value })
-                  }
+            <article className="user-card" key={item.id}>
+              <div className="user-card-identity">
+                <div
+                  className={`avatar user-photo-avatar ${item.avatarImage ? "has-photo" : ""}`}
+                  style={{ background: item.avatarColor, color: "#fff", "--avatar-color": item.avatarColor }}
                 >
-                  {Object.entries(avatarIcons).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <label className="user-photo-upload" title="העלאת תמונת משתמש">
+                  {avatarGlyph(item)}
+                </div>
+                <div className="user-card-details">
+                  <strong>{item.displayName}</strong>
+                  <span>
+                    {item.identityTypes?.includes('web') ? `Web: ${item.username}` : "ללא כניסת Web"}{" "}
+                    {item.identityTypes?.includes('ingress') && "· Home Assistant Ingress"}
+                  </span>
+                  <small className={item.online ? "user-online" : "user-offline"}>{item.online ? "מחובר כעת" : item.lastSeenAt ? `נראה לאחרונה ${new Date(item.lastSeenAt).toLocaleString("he-IL")}` : "טרם התחבר"}</small>
+                  <small className="user-last-login">התחברות אחרונה: {item.lastLoginAt ? new Date(item.lastLoginAt).toLocaleString("he-IL") : "טרם התחבר"}</small>
+                </div>
+              </div>
+              <div className="user-card-controls">
+                <label className="user-control-field">
+                  <span>תפקיד והרשאה</span>
+                  <select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>
+                    {Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>
+                <label className="user-control-field finance-access-toggle" title="שליטה נפרדת בחשיפת נתונים כספיים">
+                  <span>נתונים כספיים</span>
+                  <input type="checkbox" checked={item.financeAccess !== false} onChange={(event) => updateUser(item.id, { financeAccess: event.target.checked })} />
+                  <b>{item.financeAccess !== false ? "מוצגים" : "מוסתרים"}</b>
+                </label>
+                <label className="user-control-field user-color-field">
+                  <span>צבע</span>
+                  <input aria-label="צבע משתמש" type="color" value={item.avatarColor} onChange={(e) => updateUser(item.id, { avatarColor: e.target.value })} />
+                </label>
+                <label className="user-control-field">
+                  <span>אייקון</span>
+                  <select aria-label="אייקון משתמש" value={item.avatarIcon} onChange={(e) => updateUser(item.id, { avatarIcon: e.target.value })}>
+                    {Object.entries(avatarIcons).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>
+                <label className="user-control-field user-photo-upload" title="העלאת תמונת משתמש">
+                  <span>תמונה</span>
                   <input type="file" accept="image/*" onChange={(event) => { uploadAvatar(item.id, event.target.files?.[0]); event.target.value = ""; }} />
-                  תמונה
+                  <b>{item.avatarImage ? "החלפה" : "העלאה"}</b>
                 </label>
                 {item.avatarImage && <button type="button" className="user-photo-remove" onClick={() => removeAvatar(item.id)}>הסרה</button>}
+                <label className="active-toggle user-active-control" title={item.active ? "החשבון פעיל" : "החשבון מושבת"}>
+                  <input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} />
+                  <span />
+                </label>
+                <button className="user-delete" disabled={String(item.id) === String(currentUser.id)} onClick={() => deleteUser(item)} title="מחיקת משתמש"><Trash2 size={16} /></button>
               </div>
-              <label className="active-toggle">
-                <input
-                  type="checkbox"
-                  checked={item.active}
-                  onChange={(e) =>
-                    updateUser(item.id, { active: e.target.checked })
-                  }
-                />
-                <span />
-              </label>
-              <button
-                className="user-delete"
-                disabled={String(item.id) === String(currentUser.id)}
-                onClick={() => deleteUser(item)}
-                title="מחיקת משתמש"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
+              {item.role === "custom" && <details className="user-permissions"><summary>הרשאות מפורטות</summary><PermissionMatrix value={item.permissions} onChange={(permissions) => updateUser(item.id, { permissions })} /></details>}
+            </article>
           ))}
         </div>
       </div>}

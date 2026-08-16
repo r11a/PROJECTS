@@ -936,13 +936,6 @@ export function FinanceWorkspace({
   const total = financeProjects.reduce((sum,item)=>sum+Number(item.total||0),0);
   const paid = financeProjects.reduce((sum,item)=>sum+Number(item.paid||0),0);
   const balance=financeProjects.reduce((sum,item)=>sum+Number(item.balance||0),0);
-  // Keep chart keys ASCII-only. Besides being clearer in the Recharts payload, this
-  // avoids a parser edge case in the add-on production bundle.
-  const chartData = financeProjects.map((item) => ({
-    name: item.name,
-    paid: Number(item.paid || 0),
-    balance: Number(item.balance || 0),
-  }));
   const save = async (value) => {
     try {
       await api(
@@ -995,24 +988,27 @@ export function FinanceWorkspace({
       </section>
       <section className="finance-dashboard-grid">
         <article className="panel finance-chart-card">
-          <header><div><span>גבייה לפי פרויקט</span><h3>שולם מול יתרה</h3></div></header>
-          {chartData.length ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 10, top: 10, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tickFormatter={(value) => `${Math.round(value / 1000)}K`} />
-                <YAxis type="category" dataKey="name" width={105} tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(value) => money.format(Number(value))} />
-                <Bar dataKey="paid" name="שולם" stackId="a" fill="#1fa873" radius={[0, 6, 6, 0]} />
-                <Bar dataKey="balance" name="יתרה" stackId="a" fill="#e3a43b" radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <header><div><span>גבייה לפי פרויקט</span><h3>תמונת מזומן ברורה</h3></div><div className="finance-legend"><span><i className="paid"/>שולם</span><span><i className="balance"/>יתרה</span></div></header>
+          {financeProjects.length ? (
+            <div className="finance-bars" role="list" aria-label="גבייה לפי פרויקט">
+              {financeProjects.map((item) => {
+                const itemTotal = Math.max(0, Number(item.total || 0));
+                const itemPaid = Math.max(0, Number(item.paid || 0));
+                const itemBalance = Math.max(0, Number(item.balance || 0));
+                const paidPercent = itemTotal ? Math.min(100, Math.round((itemPaid / itemTotal) * 100)) : 0;
+                return <button type="button" role="listitem" key={item.id} className="finance-bar-row" onClick={() => openProject?.(projects.find((project) => String(project.id) === String(item.id)))}>
+                  <div className="finance-bar-title"><strong>{item.name}</strong><small>{money.format(itemTotal)} היקף</small></div>
+                  <div className="finance-bar-track" aria-label={`${item.name}: ${paidPercent}% נגבה`}><i className="paid" style={{ width: `${paidPercent}%` }} /><i className="balance" style={{ width: `${100 - paidPercent}%` }} /></div>
+                  <div className="finance-bar-values"><b>{money.format(itemPaid)} <small>שולם</small></b><span>{money.format(itemBalance)} <small>יתרה</small></span><em>{paidPercent}%</em></div>
+                </button>;
+              })}
+            </div>
           ) : (
             <EmptyState icon={CreditCard} title="אין נתונים כספיים" text="הגדירו מסגרת כספית או דרישת תשלום לפרויקט." />
           )}
         </article>
         <article className="panel finance-project-summary">
-          <header><div><span>מצב כספי</span><h3>כל פרויקט בשורה אחת</h3></div></header>
+          <header><div><span>פעולות נדרשות</span><h3>הגבייה הקרובה</h3></div></header>
           {financeProjects.map((item) => (
             <button type="button" key={item.id} onClick={() => openProject?.(projects.find((project) => String(project.id) === String(item.id)))}>
               <span><b>{item.name}</b><small>{item.last_paid_at ? `תשלום אחרון: ${dateText(item.last_paid_at)}` : "טרם התקבל תשלום"}</small></span>
@@ -1298,6 +1294,7 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
   const monthlyMap = new Map();
   (data.monthly || []).forEach((item) => { const row=monthlyMap.get(item.month)||{month:item.month,paid:0,pending:0}; row[item.status === "paid" ? "paid" : "pending"] += Number(item.amount); monthlyMap.set(item.month,row); });
   const monthlyData = [...monthlyMap.values()].slice(-12).map((item)=>({ ...item, label:new Date(`${item.month}-01T12:00:00`).toLocaleDateString("he-IL",{month:"short",year:"2-digit"}) }));
+  const financeProjectData = (data.financeProjects || []).map((item) => ({ ...item, total:Number(item.total || 0), paid:Number(item.paid || 0), open:Number(item.open || 0) }));
   const aiUsageData = (data.aiUsage || []).map((item)=>({ ...item, questions:Number(item.questions),insights:Number(item.insights),tokens:Number(item.tokens),estimatedCost:Number(item.estimated_cost),label:new Date(`${item.day}T12:00:00`).toLocaleDateString("he-IL",{day:"numeric",month:"short"}) }));
   const aiUsageSummary = { questions:Number(data.aiUsageSummary?.questions || 0),insights:Number(data.aiUsageSummary?.insights || 0),tokens:Number(data.aiUsageSummary?.tokens || 0),estimatedCost:Number(data.aiUsageSummary?.estimated_cost || 0) };
   return (
@@ -1419,7 +1416,7 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
         <div className="panel report-panel"><h3>מסמכים לפי סוג</h3>{data.documents?.length ? <><ResponsiveContainer width="100%" height={220}><PieChart><Pie data={data.documents} dataKey="count" nameKey="category" innerRadius={48} outerRadius={76} paddingAngle={3} isAnimationActive animationBegin={120} animationDuration={1000} animationEasing="ease-out">{data.documents.map((_,index)=><Cell key={index} fill={palette[index%palette.length]}/>)}</Pie><Tooltip formatter={(value)=>[value,"מסמכים"]} contentStyle={{direction:"rtl"}}/></PieChart></ResponsiveContainer><div className="report-legend compact">{data.documents.map((item,index)=><span key={item.category}><i style={{background:palette[index%palette.length]}}/>{item.category}<b>{item.count}</b></span>)}</div></> : <div className="chart-empty">אין מסמכים לסיכום</div>}</div>
       </div>
       <section className="report-category-head"><div><span>04</span><h3>כספים וגבייה</h3></div><p>מגמת תשלומים שהתקבלו מול תשלומים שטרם נגבו.</p></section>
-      <div className="panel report-panel report-finance-trend"><h3>מגמת גבייה חודשית</h3>{monthlyData.length ? <ResponsiveContainer width="100%" height={300}><AreaChart data={monthlyData} margin={{top:10,right:12,left:12,bottom:5}}><defs><linearGradient id="paidGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#12a594" stopOpacity={0.45}/><stop offset="95%" stopColor="#12a594" stopOpacity={0.03}/></linearGradient><linearGradient id="pendingGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#e29b38" stopOpacity={0.35}/><stop offset="95%" stopColor="#e29b38" stopOpacity={0.02}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="label"/><YAxis tickFormatter={(value)=>`${Math.round(value/1000)}K`}/><Tooltip formatter={(value,name)=>[money.format(value),name==="paid"?"נגבה":"ממתין"]} contentStyle={{direction:"rtl"}}/><Area type="monotone" dataKey="paid" stroke="#12a594" strokeWidth={3} fill="url(#paidGradient)" isAnimationActive animationDuration={1100} animationEasing="ease-out"/><Area type="monotone" dataKey="pending" stroke="#e29b38" strokeWidth={2} fill="url(#pendingGradient)" isAnimationActive animationBegin={140} animationDuration={1100} animationEasing="ease-out"/></AreaChart></ResponsiveContainer> : <div className="chart-empty">אין תשלומים עם תאריך להצגת מגמה</div>}</div>
+      <div className="panel report-panel report-finance-trend"><h3>מגמת גבייה חודשית</h3>{monthlyData.length ? <ResponsiveContainer width="100%" height={300}><AreaChart data={monthlyData} margin={{top:10,right:12,left:12,bottom:5}}><defs><linearGradient id="paidGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#12a594" stopOpacity={0.45}/><stop offset="95%" stopColor="#12a594" stopOpacity={0.03}/></linearGradient><linearGradient id="pendingGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#e29b38" stopOpacity={0.35}/><stop offset="95%" stopColor="#e29b38" stopOpacity={0.02}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="label"/><YAxis tickFormatter={(value)=>`${Math.round(value/1000)}K`}/><Tooltip formatter={(value,name)=>[money.format(value),name==="paid"?"נגבה":"ממתין"]} contentStyle={{direction:"rtl"}}/><Area type="monotone" dataKey="paid" stroke="#12a594" strokeWidth={3} fill="url(#paidGradient)" isAnimationActive animationDuration={1100} animationEasing="ease-out"/><Area type="monotone" dataKey="pending" stroke="#e29b38" strokeWidth={2} fill="url(#pendingGradient)" isAnimationActive animationBegin={140} animationDuration={1100} animationEasing="ease-out"/></AreaChart></ResponsiveContainer> : financeProjectData.length ? <div className="report-finance-fallback"><p>תמונת מצב נוכחית לפי פרויקט — הוספת תאריכי תשלום תפעיל גם מגמה חודשית.</p>{financeProjectData.map((item)=>{const paidPercent=item.total ? Math.min(100,Math.round((item.paid/item.total)*100)) : 0;return <article key={item.id}><header><strong>{item.name}</strong><span>{money.format(item.paid)} נגבה מתוך {money.format(item.total)}</span></header><div className="report-finance-track" aria-label={`גבייה בפרויקט ${item.name}`}><i style={{width:`${paidPercent}%`}}/></div><footer><b>{paidPercent}% נגבה</b><span>יתרה {money.format(item.open)}</span></footer></article>;})}</div> : <div className="chart-empty">אין עדיין נתונים כספיים להצגה</div>}</div>
       <section className="report-category-head"><div><span>05</span><h3>שימוש בסוכן AI</h3></div><p>כמות שאלות, תובנות אוטומטיות, טוקנים ואומדן עלות ב־30 הימים האחרונים.</p></section>
       <div className="panel report-panel ai-usage-panel">
         <header><div><h3>שאלות מול עלות משוערת</h3><small>העלות מחושבת לפי טוקנים ומחירי המחירון של המודל; במסלול Gemini החינמי החיוב בפועל עשוי להיות ₪0.</small></div><div className="ai-usage-kpis"><span><small>שאלות</small><b>{aiUsageSummary.questions}</b></span><span><small>תובנות רקע</small><b>{aiUsageSummary.insights}</b></span><span><small>טוקנים</small><b>{aiUsageSummary.tokens.toLocaleString("he-IL")}</b></span><span><small>אומדן</small><b>${aiUsageSummary.estimatedCost.toFixed(4)}</b></span></div></header>

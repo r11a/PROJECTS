@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.23.1
+
+- Rebuilt the finance visuals to show each project's paid amount and outstanding balance even when no dated payment schedule exists yet.
+- Corrected catalog component colors so components consistently inherit their system-category color.
+- Reflowed the user administration cards for readable desktop and mobile controls.
+- Added root-level UI error capture to the audit trail with route and component diagnostics.
+
 ## 0.22.1
 
 - Hardened the PWA and standalone app shell cache policy so a mobile device fetches the current release after an add-on upgrade.

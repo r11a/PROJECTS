@@ -46,6 +46,41 @@
 .finance-chart-card header,.finance-project-summary header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .finance-chart-card header span,.finance-project-summary header span { display:block; color:#7d8494; font-size:12px; }
 .finance-chart-card h3,.finance-project-summary h3 { margin:3px 0; font-size:17px; }
+.finance-chart-card { overflow:hidden; padding:0; }
+.finance-chart-card header { padding:20px 22px 14px; margin:0; }
+.finance-legend { display:flex; align-items:center; flex-wrap:wrap; gap:12px; color:#667087; font-size:12px; font-weight:750; }
+.finance-legend span { display:inline-flex!important; align-items:center; gap:6px; color:#667087!important; }
+.finance-legend i { width:9px; height:9px; border-radius:50%; background:#159b66; }
+.finance-legend i.balance { background:#d29b2f; }
+.finance-bars { border-top:1px solid #edf0f5; }
+.report-finance-fallback { display:grid; gap:14px; padding:8px 2px 2px; }
+.report-finance-fallback > p { margin:0 0 3px; color:var(--muted,#778198); font-size:.85rem; }
+.report-finance-fallback article { display:grid; gap:7px; padding:13px 14px; border:1px solid #e8ebf2; border-radius:14px; background:#fafbfe; }
+.report-finance-fallback article header,.report-finance-fallback article footer { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.report-finance-fallback article header strong { color:#22263b; font-size:.95rem; }
+.report-finance-fallback article header span,.report-finance-fallback article footer span { color:#7a8398; font-size:.8rem; }
+.report-finance-fallback article footer b { color:#20846e; font-size:.82rem; }
+.report-finance-track { height:9px; overflow:hidden; border-radius:999px; background:#f1dfbd; }
+.report-finance-track i { display:block; height:100%; min-width:3px; border-radius:inherit; background:linear-gradient(90deg,#16a085,#35ba9f); transition:width .45s ease; }
+@media (max-width:640px){.report-finance-fallback article header,.report-finance-fallback article footer{align-items:flex-start;flex-direction:column;gap:4px;}}
+.finance-bar-row { display:grid; grid-template-columns:minmax(150px,1fr) minmax(220px,2.2fr) minmax(220px,1.3fr); align-items:center; gap:18px; width:100%; padding:15px 22px; border:0; border-bottom:1px solid #edf0f5; background:#fff; color:#20253a; font:inherit; text-align:right; cursor:pointer; transition:background .18s ease, transform .18s ease; }
+.finance-bar-row:last-child { border-bottom:0; }
+.finance-bar-row:hover { background:#faf9ff; }
+.finance-bar-row:focus-visible { position:relative; z-index:1; outline:3px solid rgba(105,87,223,.3); outline-offset:-3px; }
+.finance-bar-title { min-width:0; }
+.finance-bar-title strong,.finance-bar-title small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.finance-bar-title strong { font-size:14px; font-weight:850; }
+.finance-bar-title small { margin-top:4px; color:#8a92a5; font-size:11px; }
+.finance-bar-track { display:flex; direction:ltr; height:13px; overflow:hidden; border-radius:999px; background:#f0f1f5; box-shadow:inset 0 1px 2px rgba(18,24,40,.08); }
+.finance-bar-track i { display:block; min-width:0; height:100%; transition:width .55s cubic-bezier(.2,.8,.2,1); }
+.finance-bar-track i.paid { background:linear-gradient(90deg,#16a36c,#48c98b); }
+.finance-bar-track i.balance { background:linear-gradient(90deg,#efc666,#cc8b21); }
+.finance-bar-values { display:flex; justify-content:flex-end; align-items:baseline; gap:11px; direction:rtl; white-space:nowrap; }
+.finance-bar-values b,.finance-bar-values span { display:inline-flex; flex-direction:column; gap:2px; font-size:13px; font-variant-numeric:tabular-nums; }
+.finance-bar-values b { color:#138657; }
+.finance-bar-values span { color:#a26b12; }
+.finance-bar-values small { color:#8a92a5; font-size:10px; font-weight:650; }
+.finance-bar-values em { min-width:37px; padding:3px 6px; border-radius:7px; background:#f1efff; color:#5e4ccc; font-size:11px; font-style:normal; font-weight:850; text-align:center; }
 .finance-project-summary>button { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:12px; align-items:center; width:100%; padding:12px 0; border:0; border-bottom:1px solid #eceef3; background:transparent; text-align:right; cursor:pointer; }
 .finance-project-summary>button:last-child { border-bottom:0; }
 .finance-project-summary>button span { min-width:0; }.finance-project-summary>button b,.finance-project-summary>button small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.finance-project-summary>button small { color:#838b9d; margin-top:4px; }.finance-project-summary>button strong { color:#149461; font-size:13px; }.finance-project-summary>button em { color:#a36b12; font-style:normal; font-size:12px; }
@@ -57,6 +92,9 @@
   }
   .finance-dashboard-grid { grid-template-columns:1fr; gap:12px; }
   .finance-project-summary>button { grid-template-columns:minmax(0,1fr) auto; }.finance-project-summary>button em { grid-column:2; }
+  .finance-chart-card header { padding:16px; align-items:flex-start; gap:10px; }
+  .finance-bar-row { grid-template-columns:1fr; gap:9px; padding:15px 16px; }
+  .finance-bar-values { justify-content:flex-start; }
 }
 
 /* User administration: separate deliberate work modes instead of one dense grid. */
@@ -66,26 +104,44 @@
 .users-tabs button.active { background:#6957df; color:#fff; box-shadow:0 7px 16px rgba(105,87,223,.22); }
 .users-layout { display:block; min-width:0; }
 .users-list { min-width:0; overflow:hidden; }
-.visual-user-row { grid-template-columns:56px minmax(230px,1.45fr) minmax(140px,.8fr) minmax(112px,.72fr) minmax(140px,.9fr) auto auto; align-items:center; gap:14px; min-width:0; }
-.visual-user-row > div:nth-child(2) { min-width:0; }
-.visual-user-row > div:nth-child(2) strong,.visual-user-row > div:nth-child(2) span,.visual-user-row > div:nth-child(2) small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.visual-user-row > .user-permissions { grid-column:2 / -2; }
+.user-card { display:grid; grid-template-columns:minmax(245px,.85fr) minmax(560px,1.65fr); gap:22px; align-items:center; padding:18px 22px; border-bottom:1px solid #e8ebf1; background:#fff; }
+.user-card:last-child { border-bottom:0; }
+.user-card-identity { display:grid; grid-template-columns:56px minmax(0,1fr); gap:13px; align-items:center; min-width:0; }
+.user-card-details { min-width:0; }
+.user-card-details strong,.user-card-details span,.user-card-details small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.user-card-details strong { color:#20253a; font-size:16px; }
+.user-card-details span { margin-top:3px; color:#858da0; font-size:12px; }
+.user-card-details small { margin-top:3px; font-size:11px; }
+.user-card-controls { display:grid; grid-template-columns:minmax(138px,1.25fr) minmax(98px,.85fr) 64px minmax(105px,.9fr) 66px auto auto auto; gap:9px; align-items:end; min-width:0; }
+.user-control-field { display:grid; min-width:0; gap:5px; color:#7b8497; font-size:10px; font-weight:800; }
+.user-control-field > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.user-control-field select { width:100%; min-height:38px; padding:0 10px; border:1px solid #dde2eb; border-radius:10px; background:#fff; color:#30364a; font:inherit; font-size:12px; }
+.user-color-field input { width:100%; height:38px; padding:3px; border:1px solid #dde2eb; border-radius:10px; background:#fff; cursor:pointer; }
+.finance-access-toggle { grid-template-columns:auto 1fr; align-items:center; min-height:38px; padding:0 9px; border:1px solid #dde2eb; border-radius:10px; background:#fbfcff; }
+.finance-access-toggle > span { grid-column:1 / -1; }
+.finance-access-toggle input { appearance:auto; width:15px; height:15px; margin:0; accent-color:#6957df; }
+.finance-access-toggle b { color:#495169; font-size:11px; white-space:nowrap; }
+.user-photo-upload { position:relative; display:flex; align-items:center; justify-content:center; min-height:38px; padding:0 8px; border:1px dashed #b7aef2; border-radius:10px; background:#faf9ff; color:#614fd0; cursor:pointer; }
+.user-photo-upload > span { display:none; }.user-photo-upload input { position:absolute; inset:0; width:100%; opacity:0; cursor:pointer; }.user-photo-upload b { font-size:11px; }
+.user-active-control { align-self:end; min-height:38px; display:flex; align-items:center; justify-content:center; }
+.user-card .user-delete,.user-card .user-photo-remove { align-self:end; min-height:38px; }
+.user-card .user-permissions { grid-column:1 / -1; margin-top:-4px; }
 .create-user { max-width:860px; margin:0 auto; padding:22px; }
 .create-user .permission-matrix { max-height:430px; overflow:auto; }
 .identity-linker { max-width:980px; margin:0 auto; }
 @media (max-width: 960px) {
-  .visual-user-row { grid-template-columns:52px minmax(0,1fr) minmax(130px,.8fr) auto; }
-  .visual-user-row > .finance-access-toggle,.visual-user-row > .user-appearance { grid-column:2 / -1; }
-  .visual-user-row > .active-toggle,.visual-user-row > .user-delete { grid-column:auto; }
+  .user-card { grid-template-columns:1fr; gap:15px; }
+  .user-card-controls { grid-template-columns:minmax(145px,1fr) minmax(105px,.8fr) 64px minmax(110px,.8fr) 70px auto auto auto; }
 }
 @media (max-width: 620px) {
   .users-tabs { width:100%; overflow:auto; border-radius:12px; }
   .users-tabs button { flex:1 0 auto; padding:0 12px; }
-  .visual-user-row { grid-template-columns:46px minmax(0,1fr) auto; padding:14px!important; gap:10px; }
-  .visual-user-row > select,.visual-user-row > .finance-access-toggle,.visual-user-row > .user-appearance { grid-column:2 / -1; width:100%; }
-  .visual-user-row > .user-permissions { grid-column:1 / -1; }
-  .visual-user-row > .active-toggle { grid-column:2; }
-  .visual-user-row > .user-delete { grid-column:3; }
+  .user-card { padding:16px; gap:14px; }
+  .user-card-controls { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; align-items:stretch; }
+  .user-control-field { min-height:58px; }
+  .user-color-field,.user-photo-upload,.user-active-control,.user-card .user-delete,.user-card .user-photo-remove { min-height:42px; }
+  .user-color-field { grid-column:1; }.user-photo-upload { grid-column:2; }.user-active-control { grid-column:1; }.user-card .user-delete,.user-card .user-photo-remove { grid-column:2; }
+  .user-card .user-permissions { margin-top:0; }
   .permission-matrix>header,.permission-matrix>div { min-width:440px; grid-template-columns:minmax(118px,1fr) repeat(3,72px); }
   .create-user { padding:16px; border-radius:16px; }
 }

@@ -254,10 +254,14 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
         return fallback;
       }
     };
-    const [stages, tasks, finance, managers, monthly, systems, components, projectSizes, contractorStages, deadlines, documents, aiUsage, aiUsageSummary] = await Promise.all([
+    const [stages, tasks, finance, financeProjects, managers, monthly, systems, components, projectSizes, contractorStages, deadlines, documents, aiUsage, aiUsageSummary] = await Promise.all([
       reportQuery('stages', 'SELECT stage,COUNT(*)::int count,COALESCE(SUM(value),0)::numeric value FROM projects WHERE archived_at IS NULL GROUP BY stage ORDER BY count DESC', []),
       reportQuery('tasks', 'SELECT status,COUNT(*)::int count FROM tasks GROUP BY status', []),
       reportQuery('finance', 'SELECT COALESCE(SUM(value),0)::numeric total,COALESCE(SUM(paid),0)::numeric paid,COALESCE(SUM(value-paid),0)::numeric AS "open" FROM projects', [{ total: 0, paid: 0, open: 0 }]),
+      reportQuery('financeProjects', `SELECT id,name,COALESCE(value,0)::numeric total,COALESCE(paid,0)::numeric paid,
+        GREATEST(COALESCE(value,0)-COALESCE(paid,0),0)::numeric AS "open"
+        FROM projects WHERE archived_at IS NULL AND (COALESCE(value,0)>0 OR COALESCE(paid,0)>0)
+        ORDER BY COALESCE(value,0) DESC,name ASC LIMIT 10`, []),
       reportQuery('managers', `SELECT COALESCE(NULLIF(pr.display_name,''),NULLIF(p.manager,''),'ללא מנהל') name,COUNT(*)::int projects,COALESCE(ROUND(AVG(p.progress)),0)::int progress
         FROM projects p LEFT JOIN professionals pr ON pr.id=p.manager_professional_id WHERE p.archived_at IS NULL
         GROUP BY pr.id,pr.display_name,p.manager ORDER BY COUNT(*) DESC`, []),
@@ -289,6 +293,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
       stages:canViewFinance?stages:stages.map(({value: _value,...stage})=>stage),
       tasks,
       finance:canViewFinance?(finance[0] || { total: 0, paid: 0, open: 0 }):{ restricted:true,total:0,paid:0,open:0 },
+      financeProjects:canViewFinance?financeProjects:[],
       managers,
       monthly:canViewFinance?monthly:[],
       systems, components, projectSizes, contractorStages, deadlines, documents, aiUsage,
