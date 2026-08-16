@@ -60,8 +60,26 @@ test('Gantt scheduling supports drag, resize, long press duration and persistent
   const migration = await read('../migrations/019_gantt_messages.sql');
   for (const token of ['beginTaskDrag','moveTaskDrag','adjustDialogDuration','scheduleColors','onScheduleChange','mentionUserIds','משימה קריטית']) assert.match(timeline,new RegExp(token));
   assert.match(timeline,/item\.critical \? "#C92A3A"/);
+  assert.match(timeline,/Math\.max\(34, exactWidth\)/);
+  assert.match(timeline,/source: "drag"/);
+  assert.match(timeline,/אישור ושמירה/);
   assert.match(operations,/critical=\$14,color=\$15/);
   assert.match(migration,/ALTER TABLE tasks ADD COLUMN IF NOT EXISTS color/);
+});
+
+test('live workspaces refresh silently and ignore stale responses', async () => {
+  const app = await read('../src/App.jsx');
+  const workspaces = await read('../src/Workspaces.jsx');
+  const productivity = await read('../src/ProductivityWorkspace.jsx');
+  const masterData = await read('../src/MasterDataWorkspace.jsx');
+  for (const source of [workspaces, productivity, masterData]) {
+    assert.match(source, /loadRequest/);
+  }
+  for (const source of [workspaces, productivity]) {
+    assert.match(source, /silent\s*:\s*true/);
+  }
+  assert.match(app, /pendingTables = new Set/);
+  assert.match(app, /const has = \(\.\.\.names\)/);
 });
 
 test('finance workspace supports structured adjustments and task scheduling metadata', async () => {

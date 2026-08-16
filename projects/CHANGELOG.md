@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.23.4
+
+- ייצוב רענון הרקע במסכי משימות, העבודה שלי ואנשי מקצוע ללא הבהוב או לולאת טעינה.
+- טבלת לקוחות אחידה ורספונסיבית עם תצוגת מובייל טבעית.
+- שינויי תאריך ומשך בגאנט נשמרים רק לאחר אישור מפורש; שופרה פתיחת התפריט במשימות קצרות.
+
 ## 0.23.3
 
 - Enforced finance visibility as a global security policy across APIs, projects, dashboards, reports, charts, exports and AI context.

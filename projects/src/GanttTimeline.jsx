@@ -46,6 +46,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   const taskDrag = useRef(null);
   const blockTaskClick = useRef(false);
   const longPress = useRef(null);
+  const longPressOpened = useRef(false);
   const config = zooms[zoom];
   const pixelsPerDay = config.pixelsPerDay * scale;
   const pagePixels = config.pageDays * pixelsPerDay;
@@ -114,6 +115,18 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     setZoom(value);
   };
   const changeScale = (delta) => setScale((current) => clampScale(current + delta));
+  useEffect(() => () => {
+    if (longPress.current) clearTimeout(longPress.current);
+  }, []);
+  const openScheduleDialog = (item, extra = {}) => setScheduleDialog({
+    item,
+    startDate: inputDate(item.start),
+    dueDate: inputDate(item.end),
+    color: item.color || palette[0],
+    critical: Boolean(item.critical),
+    mentionUserIds: [],
+    ...extra,
+  });
   const startPinch = (event) => {
     if (event.touches.length !== 2) return;
     pinch.current = { distance: touchDistance(event.touches), scale };
@@ -154,13 +167,18 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     if (!onScheduleChange || event.pointerType === "touch" && event.isPrimary === false) return;
     event.preventDefault();
     event.stopPropagation();
+    const captureTarget = event.currentTarget;
     taskDrag.current = { pointerId:event.pointerId, item, mode, x:event.clientX, start:midnight(item.start), end:midnight(item.end), moved:false };
-    if (mode === "move") longPress.current = setTimeout(() => {
+    if (longPress.current) clearTimeout(longPress.current);
+    longPress.current = setTimeout(() => {
+      if (!taskDrag.current || taskDrag.current.pointerId !== event.pointerId) return;
       taskDrag.current = null;
+      longPress.current = null;
+      longPressOpened.current = true;
       blockTaskClick.current = true;
-      setScheduleDialog({ item, startDate:inputDate(item.start), dueDate:inputDate(item.end), color:item.color || palette[0], critical:Boolean(item.critical), mentionUserIds:[] });
-    }, 650);
-    event.currentTarget.setPointerCapture(event.pointerId);
+      openScheduleDialog(item, { source: "long-press" });
+    }, 560);
+    captureTarget.setPointerCapture(event.pointerId);
   };
   const moveTaskDrag = (event) => {
     const drag = taskDrag.current;
@@ -181,7 +199,14 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   };
   const endTaskDrag = async (event) => {
     const drag = taskDrag.current;
-    if (!drag || drag.pointerId !== event.pointerId) { if (longPress.current) { clearTimeout(longPress.current); longPress.current=null; } requestAnimationFrame(()=>{blockTaskClick.current=false;}); return; }
+    if (!drag || drag.pointerId !== event.pointerId) {
+      if (longPress.current) { clearTimeout(longPress.current); longPress.current=null; }
+      if (longPressOpened.current) {
+        longPressOpened.current = false;
+        setTimeout(() => { blockTaskClick.current = false; }, 160);
+      } else requestAnimationFrame(()=>{blockTaskClick.current=false;});
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     taskDrag.current = null;
@@ -189,7 +214,12 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     blockTaskClick.current = drag.moved;
     const key = `${drag.item.kind}-${drag.item.id}`;
     const preview = drag.preview;
-    if (drag.moved && preview) await onScheduleChange?.(drag.item, { startDate:inputDate(preview.start), dueDate:inputDate(preview.end) });
+    if (drag.moved && preview) openScheduleDialog(drag.item, {
+      source: "drag",
+      changeType: drag.mode,
+      startDate: inputDate(preview.start),
+      dueDate: inputDate(preview.end),
+    });
     setSchedulePreview((current) => { const next={...current}; delete next[key]; return next; });
     requestAnimationFrame(() => { blockTaskClick.current = false; });
   };
@@ -261,11 +291,13 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
                 const itemStart = preview?.start ?? midnight(item.start);
                 const itemEnd = preview?.end ?? midnight(item.end);
                 const color = item.critical ? "#C92A3A" : item.color || (item.status === "done" || item.status === "completed" ? "#087F5B" : palette[row.groupIndex % palette.length]);
-                const left = ((itemStart - rangeStart) / DAY) * pixelsPerDay;
+                const exactLeft = ((itemStart - rangeStart) / DAY) * pixelsPerDay;
                 const exactWidth = Math.max(10, ((itemEnd - itemStart) / DAY + 1) * pixelsPerDay);
-                const visible = left + exactWidth >= 0 && left <= canvasWidth;
+                const renderWidth = item.kind === "milestone" ? 28 : Math.max(34, exactWidth);
+                const left = exactLeft - Math.max(0, (renderWidth - exactWidth) / 2);
+                const visible = left + renderWidth >= 0 && left <= canvasWidth;
                 if (!visible) return <div className="cg-item-row" key={row.key} style={{ top: row.top, height: row.height }} />;
-                return <div className="cg-item-row" key={row.key} style={{ top: row.top, height: row.height }}><button type="button" className={`cg-bar ${item.kind} ${item.critical ? "critical" : ""} ${preview ? "editing-schedule" : ""}`} style={{ left, width: item.kind === "milestone" ? 22 : exactWidth, background: color, color: contrastText(color) }} onClick={() => { if (!blockTaskClick.current) onOpen?.(item); }} onPointerDown={(event)=>beginTaskDrag(event,item,"move")} onPointerMove={moveTaskDrag} onPointerUp={endTaskDrag} onPointerCancel={endTaskDrag} onMouseMove={(event) => !taskDrag.current && setTooltip({ item, x: event.clientX, y: event.clientY })} onMouseLeave={() => setTooltip(null)} aria-label={`פתיחת ${item.title}`}>{item.kind === "milestone" ? <i /> : <><i className="cg-resize start" onPointerDown={(event)=>beginTaskDrag(event,item,"start")}/><span>{item.title}</span><i className="cg-resize end" onPointerDown={(event)=>beginTaskDrag(event,item,"end")}/></>}</button></div>;
+                return <div className="cg-item-row" key={row.key} style={{ top: row.top, height: row.height }}><button type="button" className={`cg-bar ${item.kind} ${item.critical ? "critical" : ""} ${preview ? "editing-schedule" : ""}`} style={{ left, width: renderWidth, background: color, color: contrastText(color) }} onClick={() => { if (!blockTaskClick.current) onOpen?.(item); }} onContextMenu={(event)=>{event.preventDefault();event.stopPropagation();openScheduleDialog(item,{source:"context"})}} onPointerDown={(event)=>beginTaskDrag(event,item,"move")} onPointerMove={moveTaskDrag} onPointerUp={endTaskDrag} onPointerCancel={endTaskDrag} onMouseMove={(event) => !taskDrag.current && setTooltip({ item, x: event.clientX, y: event.clientY })} onMouseLeave={() => setTooltip(null)} aria-label={`פתיחת ${item.title}`}>{item.kind === "milestone" ? <i /> : <><i className="cg-resize start" onPointerDown={(event)=>beginTaskDrag(event,item,"start")}/><span>{item.title}</span><i className="cg-resize end" onPointerDown={(event)=>beginTaskDrag(event,item,"end")}/></>}</button></div>;
               })}
             </div>
           </div>

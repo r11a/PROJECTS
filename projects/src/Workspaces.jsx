@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownUp,
@@ -426,9 +426,11 @@ export function TasksWorkspace({
   const [sortBy, setSortBy] = useState("due_asc");
   const [editor, setEditor] = useState(null);
   const [loading, setLoading] = useState(true);
-  const load = async () => {
+  const loadRequest = useRef(0);
+  const load = useCallback(async ({ silent = false } = {}) => {
+    const requestId = ++loadRequest.current;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const suffix = projectId
         ? `&projectId=${encodeURIComponent(projectId)}`
         : "";
@@ -440,18 +442,19 @@ export function TasksWorkspace({
           `/operations/milestones?projectId=${encodeURIComponent(projectId)}`,
         ),
       ]);
+      if (requestId !== loadRequest.current) return;
       setTasks(a.tasks);
       setMilestones(b.milestones);
     } catch (e) {
-      setNotice(e.message);
+      if (requestId === loadRequest.current) setNotice(e.message);
     } finally {
-      setLoading(false);
+      if (requestId === loadRequest.current) setLoading(false);
     }
-  };
+  }, [query, status, projectId]);
   useEffect(() => {
     const timer = setTimeout(load, 150);
     return () => clearTimeout(timer);
-  }, [query, status, projectId]);
+  }, [load]);
   useEffect(() => {
     if (!initialTaskId || !tasks.length) return;
     const item = tasks.find((task) => String(task.id) === String(initialTaskId));
@@ -461,10 +464,13 @@ export function TasksWorkspace({
     onInitialTaskOpened?.();
   }, [initialTaskId, tasks, onInitialTaskOpened]);
   useEffect(() => {
-    const live = () => load();
+    const live = (event) => {
+      if (!["tasks", "milestones", "projects", "professionals"].includes(event.detail?.table)) return;
+      load({ silent: true });
+    };
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);
-  }, [query, status, projectId]);
+  }, [load]);
   const visibleTasks = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -517,7 +523,7 @@ export function TasksWorkspace({
       });
       setEditor(null);
       setNotice("הפריט נשמר בהצלחה");
-      load();
+      load({ silent: true });
       onDataChanged?.();
     } catch (e) {
       setNotice(e.message);
@@ -528,7 +534,7 @@ export function TasksWorkspace({
     try {
       await api(`/operations/${tab}/${item.id}`, { method: "DELETE" });
       setNotice("הפריט נמחק");
-      load();
+      load({ silent: true });
       onDataChanged?.();
     } catch (e) {
       setNotice(e.message);

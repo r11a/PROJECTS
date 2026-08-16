@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { GanttTimeline } from "./GanttTimeline";
 import { TaskEditor } from "./Workspaces";
@@ -11,20 +11,29 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
   const [query, setQuery] = useState("");
   const [editor, setEditor] = useState(null);
   const [users,setUsers]=useState([]);
-  const load = () => Promise.all([
-    api("/operations/tasks?q=&status="),
-    api("/operations/milestones?projectId="),
-  ]).then(([taskResult, milestoneResult]) => {
-    setTasks(taskResult.tasks);
-    setMilestones(milestoneResult.milestones);
-  }).catch((error) => setNotice(error.message));
+  const loadRequest = useRef(0);
+  const load = useCallback(() => {
+    const requestId = ++loadRequest.current;
+    return Promise.all([
+      api("/operations/tasks?q=&status="),
+      api("/operations/milestones?projectId="),
+    ]).then(([taskResult, milestoneResult]) => {
+      if (requestId !== loadRequest.current) return;
+      setTasks(taskResult.tasks);
+      setMilestones(milestoneResult.milestones);
+    }).catch((error) => {
+      if (requestId === loadRequest.current) setNotice(error.message);
+    });
+  }, []);
   useEffect(() => {
     load();
     api('/team').then(result=>setUsers(result.users||[])).catch(()=>{});
-    const live = () => load();
+    const live = (event) => {
+      if (["tasks", "milestones"].includes(event.detail?.table)) load();
+    };
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);
-  }, []);
+  }, [load]);
   const groups = useMemo(() => {
     const map = new Map();
     for (const item of tasks) {
