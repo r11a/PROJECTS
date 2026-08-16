@@ -125,7 +125,7 @@ function projectFromRow(row) {
     id: row.id, serialCode:row.serial_code, name: row.name, client: row.client, location: row.location, address: withoutArabic(row.address),
     lat: Number(row.lat), lng: Number(row.lng), stage: row.stage, progress: Number(row.progress),
     manager: row.manager, ownerInitials: row.owner_initials, value: Number(row.value), paid: Number(row.paid),
-    due: row.due, priority: row.priority, flag: row.flag, systems: row.systems || [], installationHoursTarget:Number(row.installation_hours_target||0),programmingHoursTarget:Number(row.programming_hours_target||0),
+    due: row.due, priority: row.priority, flag: row.flag, systems: Array.isArray(row.systems) ? row.systems : [], installationHoursTarget:Number(row.installation_hours_target||0),programmingHoursTarget:Number(row.programming_hours_target||0),
     nextMilestone: row.next_milestone, phone: row.phone, email: row.email, health: Number(row.health),
     tasksDone: Number(row.tasks_done), tasksTotal: Number(row.tasks_total), managerId: row.manager_professional_id, clientId: row.client_id,
     archived: Boolean(row.archived_at), archivedAt: row.archived_at, archivedBy: row.archived_by,
@@ -133,7 +133,7 @@ function projectFromRow(row) {
     projectClassification: row.project_classification || 'private_house',
     projectIcon: row.project_icon || '', projectColor: row.project_color || '#6957df', installationLeadId: row.installation_lead_professional_id,
     completed: Boolean(row.completed_at), completedAt: row.completed_at, completedBy: row.completed_by,
-    financeMode: row.finance_mode || 'total', paymentTerms: row.payment_terms || '', depositAmount:Number(row.deposit_amount||0), depositPaid:Boolean(row.deposit_paid), financeBreakdown:row.finance_breakdown || [],
+    financeMode: row.finance_mode || 'total', paymentTerms: row.payment_terms || '', depositAmount:Number(row.deposit_amount||0), depositPaid:Boolean(row.deposit_paid), financeBreakdown:Array.isArray(row.finance_breakdown) ? row.finance_breakdown : [],
   };
 }
 
@@ -551,7 +551,7 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
     manager: managerFields,
     supervisor: managerFields.filter((key)=>!['value','paid','financeMode','paymentTerms','depositAmount','depositPaid','financeBreakdown'].includes(key)),
     technician: ['stage', 'progress', 'flag', 'systems', 'nextMilestone', 'health', 'tasksDone', 'tasksTotal'],
-    finance: ['paid', 'value', 'flag'],
+    finance: ['paid', 'value', 'flag', 'financeMode', 'paymentTerms', 'depositAmount', 'depositPaid', 'financeBreakdown'],
   };
   const fallbackFields=accessLevel(request.user,'projects')==='write'?managerFields:[];
   const permittedFields=(allowedByRole[request.user.role]||fallbackFields).filter((key)=>request.user.financeAccess!==false||!['value','paid','financeMode','paymentTerms','depositAmount','depositPaid','financeBreakdown'].includes(key));

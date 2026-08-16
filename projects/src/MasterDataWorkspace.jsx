@@ -662,7 +662,9 @@ function EquipmentTree({ items, apiRoot, user, onEdit, onDelete, onDuplicate }) 
       />
     );
   const categories=items.filter(item=>item.itemType==="system_type");
-  const renderItem=(item)=><div className={`equipment-row level-${item.itemType}`} key={item.id}>
+  const renderItem=(item, inheritedColor = "#6957df") => {
+    const effectiveColor = item.color || inheritedColor;
+    return <div className={`equipment-row level-${item.itemType}`} key={item.id} style={{ "--equipment-color": effectiveColor }}>
           <span>
             {item.iconImageStoredName ? (
               <img
@@ -671,7 +673,7 @@ function EquipmentTree({ items, apiRoot, user, onEdit, onDelete, onDuplicate }) 
                 alt=""
               />
             ) : (
-              <i style={{ background: item.color }} />
+              <i style={{ background: effectiveColor }} />
             )}{" "}
             <strong>{item.name}</strong>
           </span>
@@ -695,7 +697,8 @@ function EquipmentTree({ items, apiRoot, user, onEdit, onDelete, onDuplicate }) 
             {["admin","manager"].includes(user.role)&&item.itemType!=="system_type"&&<label className="catalog-duplicate-select" title="שכפול לקטגוריה נוספת"><Copy size={15}/><select aria-label="שכפול לקטגוריה נוספת" value="" onChange={(event)=>{const target=Number(event.target.value);if(target)onDuplicate(item,target)}}><option value="">שכפל ל...</option>{items.filter(candidate=>candidate.itemType===(item.itemType==="system"?"system_type":"system")&&String(candidate.id)!==String(item.parentId)).map(candidate=><option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>}
           </span>
         </div>;
-  return <div className="equipment-category-grid">{categories.map(category=>{const systems=items.filter(item=>item.itemType==="system"&&String(item.parentId)===String(category.id));return <details className="equipment-category panel" key={category.id} open><summary><span className="catalog-category-icon" style={{background:category.color}}>{category.iconImageStoredName?<img src={`${apiRoot}/equipment-catalog/${category.id}/icon`} alt=""/>:<Boxes size={20}/>}</span><div><strong>{category.name}</strong><small>{systems.length} מערכות · פתיחה לעריכה וניהול</small></div><button type="button" onClick={event=>{event.preventDefault();onEdit(category)}}><Pencil size={15}/></button></summary><div className="equipment-head"><span>מערכת / מוצר / התקן / רכיב</span><span>סוג</span><span>יצרן / דגם</span><span>מק״ט Priority</span><span>סטטוס</span><span/></div>{systems.map(system=><div className="catalog-system-group" key={system.id}>{renderItem(system)}{items.filter(item=>item.itemType==="component"&&String(item.parentId)===String(system.id)).map(renderItem)}</div>)}</details>})}</div>;
+  };
+  return <div className="equipment-category-grid">{categories.map(category=>{const systems=items.filter(item=>item.itemType==="system"&&String(item.parentId)===String(category.id));return <details className="equipment-category panel" key={category.id} open><summary><span className="catalog-category-icon" style={{background:category.color}}>{category.iconImageStoredName?<img src={`${apiRoot}/equipment-catalog/${category.id}/icon`} alt=""/>:<Boxes size={20}/>}</span><div><strong>{category.name}</strong><small>{systems.length} מערכות · פתיחה לעריכה וניהול</small></div><button type="button" onClick={event=>{event.preventDefault();onEdit(category)}}><Pencil size={15}/></button></summary><div className="equipment-head"><span>מערכת / מוצר / התקן / רכיב</span><span>סוג</span><span>יצרן / דגם</span><span>מק״ט Priority</span><span>סטטוס</span><span/></div>{systems.map(system=><div className="catalog-system-group" key={system.id}>{renderItem(system, category.color)}{items.filter(item=>item.itemType==="component"&&String(item.parentId)===String(system.id)).map(component=>renderItem(component, system.color || category.color))}</div>)}</details>})}</div>;
 }
 
 function EquipmentEditor({ value, items, onClose, onSave }) {

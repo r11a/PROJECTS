@@ -8,7 +8,7 @@ const PAYMENT_STATUSES = ['pending', 'paid', 'cancelled'];
 async function syncProjectMetrics(pool, projectId) {
   if (!projectId) return;
   await pool.query(`UPDATE projects p SET
-    paid=COALESCE((SELECT SUM(amount) FROM project_payments WHERE project_id=p.id AND status='paid'),0),
+    paid=COALESCE((SELECT SUM(amount) FROM project_payments WHERE project_id=p.id AND status='paid' AND entry_type<>'credit'),0),
     tasks_total=(SELECT COUNT(*) FROM tasks WHERE project_id=p.id AND status<>'cancelled'),
     tasks_done=(SELECT COUNT(*) FROM tasks WHERE project_id=p.id AND status='done'),
     updated_at=NOW() WHERE p.id=$1`, [projectId]);
@@ -50,8 +50,9 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     if (request.body.startDate && request.body.startDate > request.body.dueDate) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
     if (request.body.dependencyTaskId) { const dependency=await pool.query("SELECT project_id,status FROM tasks WHERE id=$1",[request.body.dependencyTaskId]); if(!dependency.rowCount||dependency.rows[0].project_id!==request.body.projectId||!['open','in_progress'].includes(dependency.rows[0].status))return response.status(400).json({error:'משימת התלות חייבת להיות פתוחה או בביצוע ובאותו פרויקט'}); }
     if (request.body.parentTaskId) { const parent=await pool.query('SELECT project_id FROM tasks WHERE id=$1',[request.body.parentTaskId]); if(!parent.rowCount||String(parent.rows[0].project_id)!==String(request.body.projectId))return response.status(400).json({error:'משימת האב חייבת להיות באותו פרויקט'}); }
-    const result = await pool.query(`INSERT INTO tasks(client_id,project_id,title,description,status,priority,assignee_professional_id,owner_professional_id,start_date,due_date,estimated_hours,task_type,dependency_task_id,parent_task_id,critical,created_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null,request.body.ownerProfessionalId || null, request.body.startDate || request.body.dueDate, request.body.dueDate, Number(request.body.estimatedHours) || 0, request.body.taskType || 'task', request.body.dependencyTaskId || null,request.body.parentTaskId || null,Boolean(request.body.critical), request.user.id]);
+    const durationHours=Math.max(0,Number(request.body.durationHours ?? request.body.estimatedHours)||0);
+    const result = await pool.query(`INSERT INTO tasks(client_id,project_id,title,description,status,priority,assignee_professional_id,owner_professional_id,start_date,due_date,start_time,duration_hours,estimated_hours,task_type,dependency_task_id,parent_task_id,critical,created_by)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12,$13,$14,$15,$16,$17) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null,request.body.ownerProfessionalId || null, request.body.startDate || request.body.dueDate, request.body.dueDate, request.body.startTime || null, durationHours, request.body.taskType || 'task', request.body.dependencyTaskId || null,request.body.parentTaskId || null,Boolean(request.body.critical), request.user.id]);
     await syncProjectMetrics(pool, request.body.projectId);
     await audit(request, 'create', 'task', String(result.rows[0].id), { title, projectId: request.body.projectId });
     await executeAutomations({ pool,triggerType:'task_created',entityType:'task',entityId:result.rows[0].id,context:{ projectId:request.body.projectId,status:result.rows[0].status,title },userId:request.user.id });
@@ -71,8 +72,9 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     if(String(parentTaskId||'')===String(request.params.id))return response.status(400).json({error:'משימה אינה יכולה להיות תת־משימה של עצמה'});
     if(parentTaskId){const parent=await pool.query('SELECT project_id,parent_task_id FROM tasks WHERE id=$1',[parentTaskId]);if(!parent.rowCount||String(parent.rows[0].project_id)!==String(row.project_id)||String(parent.rows[0].parent_task_id||'')===String(request.params.id))return response.status(400).json({error:'שיוך משימת האב אינו תקין או יוצר מעגל'});}
     if (nextStart && nextDue && String(nextStart).slice(0,10) > String(nextDue).slice(0,10)) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
-    const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,owner_professional_id=$6,start_date=$7,due_date=$8,estimated_hours=$9,task_type=$10,dependency_task_id=$11,parent_task_id=$12,critical=$13,color=$14,
-      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$15 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id,request.body.ownerProfessionalId ?? row.owner_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, request.body.estimatedHours ?? row.estimated_hours, request.body.taskType ?? row.task_type, dependencyId,parentTaskId,request.body.critical ?? row.critical, request.body.color ?? row.color, request.params.id]);
+    const durationHours=Math.max(0,Number(request.body.durationHours ?? request.body.estimatedHours ?? row.duration_hours ?? row.estimated_hours)||0);
+    const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,owner_professional_id=$6,start_date=$7,due_date=$8,start_time=$9,duration_hours=$10,estimated_hours=$10,task_type=$11,dependency_task_id=$12,parent_task_id=$13,critical=$14,color=$15,
+      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$16 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id,request.body.ownerProfessionalId ?? row.owner_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, request.body.startTime ?? row.start_time, durationHours, request.body.taskType ?? row.task_type, dependencyId,parentTaskId,request.body.critical ?? row.critical, request.body.color ?? row.color, request.params.id]);
     await syncProjectMetrics(pool, row.project_id);
     await audit(request, 'update', 'task', request.params.id, request.body);
     if(status!==row.status) await executeAutomations({ pool,triggerType:'task_status_changed',entityType:'task',entityId:request.params.id,context:{ projectId:row.project_id,status,fromStatus:row.status,title:result.rows[0].title },userId:request.user.id });
@@ -125,11 +127,26 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     response.json({ payments: result.rows });
   });
 
+  router.get('/operations/finance-summary', async (request,response) => {
+    const projectId=String(request.query.projectId||'');
+    const result=await pool.query(`SELECT p.id,p.name,p.value,
+      COALESCE(SUM(pay.amount) FILTER (WHERE pay.entry_type='addition' AND pay.status<>'cancelled'),0) additions,
+      COALESCE(SUM(pay.amount) FILTER (WHERE pay.entry_type='credit' AND pay.status<>'cancelled'),0) credits,
+      COALESCE(SUM(pay.amount) FILTER (WHERE pay.entry_type<>'credit' AND pay.status='paid'),0) paid,
+      COALESCE(SUM(pay.amount) FILTER (WHERE pay.entry_type<>'credit' AND pay.status='pending'),0) pending,
+      MAX(pay.paid_at) FILTER (WHERE pay.status='paid') last_paid_at
+      FROM projects p LEFT JOIN project_payments pay ON pay.project_id=p.id
+      WHERE ($1='' OR p.id=$1) GROUP BY p.id,p.name,p.value ORDER BY p.name`,[projectId]);
+    const projects=result.rows.map(row=>{const total=Number(row.value)+Number(row.additions)-Number(row.credits);const paid=Number(row.paid);return {...row,value:Number(row.value),additions:Number(row.additions),credits:Number(row.credits),total,paid,pending:Number(row.pending),balance:Math.max(0,total-paid)};});
+    response.json({projects});
+  });
+
   router.post('/operations/payments', requireRoles('admin', 'manager', 'finance'), async (request, response) => {
     const title = String(request.body.title || '').trim(); const amount = Number(request.body.amount);
     if (!request.body.projectId || !title || !(amount >= 0)) return response.status(400).json({ error: 'פרויקט, תיאור וסכום תקין הם שדות חובה' });
     const status = PAYMENT_STATUSES.includes(request.body.status) ? request.body.status : 'pending';
-    const result = await pool.query(`INSERT INTO project_payments(project_id,title,amount,due_date,status,paid_at,reference,notes,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`, [request.body.projectId, title, amount, request.body.dueDate || null, status, status === 'paid' ? (request.body.paidAt || new Date()) : null, request.body.reference || '', request.body.notes || '', request.user.id]);
+    const entryType=['invoice','addition','credit'].includes(request.body.entryType)?request.body.entryType:'invoice';
+    const result = await pool.query(`INSERT INTO project_payments(project_id,title,amount,due_date,status,paid_at,reference,notes,entry_type,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`, [request.body.projectId, title, amount, request.body.dueDate || null, status, status === 'paid' ? (request.body.paidAt || new Date()) : null, request.body.reference || '', request.body.notes || '', entryType, request.user.id]);
     await syncProjectMetrics(pool, request.body.projectId); await audit(request, 'create', 'payment', String(result.rows[0].id), { title, amount }); response.status(201).json({ payment: result.rows[0] });
   });
 
@@ -137,7 +154,8 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const current = await pool.query('SELECT * FROM project_payments WHERE id=$1', [request.params.id]);
     if (!current.rowCount) return response.status(404).json({ error: 'התשלום לא נמצא' });
     const row = current.rows[0]; const status = PAYMENT_STATUSES.includes(request.body.status) ? request.body.status : row.status;
-    const result = await pool.query(`UPDATE project_payments SET title=$1,amount=$2,due_date=$3,status=$4,paid_at=$5,reference=$6,notes=$7,updated_at=NOW() WHERE id=$8 RETURNING *`, [request.body.title ?? row.title, request.body.amount ?? row.amount, request.body.dueDate ?? row.due_date, status, status === 'paid' ? (request.body.paidAt || row.paid_at || new Date()) : null, request.body.reference ?? row.reference, request.body.notes ?? row.notes, request.params.id]);
+    const entryType=['invoice','addition','credit'].includes(request.body.entryType)?request.body.entryType:row.entry_type;
+    const result = await pool.query(`UPDATE project_payments SET title=$1,amount=$2,due_date=$3,status=$4,paid_at=$5,reference=$6,notes=$7,entry_type=$8,updated_at=NOW() WHERE id=$9 RETURNING *`, [request.body.title ?? row.title, request.body.amount ?? row.amount, request.body.dueDate ?? row.due_date, status, status === 'paid' ? (request.body.paidAt || row.paid_at || new Date()) : null, request.body.reference ?? row.reference, request.body.notes ?? row.notes, entryType, request.params.id]);
     await syncProjectMetrics(pool, row.project_id); await audit(request, 'update', 'payment', request.params.id, request.body); response.json({ payment: result.rows[0] });
   });
 

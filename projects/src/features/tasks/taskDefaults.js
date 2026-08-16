@@ -1,2 +1,2 @@
-export const createTaskDraft=()=>({projectId:'',title:'',startDate:new Date().toISOString().slice(0,10),dueDate:'',status:'open',priority:'normal',assigneeProfessionalId:'',ownerProfessionalId:'',parentTaskId:'',taskType:'task',estimatedHours:'',description:''});
+export const createTaskDraft=()=>({projectId:'',title:'',startDate:new Date().toISOString().slice(0,10),dueDate:'',startTime:'',durationHours:'',status:'open',priority:'normal',assigneeProfessionalId:'',ownerProfessionalId:'',parentTaskId:'',taskType:'task',estimatedHours:'',description:''});
 export const createMilestoneDraft=()=>({projectId:'',title:'',dueDate:'',status:'planned',progress:0,ownerProfessionalId:'',description:''});

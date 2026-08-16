@@ -60,8 +60,21 @@ test('Gantt scheduling supports drag, resize, long press duration and persistent
   const migration = await read('../migrations/019_gantt_messages.sql');
   for (const token of ['beginTaskDrag','moveTaskDrag','adjustDialogDuration','scheduleColors','onScheduleChange','mentionUserIds','משימה קריטית']) assert.match(timeline,new RegExp(token));
   assert.match(timeline,/item\.critical \? "#C92A3A"/);
-  assert.match(operations,/critical=\$13,color=\$14/);
+  assert.match(operations,/critical=\$14,color=\$15/);
   assert.match(migration,/ALTER TABLE tasks ADD COLUMN IF NOT EXISTS color/);
+});
+
+test('finance workspace supports structured adjustments and task scheduling metadata', async () => {
+  const operations = await read('../server/operations.js');
+  const workspace = await read('../src/Workspaces.jsx');
+  const migration = await read('../migrations/030_finance_and_task_schedule.sql');
+  assert.match(migration, /start_time TIME/);
+  assert.match(migration, /duration_hours NUMERIC/);
+  assert.match(migration, /entry_type TEXT/);
+  assert.match(operations, /finance-summary/);
+  assert.match(operations, /entryType/);
+  assert.match(workspace, /שעת התחלה/);
+  assert.match(workspace, /אשף כספים לפרויקט/);
 });
 
 test('project time reporting keeps targets in project setup and actual hours in the workspace', async () => {

@@ -39,7 +39,7 @@ test('release versions stay synchronized',async()=>{
   const manifest=JSON.parse(await read('package.json'));
   const config=await read('config.yaml');
   const docker=await read('Dockerfile');
-  assert.equal(manifest.version,'0.22.1');
-  assert.match(config,/version: "0\.22\.1"/);
-  assert.match(docker,/io\.hass\.version="0\.22\.1"/);
+  assert.equal(manifest.version,'0.23.0');
+  assert.match(config,/version: "0\.23\.0"/);
+  assert.match(docker,/io\.hass\.version="0\.23\.0"/);
 });

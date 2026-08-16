@@ -1358,6 +1358,7 @@ function InitialPasswordPage({onChanged}) {
 
 function UsersPage({ setNotice, currentUser, onChanged }) {
   const [users, setUsers] = useState([]);
+  const [activeTab, setActiveTab] = useState("accounts");
   const [identityLink, setIdentityLink] = useState({ primaryUserId:"", secondaryUserId:"" });
   const [linkingIdentity,setLinkingIdentity]=useState(false);
   const [form, setForm] = useState({
@@ -1477,7 +1478,12 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
           {users.length} משתמשים
         </span>
       </div>
-      <div className="users-layout">
+      <nav className="users-tabs" aria-label="ניהול משתמשים">
+        <button type="button" className={activeTab === "accounts" ? "active" : ""} onClick={() => setActiveTab("accounts")}>משתמשים</button>
+        <button type="button" className={activeTab === "create" ? "active" : ""} onClick={() => setActiveTab("create")}><Plus size={16} /> יצירת משתמש</button>
+        <button type="button" className={activeTab === "identities" ? "active" : ""} onClick={() => setActiveTab("identities")}>איחוד זהויות</button>
+      </nav>
+      {activeTab === "accounts" && <div className="users-layout">
         <div className="panel users-list">
           <div className="panel-head">
             <div>
@@ -1565,6 +1571,8 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
             </div>
           ))}
         </div>
+      </div>}
+      {activeTab === "create" &&
         <form className="panel create-user" onSubmit={createUser}>
           <div className="panel-head">
             <div>
@@ -1647,8 +1655,8 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
             יצירת חשבון
           </button>
         </form>
-      </div>
-      {users.length > 1 && <form className="panel identity-linker" onSubmit={mergeIdentities}>
+      }
+      {activeTab === "identities" && users.length > 1 && <form className="panel identity-linker" onSubmit={mergeIdentities}>
         <div className="identity-linker-copy"><span><Link2 size={19}/></span><div><h3>איחוד זהויות Web ו־Home Assistant</h3><p>בחרו את החשבון שיישאר מוצג, ואת החשבון הכפול שיוטמע בו. ההרשאות, המראה והשם של הזהות הראשית נשמרים.</p></div></div>
         <label>הזהות הראשית שתוצג<select value={identityLink.primaryUserId} onChange={(event)=>setIdentityLink({...identityLink,primaryUserId:event.target.value})}><option value="">בחירת חשבון ראשי</option>{users.map((item)=><option key={item.id} value={item.id}>{item.displayName} · {item.identityTypes?.join(' + ')||'חשבון'}</option>)}</select></label>
         <span className="identity-link-arrow">←</span>

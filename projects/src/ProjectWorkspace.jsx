@@ -56,7 +56,13 @@ const projectClassificationOptions = [
 ];
 const projectIconOptions=[["home","בית"],["villa","וילה"],["cottage","קוטג׳"],["building","בניין"],["penthouse","פנטהאוז"],["studio","סטודיו"]];
 function ProjectTypeIcon({project,size=27}){const key=project.projectIcon||project.projectClassification;const Icon={home:Home,private_house:Home,villa:Castle,cottage:House,building:Building2,apartment_building:Building2,penthouse:PanelsTopLeft,studio:Command,duplex:House}[key]||Home;return <Icon size={size}/>}
-function navigationUrl(project){const query=encodeURIComponent(project.address||`${project.lat},${project.lng}`);if(/iPad|iPhone|iPod/.test(navigator.userAgent))return `maps://?q=${query}`;if(/Android/i.test(navigator.userAgent))return `geo:0,0?q=${query}`;return `https://www.google.com/maps/search/?api=1&query=${query}`;}
+function navigationUrl(project){const query=encodeURIComponent(project.address||`${project.lat},${project.lng}`);if(/iPad|iPhone|iPod/.test(navigator.userAgent))return `maps://?q=${query}`;if(/Android/i.test(navigator.userAgent))return `geo:0,0?q=${query}`;return `https://www.google.com/maps/dir/?api=1&destination=${query}`;}
+function openNavigation(project){
+  const url=navigationUrl(project);
+  // A direct navigation is required for maps:// and geo: inside a mobile PWA.
+  if (/^(maps|geo):/i.test(url)) window.location.assign(url);
+  else window.open(url,'_blank','noopener,noreferrer');
+}
 
 function Modal({ title, onClose, children }) {
   return <AppModal title={title} subtitle="כרטיס פרויקט" onClose={onClose}>{children}</AppModal>;
@@ -321,7 +327,7 @@ export function ProjectWorkspace({
               <UserRound size={15} />
               {project.client}
               <span>·</span>
-              <a className="project-navigation-link" href={navigationUrl(project)} target="_blank" rel="noreferrer" title="פתיחה באפליקציית ניווט"><MapPin size={15} />{project.address}</a>
+              <button type="button" className="project-navigation-link" onClick={()=>openNavigation(project)} title="נווט לכתובת באפליקציית הניווט"><MapPin size={15} />{project.address}<small>נווט</small></button>
             </p>
           </div>
         </div>
@@ -764,7 +770,7 @@ export function ProjectWorkspace({
             </div>
             {workspace.equipment.length ? (
               workspace.equipment.map((x) => (
-                <div className="resource-row" key={x.id}>
+                <div className="resource-row resource-row-preview" key={x.id} role="button" tabIndex={0} onClick={()=>setPreviewFile(x)} onKeyDown={(event)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setPreviewFile(x)}}}>
                   <span className="resource-avatar equipment">
                     <Command size={17} />
                   </span>
@@ -852,12 +858,13 @@ export function ProjectWorkspace({
                       {(Number(x.size_bytes) / 1024 / 1024).toFixed(1)} MB
                     </small>
                   </div>
-                  <button onClick={()=>setPreviewFile(x)} title="פתיחה / תצוגה">
+                  <button onClick={(event)=>{event.stopPropagation();setPreviewFile(x)}} title="פתיחה / תצוגה">
                     <Eye size={16} />
                   </button>
-                  {user.role==='admin'&&<button className="danger-icon" onClick={()=>archiveDocument(x)} title="העברה לסל המחזור"><Trash2 size={16}/></button>}
+                  {user.role==='admin'&&<button className="danger-icon" onClick={(event)=>{event.stopPropagation();archiveDocument(x)}} title="העברה לסל המחזור"><Trash2 size={16}/></button>}
                   <a
                     href={`${apiRoot}/documents/${x.id}/download`}
+                    onClick={(event)=>event.stopPropagation()}
                     title="הורדה"
                   >
                     <Download size={16} />
@@ -1116,10 +1123,10 @@ export function ProjectWorkspace({
           onClose={() => setModal("")}
         />
       )}
-      {previewFile&&<Modal title={previewFile.title||previewFile.original_name} onClose={()=>setPreviewFile(null)}>
+      {previewFile&&<Modal title={previewFile.title||previewFile.original_name} onClose={()=>setPreviewFile(null)} className="project-media-modal">
         <div className="project-media-viewer">
           {previewFile.mime_type?.startsWith('image/')?<img src={`${apiRoot}/documents/${previewFile.id}/preview`} alt={previewFile.title||previewFile.original_name}/>:previewFile.mime_type?.startsWith('video/')?<video src={`${apiRoot}/documents/${previewFile.id}/preview`} controls playsInline/>:previewFile.mime_type==='application/pdf'?<iframe src={`${apiRoot}/documents/${previewFile.id}/preview`} title={previewFile.title||previewFile.original_name}/>:<div className="media-unsupported"><FileText size={52}/><h3>המסמך זמין לפתיחה או להורדה</h3><p>תצוגה מקדימה מלאה של קובצי Word ו־Excel תלויה ביישום המותקן במכשיר.</p></div>}
-          <footer><span>{previewFile.category} · {dateText(previewFile.created_at)} · {previewFile.uploaded_by_name||'מערכת'}</span><a className="ops-primary" href={`${apiRoot}/documents/${previewFile.id}/download`}><Download size={16}/>הורדת הקובץ</a></footer>
+          <footer><span>{previewFile.category} · {dateText(previewFile.created_at)} · {previewFile.uploaded_by_name||'מערכת'}</span><div><a className="ops-secondary" href={`${apiRoot}/documents/${previewFile.id}/preview`} target="_blank" rel="noreferrer">פתיחה במכשיר</a><a className="ops-primary" href={`${apiRoot}/documents/${previewFile.id}/download`}><Download size={16}/>הורדת הקובץ</a></div></footer>
         </div>
       </Modal>}
     </div>

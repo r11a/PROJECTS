@@ -19,6 +19,7 @@ import {
   Trash2,
   TrendingUp,
   UserRound,
+  WalletCards,
 } from "lucide-react";
 import {
   Area,
@@ -71,6 +72,7 @@ const milestoneStatus = {
   delayed: "באיחור",
 };
 const paymentStatus = { pending: "ממתין", paid: "שולם", cancelled: "בוטל" };
+const paymentEntryTypes = { invoice:"דרישת תשלום", addition:"תוספת לפרויקט", credit:"זיכוי לפרויקט" };
 const stageNames = {
   waiting: "בהמתנה",
   mobilization: "בהנעה",
@@ -221,6 +223,10 @@ export function TaskEditor({
             />
           </label>
         )}
+        {!isMilestone && <label>
+          שעת התחלה
+          <input type="time" value={String(form.startTime || form.start_time || "").slice(0,5)} onChange={(e)=>setForm({...form,startTime:e.target.value})}/>
+        </label>}
         <label>
           {isMilestone ? "תאריך יעד" : "תאריך סיום"}
           <input
@@ -333,9 +339,9 @@ export function TaskEditor({
                 type="number"
                 min="0"
                 step="0.5"
-                value={form.estimatedHours || form.estimated_hours || ""}
+                value={form.durationHours ?? form.duration_hours ?? form.estimatedHours ?? form.estimated_hours ?? ""}
                 onChange={(e) =>
-                  setForm({ ...form, estimatedHours: e.target.value })
+                  setForm({ ...form, durationHours: e.target.value, estimatedHours: e.target.value })
                 }
               />
             </label>
@@ -790,6 +796,7 @@ function PaymentEditor({ projects, initial, onClose, onSave }) {
       projectId: "",
       title: "",
       amount: "",
+      entryType: "invoice",
       dueDate: "",
       status: "pending",
       reference: "",
@@ -849,6 +856,12 @@ function PaymentEditor({ projects, initial, onClose, onSave }) {
           />
         </label>
         <label>
+          סוג תנועה
+          <select value={form.entryType || form.entry_type || "invoice"} onChange={(e)=>setForm({...form,entryType:e.target.value})}>
+            {Object.entries(paymentEntryTypes).map(([value,label])=><option value={value} key={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>
           מועד
           <input
             type="date"
@@ -903,11 +916,16 @@ export function FinanceWorkspace({
   projectId = "",
 }) {
   const [payments, setPayments] = useState([]);
+  const [financeProjects,setFinanceProjects]=useState([]);
+  const [financeSetup,setFinanceSetup]=useState(null);
   const [editor, setEditor] = useState(null);
   const [query, setQuery] = useState("");
   const load = () =>
-    api(`/operations/payments?projectId=${encodeURIComponent(projectId)}`)
-      .then((r) => setPayments(r.payments))
+    Promise.all([
+      api(`/operations/payments?projectId=${encodeURIComponent(projectId)}`),
+      api(`/operations/finance-summary?projectId=${encodeURIComponent(projectId)}`),
+    ])
+      .then(([paymentData,summary]) => { setPayments(Array.isArray(paymentData.payments)?paymentData.payments:[]); setFinanceProjects(Array.isArray(summary.projects)?summary.projects:[]); })
       .catch((e) => setNotice(e.message));
   useEffect(load, [projectId]);
   const visible = payments.filter((x) =>
@@ -915,12 +933,16 @@ export function FinanceWorkspace({
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
-  const total = projects
-      .filter((p) => !projectId || p.id === projectId)
-      .reduce((s, p) => s + Number(p.value), 0),
-    paid = payments
-      .filter((p) => p.status === "paid")
-      .reduce((s, p) => s + Number(p.amount), 0);
+  const total = financeProjects.reduce((sum,item)=>sum+Number(item.total||0),0);
+  const paid = financeProjects.reduce((sum,item)=>sum+Number(item.paid||0),0);
+  const balance=financeProjects.reduce((sum,item)=>sum+Number(item.balance||0),0);
+  // Keep chart keys ASCII-only. Besides being clearer in the Recharts payload, this
+  // avoids a parser edge case in the add-on production bundle.
+  const chartData = financeProjects.map((item) => ({
+    name: item.name,
+    paid: Number(item.paid || 0),
+    balance: Number(item.balance || 0),
+  }));
   const save = async (value) => {
     try {
       await api(
@@ -960,7 +982,7 @@ export function FinanceWorkspace({
         </div>
         <div>
           <span>יתרה</span>
-          <strong>{money.format(Math.max(0, total - paid))}</strong>
+          <strong>{money.format(balance)}</strong>
         </div>
         <div className="collection-gauge">
           <i
@@ -971,6 +993,35 @@ export function FinanceWorkspace({
           <span>{total ? Math.round((paid / total) * 100) : 0}% נגבה</span>
         </div>
       </section>
+      <section className="finance-dashboard-grid">
+        <article className="panel finance-chart-card">
+          <header><div><span>גבייה לפי פרויקט</span><h3>שולם מול יתרה</h3></div></header>
+          {chartData.length ? (
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 10, top: 10, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tickFormatter={(value) => `${Math.round(value / 1000)}K`} />
+                <YAxis type="category" dataKey="name" width={105} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value) => money.format(Number(value))} />
+                <Bar dataKey="paid" name="שולם" stackId="a" fill="#1fa873" radius={[0, 6, 6, 0]} />
+                <Bar dataKey="balance" name="יתרה" stackId="a" fill="#e3a43b" radius={[0, 6, 6, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState icon={CreditCard} title="אין נתונים כספיים" text="הגדירו מסגרת כספית או דרישת תשלום לפרויקט." />
+          )}
+        </article>
+        <article className="panel finance-project-summary">
+          <header><div><span>מצב כספי</span><h3>כל פרויקט בשורה אחת</h3></div></header>
+          {financeProjects.map((item) => (
+            <button type="button" key={item.id} onClick={() => openProject?.(projects.find((project) => String(project.id) === String(item.id)))}>
+              <span><b>{item.name}</b><small>{item.last_paid_at ? `תשלום אחרון: ${dateText(item.last_paid_at)}` : "טרם התקבל תשלום"}</small></span>
+              <strong>{money.format(item.paid)}</strong>
+              <em>{money.format(item.balance)} יתרה</em>
+            </button>
+          ))}
+        </article>
+      </section>
       <div className="work-toolbar">
         <label>
           <Search size={17} />
@@ -980,6 +1031,11 @@ export function FinanceWorkspace({
             placeholder="חיפוש תשלום או אסמכתה"
           />
         </label>
+        {canEdit && (
+          <button className="ops-secondary" onClick={()=>setFinanceSetup({projectId:projectId||projects[0]?.id||"",value:"",paymentTerms:"",depositAmount:"",depositPaid:false,financeMode:"total"})}>
+            <WalletCards size={16}/> אשף כספים
+          </button>
+        )}
         {canEdit && (
           <button className="ops-primary" onClick={() => setEditor({})}>
             <Plus size={16} />
@@ -1067,6 +1123,7 @@ export function FinanceWorkspace({
           onSave={save}
         />
       )}
+      {financeSetup && <AppModal title="אשף כספים לפרויקט" subtitle="מסגרת, תנאים ומקדמה" onClose={()=>setFinanceSetup(null)} className="finance-setup-modal"><form className="work-form" onSubmit={async(event)=>{event.preventDefault();try{const target=projects.find(item=>String(item.id)===String(financeSetup.projectId));await api(`/projects/${encodeURIComponent(financeSetup.projectId)}`,{method:"PATCH",body:JSON.stringify({...financeSetup,value:Number(financeSetup.value||target?.value||0),depositAmount:Number(financeSetup.depositAmount||0)})});setNotice("המסגרת הכספית נשמרה");setFinanceSetup(null);load()}catch(error){setNotice(error.message)}}}><label className="wide">פרויקט<select required value={financeSetup.projectId} onChange={(event)=>{const target=projects.find(item=>String(item.id)===String(event.target.value));setFinanceSetup({...financeSetup,projectId:event.target.value,value:target?.value||"",paymentTerms:target?.paymentTerms||"",depositAmount:target?.depositAmount||"",depositPaid:Boolean(target?.depositPaid),financeMode:target?.financeMode||"total"})}}>{projects.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>אופן תקצוב<select value={financeSetup.financeMode} onChange={(event)=>setFinanceSetup({...financeSetup,financeMode:event.target.value})}><option value="total">סכום כללי</option><option value="systems">פיצול לפי מערכות</option></select></label><label>סכום הפרויקט<input type="number" min="0" step="0.01" value={financeSetup.value} onChange={(event)=>setFinanceSetup({...financeSetup,value:event.target.value})}/></label><label className="wide">תנאי תשלום<input value={financeSetup.paymentTerms} onChange={(event)=>setFinanceSetup({...financeSetup,paymentTerms:event.target.value})} placeholder="למשל: 30% מקדמה, 40% התקנה, 30% מסירה"/></label><label>מקדמה<input type="number" min="0" step="0.01" value={financeSetup.depositAmount} onChange={(event)=>setFinanceSetup({...financeSetup,depositAmount:event.target.value})}/></label><label className="check-label"><input type="checkbox" checked={financeSetup.depositPaid} onChange={(event)=>setFinanceSetup({...financeSetup,depositPaid:event.target.checked})}/>המקדמה שולמה</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setFinanceSetup(null)}>ביטול</button><button className="ops-primary">שמירת מסגרת</button></div></form></AppModal>}
     </div>
   );
 }
@@ -1318,7 +1375,7 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
             {localizedStageData.map((x, i) => (
               <span key={x.stage}>
                 <i
-                  style={{ background: item.color }}
+                  style={{ background: x.color }}
                 />
                 {x.label}
                 <b>{x.count}</b>
