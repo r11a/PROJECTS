@@ -466,21 +466,27 @@ function App() {
       withCredentials: true,
     });
     let timer;
+    const pendingTables = new Set();
     const changed = (event) => {
+      let table = "";
+      try {
+        table = JSON.parse(event.data).table || "";
+      } catch {}
+      pendingTables.add(table);
       clearTimeout(timer);
       timer = setTimeout(() => {
-        let table = "";
-        try {
-          table = JSON.parse(event.data).table || "";
-        } catch {}
-        loadProjects().catch(() => {});
-        if (!table || table === "tasks") loadTaskCount().catch(() => {});
-        if (["clients", "client_contacts", "projects"].includes(table))
+        const tables = [...pendingTables];
+        pendingTables.clear();
+        const has = (...names) => tables.includes("") || names.some((name) => tables.includes(name));
+        if (has("projects", "tasks", "milestones", "payments", "project_payments", "project_equipment", "project_team", "work_logs", "change_requests"))
+          loadProjects().catch(() => {});
+        if (has("tasks")) loadTaskCount().catch(() => {});
+        if (has("clients", "client_contacts", "projects"))
           loadReferenceData().catch(() => {});
-        if (table === "users") refreshCurrentUser().catch(() => {});
-        window.dispatchEvent(
-          new CustomEvent("projects:live-change", { detail: { table } }),
-        );
+        if (has("users")) refreshCurrentUser().catch(() => {});
+        tables.forEach((changedTable) => window.dispatchEvent(
+          new CustomEvent("projects:live-change", { detail: { table: changedTable } }),
+        ));
       }, 120);
     };
     stream.addEventListener("change", changed);

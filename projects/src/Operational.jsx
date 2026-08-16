@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -432,7 +432,9 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice }) {
       .catch(() => {});
   }, []);
   useEffect(() => {
-    const live = () => load();
+    const live = (event) => {
+      if (["tasks", "milestones", "projects", "calendar_events"].includes(event.detail?.table)) load();
+    };
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);
   }, [year, month, cursor.getDate(), view, projectFilter]);
@@ -1025,44 +1027,52 @@ export function ClientsWorkspace({
   const canManage = ["admin", "manager"].includes(user.role);
   const canExecute = ["admin", "manager", "technician"].includes(user.role);
 
-  const loadClients = async (value = query) => {
-    setLoading(true);
+  const clientsRequest = useRef(0);
+  const detailRequest = useRef(0);
+  const loadClients = useCallback(async (value = query, { silent = false } = {}) => {
+    const requestId = ++clientsRequest.current;
+    if (!silent) setLoading(true);
     try {
       const result = await api(`/clients?q=${encodeURIComponent(value)}`);
+      if (requestId !== clientsRequest.current) return;
       setClients(result.clients);
     } catch (error) {
-      setNotice(error.message);
+      if (requestId === clientsRequest.current) setNotice(error.message);
     } finally {
-      setLoading(false);
+      if (requestId === clientsRequest.current) setLoading(false);
     }
-  };
-  const loadDetail = async (id) => {
+  }, [query]);
+  const loadDetail = useCallback(async (id) => {
+    const requestId = ++detailRequest.current;
     try {
-      setDetail(await api(`/clients/${id}`));
+      const nextDetail = await api(`/clients/${id}`);
+      if (requestId !== detailRequest.current) return;
+      setDetail(nextDetail);
       setSelectedId(id);
     } catch (error) {
-      setNotice(error.message);
+      if (requestId === detailRequest.current) setNotice(error.message);
     }
-  };
+  }, []);
   useEffect(() => {
     const timer = setTimeout(() => loadClients(query), 240);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [loadClients, query]);
   useEffect(() => {
     api("/settings")
       .then(setConfiguration)
       .catch((error) => setNotice(error.message));
   }, []);
   useEffect(() => {
-    const live = () => {
-      loadClients();
+    const live = (event) => {
+      if (!["clients", "client_contacts", "client_files", "client_labels", "projects"].includes(event.detail?.table)) return;
+      loadClients(query, { silent: true });
       if (selectedId) loadDetail(selectedId);
     };
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);
-  }, [selectedId, query]);
+  }, [selectedId, query, loadClients, loadDetail]);
   const refresh = async () => {
-    await loadClients();
+    await loadClients(query, { silent: true });
     if (selectedId) await loadDetail(selectedId);
     await onDataChanged?.();
   };
@@ -1200,24 +1210,25 @@ export function ClientsWorkspace({
                 <i>{initials(client.name)}</i>
                 <strong>{client.firstName || client.name}</strong>
               </span>
-              <span><strong>{client.lastName || "—"}</strong></span>
-              <span>
+              <span className="client-table-last"><strong>{client.lastName || "—"}</strong></span>
+              <span className="client-table-address">
                 <MapPin size={14} />
                 {client.address}
                 {client.apartmentNumber && ` · דירה ${client.apartmentNumber}`}
               </span>
-              <span>
+              <span className="client-table-projects">
                 <BriefcaseBusiness size={14} />
                 {client.projectCount}
               </span>
               <a
+                className="client-table-phone"
                 href={`tel:${client.phone}`}
                 onClick={(event) => event.stopPropagation()}
               >
                 <Phone size={14} />
                 {client.phone}
               </a>
-              <ChevronLeft size={17} />
+              <ChevronLeft className="client-table-open" size={17} />
             </button>
           ))}
         </div>

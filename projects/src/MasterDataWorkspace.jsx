@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
   ArrowDownAZ,
@@ -102,8 +102,10 @@ export function MasterDataWorkspace({
   const [professionalRole,setProfessionalRole]=useState('');
   const [professionalAffiliation,setProfessionalAffiliation]=useState('');
   const [professionalSort,setProfessionalSort]=useState('az');
+  const loadRequest = useRef(0);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    const requestId = ++loadRequest.current;
     try {
       const [people, roleData, equipmentData,settingsData] = await Promise.all([
         api("/professionals"),
@@ -111,21 +113,33 @@ export function MasterDataWorkspace({
         api("/equipment-catalog"),
         api("/settings"),
       ]);
+      if (requestId !== loadRequest.current) return;
       setProfessionals(people.professionals);
       setRoles(roleData.roles);
       setEquipment(equipmentData.items);
       setProfessionalFields((settingsData.customFields||[]).filter(field=>field.entityType==='professional'&&field.active));
     } catch (error) {
+      if (requestId !== loadRequest.current) return;
       setNotice(error.message);
     }
-  };
+  }, []);
   const refresh = async () => {
     await load();
     await onDataChanged?.();
   };
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
+  useEffect(() => {
+    const live = (event) => {
+      const relevant = initialTab === "equipment"
+        ? ["equipment_catalog", "equipment_categories", "settings"]
+        : ["professionals", "professional_roles", "settings", "users"];
+      if (relevant.includes(event.detail?.table)) load();
+    };
+    window.addEventListener("projects:live-change", live);
+    return () => window.removeEventListener("projects:live-change", live);
+  }, [initialTab, load]);
   useEffect(() => setTab(initialTab), [initialTab]);
 
   const filteredProfessionals = useMemo(
