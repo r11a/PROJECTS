@@ -114,6 +114,8 @@ import "./workspaces.css";
 import "./theme-dark.css";
 import "./contacts.css";
 import "./messages.css";
+import "./commercial-ui.css";
+import "./commercial-ui-extra.css";
 import "./task-center.css";
 import "./ai-chat.css";
 import "./ai-chat-voice.css";
@@ -843,7 +845,7 @@ function App() {
         </div>
         <nav className="main-nav">
           <span className="nav-label">סביבת עבודה</span>
-            {nav.map(({ id, label, icon: Icon }) => {
+            {nav.filter(item=>userCanAccess(user,item.id)).map(({ id, label, icon: Icon }) => {
             const badge =
               id === "projects"
                 ? projects.length
@@ -871,7 +873,7 @@ function App() {
             );
           })}
           <span className="nav-label nav-second">ניהול</span>
-          <button
+          {userCanAccess(user,"tasks")&&<button
             className={page === "tasks" ? "active" : ""}
             onClick={() => {
               setPage("tasks");
@@ -881,10 +883,10 @@ function App() {
             <ClipboardCheck size={19} />
             <span>משימות ואבני דרך</span>
             {insights?.stats?.overdue > 0 && <em>{insights.stats.overdue}</em>}
-          </button>
-          <button className={page === "gantt" ? "active" : ""} onClick={()=>{setPage('gantt');setSidebarOpen(false)}}><Activity size={19}/><span>לוח גאנט</span></button>
-          <button className={page === "control" ? "active" : ""} onClick={()=>{setPage('control');setSidebarOpen(false)}}><Gauge size={19}/><span>בקרת ביצוע</span></button>
-          <button
+          </button>}
+          {userCanAccess(user,"gantt")&&<button className={page === "gantt" ? "active" : ""} onClick={()=>{setPage('gantt');setSidebarOpen(false)}}><Activity size={19}/><span>לוח גאנט</span></button>}
+          {userCanAccess(user,"control")&&<button className={page === "control" ? "active" : ""} onClick={()=>{setPage('control');setSidebarOpen(false)}}><Gauge size={19}/><span>בקרת ביצוע</span></button>}
+          {userCanAccess(user,"reports")&&<button
             className={page === "reports" ? "active" : ""}
             onClick={() => {
               setPage("reports");
@@ -893,7 +895,7 @@ function App() {
           >
             <Activity size={19} />
             <span>דוחות וניתוחים</span>
-          </button>
+          </button>}
         </nav>
         <div className="sidebar-footer">
           <button
@@ -1176,6 +1178,7 @@ function App() {
           stageOptions={stageOptions}
           equipment={equipmentCatalog}
           templates={projectTemplates}
+          user={user}
         />
       )}
       {alertsOpen && insights?.alerts?.length > 0 && (
@@ -1232,10 +1235,27 @@ function App() {
 const roleLabels = {
   admin: "מנהל מערכת",
   manager: "מנהל פרויקט",
+  supervisor: "מפקח",
   technician: "טכנאי",
   finance: "כספים",
   viewer: "צופה",
+  custom: "הרשאה מותאמת אישית",
 };
+const permissionSections=[
+  ["projects","פרויקטים"],["clients","לקוחות"],["professionals","אנשי מקצוע"],["tasks","משימות וגאנט"],
+  ["calendar","לוח שנה"],["forms","טפסים ומסמכים"],["catalog","מערכות ורכיבים"],["finance","כספים וגבייה"],
+  ["reports","דוחות וניתוחים"],["messages","הודעות"],["settings","הגדרות מערכת"],
+];
+function PermissionMatrix({value={},onChange}){return <div className="permission-matrix"><header><b>מסך / תחום</b><span>ללא</span><span>קריאה</span><span>קריאה וכתיבה</span></header>{permissionSections.map(([key,label])=><div key={key}><b>{label}</b>{["none","read","write"].map(level=><label key={level}><input type="radio" name={`permission-${key}`} checked={(value[key]||"none")===level} onChange={()=>onChange({...value,[key]:level})}/><span/></label>)}</div>)}</div>}
+const pageResources={dashboard:"projects","my-work":"tasks",calendar:"calendar",projects:"projects",clients:"clients",professionals:"professionals",catalog:"catalog",forms:"forms",finance:"finance",tasks:"tasks",gantt:"tasks",control:"projects",reports:"reports",settings:"settings"};
+const uiRoleResources={
+  manager:["projects","clients","professionals","tasks","calendar","forms","catalog","finance","reports","messages"],
+  supervisor:["projects","clients","professionals","tasks","calendar","forms","catalog","reports","messages"],
+  technician:["projects","tasks","calendar","forms","catalog","messages"],
+  finance:["projects","clients","finance","reports","messages"],
+  viewer:["projects","clients","professionals","tasks","calendar","forms","catalog","reports","messages"],
+};
+function userCanAccess(user,page){const resource=pageResources[page]||page;if(user.role==="admin")return true;if(resource==="finance"&&user.financeAccess===false)return false;if(user.role==="custom")return ["read","write"].includes(user.permissions?.[resource]);return (uiRoleResources[user.role]||[]).includes(resource);}
 const avatarIcons = {
   user: "אדם",
   wrench: "כלי עבודה",
@@ -1347,6 +1367,8 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
     role: "viewer",
     avatarColor: "#6957df",
     avatarIcon: "user",
+    financeAccess:true,
+    permissions:{},
   });
   const loadUsers = () =>
     api("/users")
@@ -1368,6 +1390,8 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
         role: "viewer",
         avatarColor: "#6957df",
         avatarIcon: "user",
+        financeAccess:true,
+        permissions:{},
       });
       setNotice("המשתמש נוצר");
       loadUsers();
@@ -1490,6 +1514,8 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                   </option>
                 ))}
               </select>
+              <label className="finance-access-toggle" title="שליטה נפרדת בחשיפת נתונים כספיים"><input type="checkbox" checked={item.financeAccess!==false} onChange={(event)=>updateUser(item.id,{financeAccess:event.target.checked})}/>צפייה בכספים</label>
+              {item.role==="custom"&&<details className="user-permissions"><summary>הרשאות מפורטות</summary><PermissionMatrix value={item.permissions} onChange={(permissions)=>updateUser(item.id,{permissions})}/></details>}
               <div className="user-appearance">
                 <input
                   aria-label="צבע משתמש"
@@ -1587,6 +1613,8 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
               ))}
             </select>
           </label>
+          <label className="finance-access-toggle"><input type="checkbox" checked={form.financeAccess} onChange={(event)=>setForm({...form,financeAccess:event.target.checked})}/>אפשר צפייה בכספים</label>
+          {form.role==="custom"&&<PermissionMatrix value={form.permissions} onChange={(permissions)=>setForm({...form,permissions})}/>}
           <div className="new-user-appearance">
             <label>
               צבע
@@ -2105,6 +2133,7 @@ function ProjectsPage({
   const [view, setView] = useState("table");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [projectScope,setProjectScope]=useState("active");
   const [archivedProjects, setArchivedProjects] = useState([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -2114,13 +2143,15 @@ function ProjectsPage({
   const [priority, setPriority] = useState("");
   const [flagged, setFlagged] = useState(false);
   const [projectSort, setProjectSort] = useState({ key:"name", direction:"asc" });
-  const switchArchive = async (archived) => {
+  const switchArchive = async (scope) => {
+    const archived=scope==="archived";
+    setProjectScope(scope);
     setShowArchived(archived);
     setStageFilter("all");
-    if (!archived) return;
+    if (scope==="active") return;
     setArchiveLoading(true);
     try {
-      const result = await api("/projects?scope=archived");
+      const result = await api(`/projects?scope=${scope}`);
       setArchivedProjects(result.projects);
     } catch (error) {
       setNotice(error.message);
@@ -2151,7 +2182,7 @@ function ProjectsPage({
       setDeleting(false);
     }
   };
-  const sourceProjects = showArchived
+  const sourceProjects = projectScope!=="active"
     ? archivedProjects.filter(
         (project) =>
           `${project.name} ${project.client} ${project.location} ${project.id}`
@@ -2182,7 +2213,7 @@ function ProjectsPage({
     <div className="section-page">
       <div className="page-intro">
         <div>
-          <h2>{showArchived ? "ארכיון פרויקטים" : "כל הפרויקטים"}</h2>
+          <h2>{projectScope==="archived" ? "ארכיון פרויקטים" : projectScope==="completed" ? "פרויקטים שהסתיימו" : "כל הפרויקטים"}</h2>
           <p>
             {showArchived
               ? "פרויקטים שהסתיימו נשמרים כאן וניתנים לשחזור מלא"
@@ -2192,14 +2223,15 @@ function ProjectsPage({
         <div className="project-page-actions">
           <div className="archive-switch">
             <button
-              className={!showArchived ? "active" : ""}
-              onClick={() => switchArchive(false)}
+              className={projectScope==="active" ? "active" : ""}
+              onClick={() => switchArchive("active")}
             >
               פעילים
             </button>
+            <button className={projectScope==="completed"?"active":""} onClick={()=>switchArchive("completed")}><CheckCircle2 size={16}/>הסתיימו</button>
             <button
-              className={showArchived ? "active" : ""}
-              onClick={() => switchArchive(true)}
+              className={projectScope==="archived" ? "active" : ""}
+              onClick={() => switchArchive("archived")}
             >
               <Archive size={16} />
               ארכיון
@@ -2343,7 +2375,7 @@ function ProjectsPage({
                 <tr key={project.id} onClick={() => openProject(project)}>
                   <td>
                     <div className="project-cell">
-                      <div className="project-thumb">
+                      <div className="project-thumb" style={{background:`${project.projectColor||'#6957df'}18`,color:project.projectColor||'#6957df'}}>
                         <Home size={18} />
                       </div>
                       <div>
@@ -3291,6 +3323,7 @@ function NewProjectModal({
   stageOptions,
   equipment,
   templates,
+  user,
 }) {
   const managers = professionals.filter(
     (item) =>
@@ -3312,7 +3345,10 @@ function NewProjectModal({
     clientCity: "",
     location: "",
     projectClassification: "private_house",
+    projectIcon: "home",
+    projectColor: "#6957df",
     managerId: managers[0]?.id || "",
+    installationLeadId: "",
     stage: stageOptions[0]?.metadata?.key || "planning",
     value: "",
     installationHoursTarget: "",
@@ -3321,6 +3357,12 @@ function NewProjectModal({
     targetDate: "",
     selectedEquipment: {},
     templateId: "",
+    financeEnabled: false,
+    financeMode: "total",
+    paymentTerms: "",
+    depositAmount: "",
+    depositPaid: false,
+    systemBudgets: {},
   });
   const submit = (event) => {
     event.preventDefault();
@@ -3355,6 +3397,8 @@ function NewProjectModal({
       newClient,
       location: form.location || client?.city || form.clientCity || "",
       projectClassification: form.projectClassification,
+      projectIcon:form.projectIcon,
+      projectColor:form.projectColor,
       address: client?.address || form.clientAddress || form.location,
       lat: 32.08,
       lng: 34.82,
@@ -3362,8 +3406,14 @@ function NewProjectModal({
       progress: 0,
       managerId: manager?.id || null,
       manager: manager?.displayName || "",
+      installationLeadId:form.installationLeadId||null,
       ownerInitials: manager?.displayName?.slice(0, 2) || "",
-      value: Number(form.value) || 0,
+      value:form.financeEnabled&&form.financeMode==="systems"?equipmentItems.reduce((sum,{id})=>sum+(Number(form.systemBudgets[id])||0),0):Number(form.value)||0,
+      financeMode:form.financeEnabled?form.financeMode:"total",
+      paymentTerms:form.financeEnabled?form.paymentTerms:"",
+      depositAmount:form.financeEnabled?Number(form.depositAmount)||0:0,
+      depositPaid:form.financeEnabled&&form.depositPaid,
+      financeBreakdown:form.financeEnabled&&form.financeMode==="systems"?equipmentItems.map(({id})=>({name:equipment.find(item=>Number(item.id)===id)?.name||String(id),amount:Number(form.systemBudgets[id])||0})):[],
       installationHoursTarget: Number(form.installationHoursTarget) || 0,
       programmingHoursTarget: Number(form.programmingHoursTarget) || 0,
       paid: 0,
@@ -3798,7 +3848,12 @@ function NewProjectModal({
                   />
                 </label>
               </div>
-              <label>
+              <div className="form-row">
+                <label>אייקון מוביל<select value={form.projectIcon} onChange={(event)=>setForm({...form,projectIcon:event.target.value})}><option value="home">בית פרטי</option><option value="villa">וילה</option><option value="cottage">קוטג׳</option><option value="building">בניין משותף</option><option value="penthouse">פנטהאוז</option><option value="studio">סטודיו</option></select></label>
+                <label>צבע מוביל<input type="color" value={form.projectColor} onChange={(event)=>setForm({...form,projectColor:event.target.value})}/></label>
+                <label>ראש צוות התקנה<select value={form.installationLeadId} onChange={(event)=>setForm({...form,installationLeadId:event.target.value})}><option value="">ללא הקצאה</option>{professionals.filter(item=>item.active!==false).map(item=><option key={item.id} value={item.id}>{item.displayName}</option>)}</select></label>
+              </div>
+              {user.financeAccess!==false&&<label>
                 שווי משוער
                 <input
                   type="number"
@@ -3807,7 +3862,7 @@ function NewProjectModal({
                   onChange={(e) => setForm({ ...form, value: e.target.value })}
                   placeholder="₪ 0"
                 />
-              </label>
+              </label>}
               <div className="form-row project-hour-target-fields">
                 <label>
                   יעד שעות התקנה
@@ -3833,6 +3888,10 @@ function NewProjectModal({
                 </label>
               </div>
               <p className="time-target-note">היעדים מיועדים רק להתקנה ולתכנות. יתר הפעילויות נמדדות בפועל ללא יעד.</p>
+              {user.financeAccess!==false&&<fieldset className="project-finance-wizard">
+                <legend><label className="finance-paid-check"><input type="checkbox" checked={form.financeEnabled} onChange={(event)=>setForm({...form,financeEnabled:event.target.checked})}/>הפעלת אשף כספים אופציונלי</label></legend>
+                {form.financeEnabled&&<><label>אופן תקצוב<select value={form.financeMode} onChange={(event)=>setForm({...form,financeMode:event.target.value})}><option value="total">סכום כללי</option><option value="systems">סכום מפוצל לכל מערכת</option></select></label><label>תנאי תשלום<input value={form.paymentTerms} onChange={(event)=>setForm({...form,paymentTerms:event.target.value})} placeholder="לדוגמה: 30% מקדמה, יתרה לפי אבני דרך"/></label><label>מקדמה<input type="number" min="0" step="0.01" value={form.depositAmount} onChange={(event)=>setForm({...form,depositAmount:event.target.value})}/></label><label className="finance-paid-check"><input type="checkbox" checked={form.depositPaid} onChange={(event)=>setForm({...form,depositPaid:event.target.checked})}/>המקדמה שולמה</label></>}
+              </fieldset>}
             </>
           )}
           {step === 3 && (
@@ -3869,6 +3928,7 @@ function NewProjectModal({
                               })
                             }
                           />
+                          {form.financeEnabled&&form.financeMode==="systems"&&Number(form.selectedEquipment[item.id])>0&&<input type="number" min="0" step="0.01" placeholder="סכום למערכת" value={form.systemBudgets[item.id]||""} onChange={(event)=>setForm({...form,systemBudgets:{...form.systemBudgets,[item.id]:event.target.value}})}/>}
                         </label>
                       ))}
                   </section>

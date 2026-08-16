@@ -24,8 +24,8 @@ const OPTIONS_FILE = process.env.PROJECTS_OPTIONS_FILE || '/data/options.json';
 const MIGRATIONS_DIR = new URL('../migrations/', import.meta.url);
 const PORT = Number(process.env.PORT || 3000);
 const APP_VERSION = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
-const ROLES = ['admin', 'manager', 'technician', 'finance', 'viewer'];
-const EDIT_ROLES = ['admin', 'manager', 'technician', 'finance'];
+const ROLES = ['admin', 'manager', 'supervisor', 'technician', 'finance', 'viewer', 'custom'];
+const EDIT_ROLES = ['admin', 'manager', 'supervisor', 'technician', 'finance', 'custom'];
 
 async function readOptions() {
   try {
@@ -97,6 +97,8 @@ const projectColumns = [
   'installation_hours_target', 'programming_hours_target',
   'phone', 'email', 'health', 'tasks_done', 'tasks_total', 'manager_professional_id', 'client_id',
   'project_size', 'contractor_progress', 'document_folder', 'project_classification',
+  'project_icon', 'project_color', 'installation_lead_professional_id',
+  'finance_mode', 'payment_terms', 'deposit_amount', 'deposit_paid', 'finance_breakdown',
 ];
 const inputToColumn = {
   id: 'id', name: 'name', client: 'client', location: 'location', address: 'address', lat: 'lat', lng: 'lng',
@@ -109,6 +111,8 @@ const inputToColumn = {
   clientId: 'client_id',
   projectSize: 'project_size', contractorProgress: 'contractor_progress', documentFolder:'document_folder',
   projectClassification: 'project_classification',
+  projectIcon: 'project_icon', projectColor: 'project_color', installationLeadId: 'installation_lead_professional_id',
+  financeMode: 'finance_mode', paymentTerms: 'payment_terms', depositAmount: 'deposit_amount', depositPaid: 'deposit_paid', financeBreakdown: 'finance_breakdown',
 };
 const STAGE_PROGRESS = { waiting:0,mobilization:9,infrastructure:18,threading:27,electrician_threading:36,threading_done:45,installation_a:55,installation_b:65,installation_c:75,activation_programming:85,finishes:93,post_delivery:100 };
 
@@ -127,6 +131,24 @@ function projectFromRow(row) {
     archived: Boolean(row.archived_at), archivedAt: row.archived_at, archivedBy: row.archived_by,
     projectSize: row.project_size || 'medium', contractorProgress: row.contractor_progress || 'waiting', documentFolder:row.document_folder || '',
     projectClassification: row.project_classification || 'private_house',
+    projectIcon: row.project_icon || '', projectColor: row.project_color || '#6957df', installationLeadId: row.installation_lead_professional_id,
+    completed: Boolean(row.completed_at), completedAt: row.completed_at, completedBy: row.completed_by,
+    financeMode: row.finance_mode || 'total', paymentTerms: row.payment_terms || '', depositAmount:Number(row.deposit_amount||0), depositPaid:Boolean(row.deposit_paid), financeBreakdown:row.finance_breakdown || [],
+  };
+}
+
+function projectForUser(row, user) {
+  const project = projectFromRow(row);
+  if (user?.financeAccess !== false) return project;
+  return {
+    ...project,
+    value: 0,
+    paid: 0,
+    financeMode: 'restricted',
+    paymentTerms: '',
+    depositAmount: 0,
+    depositPaid: false,
+    financeBreakdown: [],
   };
 }
 
@@ -306,8 +328,18 @@ function cookieValue(request, name) {
 }
 
 function publicUser(row) {
-  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, mustChangePassword:Boolean(row.must_change_password), haUserId: row.ha_user_id, mergedIntoUserId:row.merged_into_user_id, identityTypes:[row.username?'web':null,row.ha_user_id?'ingress':null].filter(Boolean), avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', avatarImage: row.avatar_image || '', appearanceTheme: row.appearance_theme || 'light', messageSoundEnabled:row.message_sound_enabled !== false, lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
+  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, permissions:row.permissions||{}, financeAccess:row.finance_access!==false, mustChangePassword:Boolean(row.must_change_password), haUserId: row.ha_user_id, mergedIntoUserId:row.merged_into_user_id, identityTypes:[row.username?'web':null,row.ha_user_id?'ingress':null].filter(Boolean), avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', avatarImage: row.avatar_image || '', appearanceTheme: row.appearance_theme || 'light', messageSoundEnabled:row.message_sound_enabled !== false, lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
 }
+
+const ROLE_PERMISSIONS={
+  admin:{'*':'write'}, manager:{projects:'write',clients:'write',professionals:'write',tasks:'write',calendar:'write',forms:'write',catalog:'write',finance:'write',reports:'read',messages:'write'},
+  supervisor:{projects:'write',clients:'read',professionals:'read',tasks:'write',calendar:'write',forms:'write',catalog:'read',reports:'read',messages:'write'},
+  technician:{projects:'read',tasks:'write',calendar:'read',forms:'write',catalog:'read',messages:'write'},
+  finance:{projects:'read',clients:'read',finance:'write',reports:'read',messages:'write'}, viewer:{projects:'read',clients:'read',professionals:'read',tasks:'read',calendar:'read',forms:'read',catalog:'read',reports:'read',messages:'write'}, custom:{},
+};
+function permissionResource(request){const path=String(request.originalUrl||request.path).split('?')[0];if(/\/users|\/audit|\/backup|\/system\//.test(path))return 'settings';if(/payment|finance/.test(path))return 'finance';if(/equipment|catalog/.test(path))return 'catalog';if(/professional/.test(path))return 'professionals';if(/client/.test(path))return 'clients';if(/message/.test(path))return 'messages';if(/calendar/.test(path))return 'calendar';if(/task|milestone|gantt|my-work/.test(path))return 'tasks';if(/form|document|file|inspection|meeting/.test(path))return 'forms';if(/report|insight|presentation/.test(path))return 'reports';if(/project/.test(path))return 'projects';return null;}
+function accessLevel(user,resource){if(user.role==='admin')return 'write';if(resource==='finance'&&!user.financeAccess)return 'none';return user.permissions?.[resource]||ROLE_PERMISSIONS[user.role]?.[resource]||'none';}
+function requestAllowed(user,request){const resource=permissionResource(request);if(!resource)return true;const required=['GET','HEAD','OPTIONS'].includes(request.method)?'read':'write';const level=accessLevel(user,resource);return level==='write'||(required==='read'&&level==='read');}
 
 const presenceWrites=new Map();
 async function touchPresence(user){const previous=presenceWrites.get(String(user.id))||0;if(Date.now()-previous<45000)return;presenceWrites.set(String(user.id),Date.now());const returningAfterAbsence=!user.lastSeenAt||Date.now()-new Date(user.lastSeenAt).getTime()>15*60*1000;await pool.query('UPDATE users SET last_seen_at=NOW(),last_login_at=CASE WHEN $2 THEN NOW() ELSE last_login_at END WHERE id=$1',[user.id,returningAfterAbsence]);if(returningAfterAbsence)await audit({user},'login','session',String(user.id),{automatic:true});}
@@ -330,6 +362,7 @@ async function authenticate(request, response, next) {
       request.user = publicUser(result.rows[0]);
       if (!request.user.active) return response.status(403).json({ error: 'User is disabled' });
       await touchPresence(request.user);
+      if(!requestAllowed(request.user,request))return response.status(403).json({error:'Insufficient permissions'});
       return next();
     }
 
@@ -341,6 +374,7 @@ async function authenticate(request, response, next) {
     request.user = publicUser(result.rows[0]);
     if (request.user.mustChangePassword && !['/api/auth/me','/api/auth/password','/api/auth/logout'].includes(request.path)) return response.status(428).json({ error:'Password change required',code:'PASSWORD_CHANGE_REQUIRED' });
     await touchPresence(request.user);
+    if(!requestAllowed(request.user,request))return response.status(403).json({error:'Insufficient permissions'});
     next();
   } catch {
     response.status(401).json({ error: 'Invalid or expired session' });
@@ -348,7 +382,12 @@ async function authenticate(request, response, next) {
 }
 
 function requireRoles(...roles) {
-  return (request, response, next) => roles.includes(request.user.role) ? next() : response.status(403).json({ error: 'Insufficient permissions' });
+  return (request, response, next) => {
+    if(roles.length===1&&roles[0]==='admin')return request.user.role==='admin'?next():response.status(403).json({error:'Administrator permission required'});
+    const level=accessLevel(request.user,permissionResource(request));
+    const permitted=roles.includes(request.user.role)||level==='write'||(['GET','HEAD'].includes(request.method)&&level==='read');
+    return permitted?next():response.status(403).json({ error: 'Insufficient permissions' });
+  };
 }
 
 async function audit(request, action, entityType, entityId, details = {}) {
@@ -432,13 +471,13 @@ app.get('/api/live', authenticate, (request, response) => {
 });
 
 app.get('/api/projects', authenticate, async (request, response) => {
-  const scope = ['active', 'archived', 'all'].includes(request.query.scope) ? request.query.scope : 'active';
-  const where = scope === 'all' ? '' : scope === 'archived' ? 'WHERE p.archived_at IS NOT NULL' : 'WHERE p.archived_at IS NULL';
+  const scope = ['active', 'completed', 'archived', 'all'].includes(request.query.scope) ? request.query.scope : 'active';
+  const where = scope === 'all' ? '' : scope === 'archived' ? 'WHERE p.archived_at IS NOT NULL' : scope === 'completed' ? 'WHERE p.archived_at IS NULL AND p.completed_at IS NOT NULL' : 'WHERE p.archived_at IS NULL AND p.completed_at IS NULL';
   const result = await pool.query(`SELECT p.*,COALESCE(pr.display_name,p.manager) manager
     FROM projects p LEFT JOIN professionals pr ON pr.id=p.manager_professional_id
     ${where}
     ORDER BY p.created_at DESC,p.id DESC`);
-  response.json({ projects: result.rows.map(projectFromRow) });
+  response.json({ projects: result.rows.map((row) => projectForUser(row, request.user)) });
 });
 
 app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async (request, response) => {
@@ -455,16 +494,18 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
     name: request.body.name || 'פרויקט חדש', client: selectedClient.name, location: request.body.location || selectedClient.city || '',
     address: withoutArabic(geocoded?.formattedAddress || request.body.address || selectedClient.address || request.body.location || ''), lat: geocoded?.lat ?? request.body.lat ?? 32.0853, lng: geocoded?.lng ?? request.body.lng ?? 34.7818,
     stage: request.body.stage || 'waiting', progress: STAGE_PROGRESS[request.body.stage || 'waiting'] ?? 0, manager: selectedManager?.display_name || '',
-    ownerInitials: selectedManager?.display_name?.slice(0, 2) || '', value: request.body.value ?? 0,
-    paid: request.body.paid ?? 0, due: request.body.due || '', priority: request.body.priority || 'normal', flag: request.body.flag || '',
+    ownerInitials: selectedManager?.display_name?.slice(0, 2) || '', value: request.user.financeAccess===false ? 0 : request.body.value ?? 0,
+    paid: request.user.financeAccess===false ? 0 : request.body.paid ?? 0, due: request.body.due || '', priority: request.body.priority || 'normal', flag: request.body.flag || '',
     systems: request.body.systems || [], nextMilestone: request.body.nextMilestone || 'אפיון ראשוני', phone: request.body.phone || selectedClient.phone || '',
     email: request.body.email || selectedClient.email || '', health: request.body.health ?? 100, tasksDone: request.body.tasksDone ?? 0, tasksTotal: request.body.tasksTotal ?? 0,
     managerId: request.body.managerId || null, clientId: selectedClient.id, projectSize: request.body.projectSize || 'medium', contractorProgress: request.body.contractorProgress || 'waiting', documentFolder: request.body.documentFolder || '',
     projectClassification: request.body.projectClassification || 'private_house',
+    projectIcon:request.body.projectIcon||'',projectColor:request.body.projectColor||'#6957df',installationLeadId:request.body.installationLeadId||null,
+    financeMode:request.user.financeAccess===false?'total':request.body.financeMode||'total',paymentTerms:request.user.financeAccess===false?'':request.body.paymentTerms||'',depositAmount:request.user.financeAccess===false?0:Math.max(0,Number(request.body.depositAmount)||0),depositPaid:request.user.financeAccess===false?false:Boolean(request.body.depositPaid),financeBreakdown:request.user.financeAccess===false?[]:Array.isArray(request.body.financeBreakdown)?request.body.financeBreakdown:[],
     installationHoursTarget: Math.max(0, Number(request.body.installationHoursTarget) || 0),
     programmingHoursTarget: Math.max(0, Number(request.body.programmingHoursTarget) || 0),
     };
-    const values = Object.keys(inputToColumn).map((key) => key === 'systems' ? JSON.stringify(project[key]) : project[key]);
+    const values = Object.keys(inputToColumn).map((key) => ['systems','financeBreakdown'].includes(key) ? JSON.stringify(project[key]) : project[key]);
     const columns = Object.values(inputToColumn);
     const result = await db.query(
     `INSERT INTO projects(${columns.join(', ')}) VALUES(${values.map((_, index) => `$${index + 1}`).join(', ')}) RETURNING *`,
@@ -495,7 +536,7 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
     await audit(request, 'create', 'project', project.id, { clientId: selectedClient.id });
     await executeAutomations({ pool,triggerType:'project_created',entityType:'project',entityId:project.id,context:{ projectId:project.id,stage:project.stage },userId:request.user.id });
     const createdProject = await pool.query('SELECT * FROM projects WHERE id=$1',[project.id]);
-    response.status(201).json({ project: projectFromRow(createdProject.rows[0]) });
+    response.status(201).json({ project: projectForUser(createdProject.rows[0], request.user) });
   } catch (error) {
     await db.query('ROLLBACK');
     if (error.status) return response.status(error.status).json({ error: error.message });
@@ -504,12 +545,16 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
 });
 
 app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async (request, response) => {
+  const managerFields = Object.keys(inputToColumn).filter((key) => key !== 'id');
   const allowedByRole = {
-    admin: Object.keys(inputToColumn).filter((key) => key !== 'id'),
-    manager: Object.keys(inputToColumn).filter((key) => key !== 'id'),
+    admin: managerFields,
+    manager: managerFields,
+    supervisor: managerFields.filter((key)=>!['value','paid','financeMode','paymentTerms','depositAmount','depositPaid','financeBreakdown'].includes(key)),
     technician: ['stage', 'progress', 'flag', 'systems', 'nextMilestone', 'health', 'tasksDone', 'tasksTotal'],
     finance: ['paid', 'value', 'flag'],
   };
+  const fallbackFields=accessLevel(request.user,'projects')==='write'?managerFields:[];
+  const permittedFields=(allowedByRole[request.user.role]||fallbackFields).filter((key)=>request.user.financeAccess!==false||!['value','paid','financeMode','paymentTerms','depositAmount','depositPaid','financeBreakdown'].includes(key));
   if (Object.prototype.hasOwnProperty.call(request.body || {}, 'managerId')) {
     const selectedManager = await resolveProjectManager(request.body.managerId);
     request.body.manager = selectedManager?.display_name || '';
@@ -542,16 +587,16 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
       delete request.body.clientName;
     }
     delete request.body.newClient;
-    const entries = Object.entries(request.body || {}).filter(([key]) => allowedByRole[request.user.role].includes(key));
+    const entries = Object.entries(request.body || {}).filter(([key]) => permittedFields.includes(key));
     if (!entries.length) { await db.query('ROLLBACK'); return response.status(400).json({ error: 'No editable fields supplied' }); }
     const sets = entries.map(([key], index) => `${inputToColumn[key]} = $${index + 1}`);
-    const values = entries.map(([key, value]) => key === 'systems' ? JSON.stringify(value) : value);
+    const values = entries.map(([key, value]) => ['systems','financeBreakdown'].includes(key) ? JSON.stringify(value) : value);
     values.push(request.params.id);
     const result = await db.query(`UPDATE projects SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`, values);
     await db.query('COMMIT');
     await audit(request, 'update', 'project', request.params.id, Object.fromEntries(entries));
     if(request.body.stage && request.body.stage!==current.rows[0].stage) await executeAutomations({ pool,triggerType:'project_stage_changed',entityType:'project',entityId:request.params.id,context:{ projectId:request.params.id,stage:request.body.stage,fromStage:current.rows[0].stage },userId:request.user.id });
-    response.json({ project: projectFromRow(result.rows[0]) });
+    response.json({ project: projectForUser(result.rows[0], request.user) });
   } catch (error) {
     await db.query('ROLLBACK');
     if (error.status) return response.status(error.status).json({ error: error.message });
@@ -567,7 +612,15 @@ app.patch('/api/projects/:id/archive', authenticate, requireRoles('admin', 'mana
   );
   if (!result.rowCount) return response.status(404).json({ error: 'Project not found' });
   await audit(request, archived ? 'archive' : 'restore', 'project', request.params.id);
-  response.json({ project: projectFromRow(result.rows[0]) });
+  response.json({ project: projectForUser(result.rows[0], request.user) });
+});
+
+app.patch('/api/projects/:id/complete', authenticate, requireRoles('admin','manager'), async(request,response)=>{
+  const completed=request.body.completed!==false;
+  const result=await pool.query(`UPDATE projects SET completed_at=$1,completed_by=$2,updated_at=NOW() WHERE id=$3 AND archived_at IS NULL RETURNING *`,[completed?new Date():null,completed?request.user.id:null,request.params.id]);
+  if(!result.rowCount)return response.status(404).json({error:'Project not found or archived'});
+  await audit(request,completed?'complete':'reopen','project',request.params.id);
+  response.json({project:projectForUser(result.rows[0],request.user)});
 });
 
 app.delete('/api/projects/:id/permanent', authenticate, requireRoles('admin'), async (request, response) => {
@@ -717,8 +770,10 @@ app.post('/api/users', authenticate, requireRoles('admin'), async (request, resp
      VALUES($1, $2, $3, $4, $5, $6) RETURNING *`,
     [username, request.body.displayName || username, passwordHash, role, request.body.avatarColor || '#6957df', request.body.avatarIcon || 'user'],
   );
+  if(request.body.permissions||typeof request.body.financeAccess==='boolean')await pool.query('UPDATE users SET permissions=$1,finance_access=$2 WHERE id=$3',[JSON.stringify(request.body.permissions||{}),request.body.financeAccess!==false,result.rows[0].id]);
+  const createdUser=await pool.query('SELECT * FROM users WHERE id=$1',[result.rows[0].id]);
   await audit(request, 'create', 'user', String(result.rows[0].id), { username, role });
-  response.status(201).json({ user: publicUser(result.rows[0]) });
+  response.status(201).json({ user: publicUser(createdUser.rows[0]) });
 });
 
 app.patch('/api/users/:id', authenticate, requireRoles('admin'), async (request, response) => {
@@ -729,6 +784,8 @@ app.patch('/api/users/:id', authenticate, requireRoles('admin'), async (request,
   if (typeof request.body.active === 'boolean') { values.push(request.body.active); updates.push(`active = $${values.length}`); }
   if (request.body.avatarColor) { values.push(request.body.avatarColor); updates.push(`avatar_color = $${values.length}`); }
   if (request.body.avatarIcon) { values.push(request.body.avatarIcon); updates.push(`avatar_icon = $${values.length}`); }
+  if (request.body.permissions && typeof request.body.permissions==='object') { values.push(JSON.stringify(request.body.permissions)); updates.push(`permissions = $${values.length}`); }
+  if (typeof request.body.financeAccess==='boolean') { values.push(request.body.financeAccess); updates.push(`finance_access = $${values.length}`); }
   if (request.body.password) {
     const newPassword=String(request.body.password);
     if (newPassword.length < 12 || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword)) return response.status(400).json({ error: 'Password must contain at least 12 characters, upper and lower case letters, and a number' });

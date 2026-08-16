@@ -1,10 +1,10 @@
 export const stageMeta = {
-  waiting: { label: 'בהמתנה', color: '#8b919e', soft: '#f0f1f3' }, mobilization: { label: 'בהנעה', color: '#7968e8', soft: '#eeeaff' },
-  infrastructure: { label: 'תשתיות', color: '#d49235', soft: '#fff3de' }, threading: { label: 'השחלות', color: '#c47b32', soft: '#fff0df' },
-  threading_done: { label: 'בוצעו השחלות', color: '#8d73d8', soft: '#f0ebff' },
-  installation_a: { label: 'התקנות שלב א׳', color: '#438be0', soft: '#e7f3ff' }, installation_b: { label: 'התקנות שלב ב׳', color: '#277fcf', soft: '#e3f0fc' },
-  installation_c: { label: 'התקנות שלב ג׳', color: '#146fbf', soft: '#e0edf8' }, activation_programming: { label: 'הפעלות ותכנות', color: '#12a594', soft: '#dcf8f3' },
-  finishes: { label: 'פינישים', color: '#d95984', soft: '#ffe8f0' }, post_delivery: { label: 'מוכן למסירה', color: '#1d9b66', soft: '#e2f7ed' },
+  waiting: { label: 'בהמתנה', color: '#7B8497', soft: '#f0f1f3' }, mobilization: { label: 'בהנעה', color: '#6D4DE3', soft: '#eeeaff' },
+  infrastructure: { label: 'תשתיות', color: '#D18B24', soft: '#fff3de' }, threading: { label: 'השחלות', color: '#E05A33', soft: '#fff0df' },
+  threading_done: { label: 'בוצעו השחלות', color: '#A93BB8', soft: '#f0ebff' },
+  installation_a: { label: 'התקנות שלב א׳', color: '#3676E0', soft: '#e7f3ff' }, installation_b: { label: 'התקנות שלב ב׳', color: '#00A0B5', soft: '#e3f0fc' },
+  installation_c: { label: 'התקנות שלב ג׳', color: '#0E7C66', soft: '#e0edf8' }, activation_programming: { label: 'הפעלות ותכנות', color: '#18A558', soft: '#dcf8f3' },
+  finishes: { label: 'פינישים', color: '#D33F75', soft: '#ffe8f0' }, post_delivery: { label: 'מוכן למסירה', color: '#2F855A', soft: '#e2f7ed' },
 };
 
 export const seedProjects = [

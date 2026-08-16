@@ -17,7 +17,7 @@ const PROFESSIONAL_FIELDS = {
 };
 const EQUIPMENT_FIELDS = {
   itemType: 'item_type', parentId: 'parent_id', code: 'code', name: 'name', manufacturer: 'manufacturer',
-  model: 'model', unit: 'unit', description: 'description', color: 'color', icon: 'icon', active: 'active', metadata: 'metadata',
+  model: 'model', unit: 'unit', description: 'description', color: 'color', icon: 'icon', active: 'active', metadata: 'metadata', prioritySku:'priority_sku',
 };
 const JSON_INPUTS = new Set(['additionalPhones', 'additionalEmails', 'customValues', 'metadata', 'tags']);
 
@@ -36,7 +36,7 @@ function equipmentFromRow(row) {
   return {
     id: row.id, itemType: row.item_type, parentId: row.parent_id, code: row.code, name: row.name,
     manufacturer: row.manufacturer, model: row.model, unit: row.unit, description: row.description,
-    color: row.color, icon: row.icon, iconImageStoredName: row.icon_image_stored_name || '', active: row.active, metadata: row.metadata || {},
+    color: row.color, icon: row.icon, prioritySku:row.priority_sku||'', iconImageStoredName: row.icon_image_stored_name || '', active: row.active, metadata: row.metadata || {},
   };
 }
 
@@ -294,6 +294,17 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
     if (!result.rowCount) return response.status(404).json({ error: 'הפריט לא נמצא או נמצא בשימוש' });
     await audit(request, 'delete', 'equipment', request.params.id, { name: result.rows[0].name });
     response.status(204).end();
+  });
+
+  router.post('/equipment-catalog/:id/duplicate',requireRoles('admin','manager'),async(request,response)=>{
+    const source=(await pool.query('SELECT * FROM equipment_catalog WHERE id=$1',[request.params.id])).rows[0];
+    if(!source)return response.status(404).json({error:'Catalog item not found'});
+    const parentId=request.body.parentId??source.parent_id;
+    await validateEquipmentHierarchy(pool,source.item_type,parentId);
+    const result=await pool.query(`INSERT INTO equipment_catalog(item_type,parent_id,code,name,manufacturer,model,unit,description,color,icon,active,metadata,priority_sku)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,[source.item_type,parentId,request.body.code??source.code,request.body.name||`${source.name} - עותק`,source.manufacturer,source.model,source.unit,source.description,source.color,source.icon,source.active,source.metadata,source.priority_sku]);
+    await audit(request,'duplicate','equipment',String(result.rows[0].id),{sourceId:source.id,parentId});
+    response.status(201).json({item:equipmentFromRow(result.rows[0])});
   });
 
   router.post('/professionals/:id/merge', requireRoles('admin', 'manager'), async (request, response) => {

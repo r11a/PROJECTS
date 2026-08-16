@@ -7,4 +7,5 @@ export default defineConfig({
   // the standalone host port.
   base: './',
   plugins: [react()],
+  build: { sourcemap: true },
 });

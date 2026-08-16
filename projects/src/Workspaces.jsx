@@ -1227,17 +1227,11 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
   };
   if (!data && reportError) return <div className="work-error panel"><AlertTriangle size={28}/><h3>לא ניתן לטעון את הדוחות</h3><p>{reportError}</p><button className="ops-primary" onClick={loadReports}>ניסיון חוזר</button></div>;
   if (!data) return <div className="work-loading">מכין דוחות…</div>;
-  const stageColors = [
-    "#6957df",
-    "#2987e6",
-    "#12a594",
-    "#e29b38",
-    "#d95984",
-    "#1d9b66",
-  ];
+  const stageColorByKey={waiting:"#7B8497",mobilization:"#6D4DE3",infrastructure:"#D18B24",threading:"#E05A33",threading_done:"#A93BB8",installation_a:"#3676E0",installation_b:"#00A0B5",installation_c:"#0E7C66",activation_programming:"#18A558",finishes:"#D33F75",post_delivery:"#2F855A"};
   const localizedStageData = data.stages.map((item) => ({
     ...item,
     label: stageNames[item.stage] || "שלב לא מוגדר",
+    color:stageColorByKey[item.stage]||"#596174",
   }));
   const palette = ["#6957df", "#2987e6", "#12a594", "#e29b38", "#d95984", "#587fd8", "#8d63d9"];
   const sizeData = (data.projectSizes || []).map((item) => ({ ...item, label:projectSizeNames[item.size] || item.size }));
@@ -1311,7 +1305,7 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
                 animationEasing="ease-out"
               >
                 {localizedStageData.map((_, i) => (
-                  <Cell key={i} fill={stageColors[i % stageColors.length]} />
+                  <Cell key={i} fill={localizedStageData[i].color} />
                 ))}
               </Pie>
               <Tooltip
@@ -1324,7 +1318,7 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
             {localizedStageData.map((x, i) => (
               <span key={x.stage}>
                 <i
-                  style={{ background: stageColors[i % stageColors.length] }}
+                  style={{ background: item.color }}
                 />
                 {x.label}
                 <b>{x.count}</b>

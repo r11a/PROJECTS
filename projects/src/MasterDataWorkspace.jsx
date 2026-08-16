@@ -5,6 +5,7 @@ import {
   BriefcaseBusiness,
   Building2,
   Check,
+  Copy,
   Download,
   Eye,
   FileText,
@@ -70,6 +71,7 @@ const emptyEquipment = {
   color: "#6957df",
   icon: "cpu",
   active: true,
+  prioritySku: "",
 };
 
 export function MasterDataWorkspace({
@@ -246,6 +248,7 @@ export function MasterDataWorkspace({
           onEdit={(item) =>
             setEquipmentForm({ ...item, parentId: item.parentId || "" })
           }
+          onDuplicate={async(item,parentId)=>{try{await api(`/equipment-catalog/${item.id}/duplicate`,{method:"POST",body:JSON.stringify({parentId})});setNotice("הפריט שוכפל לקטגוריה שנבחרה");refresh()}catch(error){setNotice(error.message)}}}
           onDelete={async (item) => {
             if (!confirm(`למחוק את ${item.name}?`)) return;
             try {
@@ -644,7 +647,7 @@ function ProfessionalEditor({ value, roles, users, customFields=[], onClose, onS
   );
 }
 
-function EquipmentTree({ items, apiRoot, user, onEdit, onDelete }) {
+function EquipmentTree({ items, apiRoot, user, onEdit, onDelete, onDuplicate }) {
   const names = {
     system_type: "סוג מערכת",
     system: "מערכת",
@@ -658,18 +661,8 @@ function EquipmentTree({ items, apiRoot, user, onEdit, onDelete }) {
         text="בנה היררכיה פשוטה: סוג מערכת, מערכת ורכיבים ששייכים אליה."
       />
     );
-  return (
-    <div className="equipment-list">
-      <div className="equipment-head">
-        <span>שם</span>
-        <span>סוג</span>
-        <span>יצרן / דגם</span>
-        <span>קוד</span>
-        <span>סטטוס</span>
-        <span />
-      </div>
-      {items.map((item) => (
-        <div className={`equipment-row level-${item.itemType}`} key={item.id}>
+  const categories=items.filter(item=>item.itemType==="system_type");
+  const renderItem=(item)=><div className={`equipment-row level-${item.itemType}`} key={item.id}>
           <span>
             {item.iconImageStoredName ? (
               <img
@@ -686,7 +679,7 @@ function EquipmentTree({ items, apiRoot, user, onEdit, onDelete }) {
           <span>
             {[item.manufacturer, item.model].filter(Boolean).join(" · ") || "—"}
           </span>
-          <span>{item.code || "—"}</span>
+          <span>{item.prioritySku||item.code || "—"}</span>
           <span>{item.active ? "פעיל" : "מושבת"}</span>
           <span>
             {["admin", "manager"].includes(user.role) && (
@@ -699,11 +692,10 @@ function EquipmentTree({ items, apiRoot, user, onEdit, onDelete }) {
                 <Trash2 size={15} />
               </button>
             )}
+            {["admin","manager"].includes(user.role)&&item.itemType!=="system_type"&&<label className="catalog-duplicate-select" title="שכפול לקטגוריה נוספת"><Copy size={15}/><select aria-label="שכפול לקטגוריה נוספת" value="" onChange={(event)=>{const target=Number(event.target.value);if(target)onDuplicate(item,target)}}><option value="">שכפל ל...</option>{items.filter(candidate=>candidate.itemType===(item.itemType==="system"?"system_type":"system")&&String(candidate.id)!==String(item.parentId)).map(candidate=><option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>}
           </span>
-        </div>
-      ))}
-    </div>
-  );
+        </div>;
+  return <div className="equipment-category-grid">{categories.map(category=>{const systems=items.filter(item=>item.itemType==="system"&&String(item.parentId)===String(category.id));return <details className="equipment-category panel" key={category.id} open><summary><span className="catalog-category-icon" style={{background:category.color}}>{category.iconImageStoredName?<img src={`${apiRoot}/equipment-catalog/${category.id}/icon`} alt=""/>:<Boxes size={20}/>}</span><div><strong>{category.name}</strong><small>{systems.length} מערכות · פתיחה לעריכה וניהול</small></div><button type="button" onClick={event=>{event.preventDefault();onEdit(category)}}><Pencil size={15}/></button></summary><div className="equipment-head"><span>מערכת / מוצר / התקן / רכיב</span><span>סוג</span><span>יצרן / דגם</span><span>מק״ט Priority</span><span>סטטוס</span><span/></div>{systems.map(system=><div className="catalog-system-group" key={system.id}>{renderItem(system)}{items.filter(item=>item.itemType==="component"&&String(item.parentId)===String(system.id)).map(renderItem)}</div>)}</details>})}</div>;
 }
 
 function EquipmentEditor({ value, items, onClose, onSave }) {
@@ -775,6 +767,7 @@ function EquipmentEditor({ value, items, onClose, onSave }) {
             onChange={(event) => setForm({ ...form, code: event.target.value })}
           />
         </label>
+        <label>מק״ט Priority<input value={form.prioritySku||""} onChange={(event)=>setForm({...form,prioritySku:event.target.value})}/></label>
         <label>
           יצרן
           <input

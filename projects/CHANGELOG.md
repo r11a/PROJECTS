@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.22.0
+
+- Added supervisor and fully custom read/write permission profiles, including independent finance visibility.
+- Added active, completed and archived project workspaces with project-specific icons, colors and installation team leads.
+- Added an optional finance wizard with payment terms, deposit tracking and per-system budget allocation.
+- Rebuilt the systems catalog around expandable categories, Priority SKUs, moving and duplication.
+- Improved mobile document viewing, user administration, navigation handoff, online presence and iOS form behavior.
+- Hardened stale-asset caching, error diagnostics and server-side financial data redaction.
+
 ## 0.21.2
 
 - Corrected My Work relevance so direct performers and owners see assigned tasks even when another person manages the project.

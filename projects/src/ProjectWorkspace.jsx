@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Archive,
+  Building2,
+  Castle,
   Camera,
   Check,
   CheckCircle2,
@@ -12,10 +14,12 @@ import {
   FileText,
   Flag,
   Home,
+  House,
   Mail,
   MapPin,
   MessageSquare,
   Pencil,
+  PanelsTopLeft,
   Phone,
   Plus,
   RotateCcw,
@@ -50,6 +54,9 @@ const projectClassificationOptions = [
   ["studio", "סטודיו"],
   ["duplex", "דופלקס"],
 ];
+const projectIconOptions=[["home","בית"],["villa","וילה"],["cottage","קוטג׳"],["building","בניין"],["penthouse","פנטהאוז"],["studio","סטודיו"]];
+function ProjectTypeIcon({project,size=27}){const key=project.projectIcon||project.projectClassification;const Icon={home:Home,private_house:Home,villa:Castle,cottage:House,building:Building2,apartment_building:Building2,penthouse:PanelsTopLeft,studio:Command,duplex:House}[key]||Home;return <Icon size={size}/>}
+function navigationUrl(project){const query=encodeURIComponent(project.address||`${project.lat},${project.lng}`);if(/iPad|iPhone|iPod/.test(navigator.userAgent))return `maps://?q=${query}`;if(/Android/i.test(navigator.userAgent))return `geo:0,0?q=${query}`;return `https://www.google.com/maps/search/?api=1&query=${query}`;}
 
 function Modal({ title, onClose, children }) {
   return <AppModal title={title} subtitle="כרטיס פרויקט" onClose={onClose}>{children}</AppModal>;
@@ -244,15 +251,16 @@ export function ProjectWorkspace({
       address: f.get("address"),
       phone: f.get("phone"),
       email: f.get("email"),
-      value: Number(f.get("value") || 0),
       due: f.get("due"),
       nextMilestone: f.get("nextMilestone"),
       priority: f.get("priority"),
       flag: f.get("flag"),
       projectClassification: f.get("projectClassification"),
+      projectIcon:f.get("projectIcon"),projectColor:f.get("projectColor"),installationLeadId:f.get("installationLeadId")||null,
       installationHoursTarget: Number(f.get("installationHoursTarget") || 0),
       programmingHoursTarget: Number(f.get("programmingHoursTarget") || 0),
     };
+    if(user.financeAccess!==false)Object.assign(patch,{value:Number(f.get("value")||0),financeMode:f.get("financeMode"),paymentTerms:f.get("paymentTerms"),depositAmount:Number(f.get("depositAmount")||0),depositPaid:f.get("depositPaid")==="on",financeBreakdown:(project.systems||[]).map((name,index)=>({name,amount:Number(f.get(`systemAmount-${index}`)||0)}))});
     if (editClientMode === "new")
       patch.newClient = {
         name: editClientName,
@@ -279,6 +287,7 @@ export function ProjectWorkspace({
     if (!confirm(`${action}?${warning}`)) return;
     await archiveProject(project.id, !project.archived);
   };
+  const toggleCompleted=async()=>{try{await api(`/projects/${project.id}/complete`,{method:"PATCH",body:JSON.stringify({completed:!project.completed})});setNotice(project.completed?"הפרויקט הוחזר לפעילים":"הפרויקט הועבר להסתיימו");window.dispatchEvent(new Event("projects:data-changed"));setPage("projects");}catch(error){setNotice(error.message)}};
   const tabs = [
     ["overview", "סקירה"],
     ["tasks", "משימות ואבני דרך"],
@@ -290,13 +299,13 @@ export function ProjectWorkspace({
     ["finance", "כספים"],
     ["activity", "פעילות"],
     ["governance", "שינויים ובקרה"],
-  ];
+  ].filter(([key])=>key!=="finance"||user.financeAccess!==false);
   return (
     <div className="project-detail project-workspace">
       <div className="project-hero panel">
         <div className="project-identity">
-          <div className="project-home-icon">
-            <Home size={27} />
+          <div className="project-home-icon" style={{background:`${project.projectColor||'#6957df'}20`,color:project.projectColor||'#6957df'}}>
+            <ProjectTypeIcon project={project}/>
           </div>
           <div>
             <div className="project-title-line">
@@ -312,12 +321,12 @@ export function ProjectWorkspace({
               <UserRound size={15} />
               {project.client}
               <span>·</span>
-              <MapPin size={15} />
-              {project.address}
+              <a className="project-navigation-link" href={navigationUrl(project)} target="_blank" rel="noreferrer" title="פתיחה באפליקציית ניווט"><MapPin size={15} />{project.address}</a>
             </p>
           </div>
         </div>
         <div className="project-hero-actions">
+          <button className="secondary-button" disabled={!canEdit||project.archived} onClick={toggleCompleted}><CheckCircle2 size={16}/>{project.completed?"החזרה לפעילים":"סימון כהסתיים"}</button>
           <button className="secondary-button" disabled={!canEdit} onClick={() => { setTab("hours"); setHoursReportRequest((current) => current + 1); }}>
             <Timer size={16}/>
             דיווח שעות
@@ -615,7 +624,7 @@ export function ProjectWorkspace({
                 פתיחת מאגר הלקוחות
               </button>
             </div>
-            <div className="panel money-summary">
+            {user.financeAccess!==false&&<div className="panel money-summary">
               <div className="panel-head">
                 <div>
                   <h3>סיכום כספי</h3>
@@ -643,7 +652,7 @@ export function ProjectWorkspace({
                 />
               </div>
               <button onClick={() => setTab("finance")}>לפירוט תשלומים</button>
-            </div>
+            </div>}
             <form className="panel quick-notes" onSubmit={addUpdate}>
               <div className="panel-head">
                 <div>
@@ -686,7 +695,7 @@ export function ProjectWorkspace({
           users={mentionUsers.filter(item=>String(item.id)!==String(user.id))}
         />
       )}
-      {tab === "finance" && (
+      {tab === "finance" && user.financeAccess!==false && (
         <FinanceWorkspace
           api={api}
           user={user}
@@ -1095,6 +1104,7 @@ export function ProjectWorkspace({
         <ProjectEditModal
           project={project}
           clients={clients}
+          professionals={professionals}
           editClientMode={editClientMode}
           setEditClientMode={setEditClientMode}
           editClientId={editClientId}
@@ -1102,6 +1112,7 @@ export function ProjectWorkspace({
           editClientName={editClientName}
           setEditClientName={setEditClientName}
           onSubmit={editProject}
+          canViewFinance={user.financeAccess!==false}
           onClose={() => setModal("")}
         />
       )}
@@ -1118,6 +1129,7 @@ export function ProjectWorkspace({
 function ProjectEditModal({
   project,
   clients,
+  professionals,
   editClientMode,
   setEditClientMode,
   editClientId,
@@ -1126,6 +1138,7 @@ function ProjectEditModal({
   setEditClientName,
   onSubmit,
   onClose,
+  canViewFinance,
 }) {
   return (
     <Modal title="עריכת פרויקט ולקוח" onClose={onClose}>
@@ -1230,6 +1243,9 @@ function ProjectEditModal({
             ))}
           </select>
         </label>
+        <label>אייקון הפרויקט<select name="projectIcon" defaultValue={project.projectIcon||project.projectClassification||"home"}>{projectIconOptions.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+        <label>צבע מוביל<input type="color" name="projectColor" defaultValue={project.projectColor||"#6957df"}/></label>
+        <label>ראש צוות התקנה<select name="installationLeadId" defaultValue={project.installationLeadId||""}><option value="">ללא הקצאה</option>{professionals.filter(item=>item.active!==false).map(item=><option key={item.id} value={item.id}>{item.displayName}</option>)}</select></label>
         <label>
           מיקום / עיר הפרויקט
           <input name="location" defaultValue={project.location} />
@@ -1246,7 +1262,7 @@ function ProjectEditModal({
           דוא״ל בפרויקט
           <input name="email" type="email" defaultValue={project.email} />
         </label>
-        <label>
+        {canViewFinance&&<label>
           שווי הפרויקט
           <input
             name="value"
@@ -1254,7 +1270,8 @@ function ProjectEditModal({
             min="0"
             defaultValue={project.value}
           />
-        </label>
+        </label>}
+        {canViewFinance&&<fieldset className="wide project-finance-wizard"><legend>אשף כספים אופציונלי</legend><label>אופן תקצוב<select name="financeMode" defaultValue={project.financeMode||"total"}><option value="total">סכום כללי</option><option value="systems">פיצול לפי מערכות</option></select></label><label>תנאי תשלום<input name="paymentTerms" defaultValue={project.paymentTerms||""} placeholder="לדוגמה: 30% מקדמה, 40% התקנה, 30% מסירה"/></label><label>סכום מקדמה<input name="depositAmount" type="number" min="0" step="0.01" defaultValue={project.depositAmount||""}/></label><label className="finance-paid-check"><input name="depositPaid" type="checkbox" defaultChecked={project.depositPaid}/>המקדמה שולמה</label>{(project.systems||[]).length>0&&<div className="wide finance-system-breakdown"><strong>פיצול סכום לפי מערכת</strong>{project.systems.map((name,index)=><label key={`${name}-${index}`}>{name}<input name={`systemAmount-${index}`} type="number" min="0" step="0.01" defaultValue={project.financeBreakdown?.find(item=>item.name===name)?.amount||""}/></label>)}</div>}</fieldset>}
         <label>
           יעד שעות התקנה
           <input name="installationHoursTarget" type="number" min="0" step="0.5" defaultValue={project.installationHoursTarget || ""} placeholder="ללא יעד" />

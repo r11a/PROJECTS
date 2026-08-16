@@ -163,7 +163,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
       pool.query(`SELECT m.*,u.display_name created_by_name FROM project_meeting_summaries m LEFT JOIN users u ON u.id=m.created_by WHERE m.project_id=$1 ORDER BY m.meeting_at DESC`,[id]),
       pool.query(`SELECT e.*,p.display_name professional_name,u.display_name user_name FROM project_time_entries e LEFT JOIN professionals p ON p.id=e.professional_id LEFT JOIN users u ON u.id=e.user_id WHERE e.project_id=$1 ORDER BY e.work_date DESC,e.created_at DESC`,[id]),
     ]);
-    response.json({ tasks: tasks.rows, milestones: milestones.rows, payments: payments.rows, team: team.rows, equipment: equipment.rows, forms: forms.rows, files: files.rows, updates: updates.rows, activity: activity.rows,reviews:reviews.rows,meetings:meetings.rows,timeEntries:timeEntries.rows });
+    response.json({ tasks: tasks.rows, milestones: milestones.rows, payments: request.user.financeAccess === false ? [] : payments.rows, team: team.rows, equipment: equipment.rows, forms: forms.rows, files: files.rows, updates: updates.rows, activity: activity.rows,reviews:reviews.rows,meetings:meetings.rows,timeEntries:timeEntries.rows });
   });
 
   router.post('/projects/:id/time-entries',requireRoles('admin','manager','technician'),async(request,response)=>{
@@ -227,7 +227,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
 
   router.delete('/projects/:id/equipment/:itemId', requireRoles('admin'), async (request, response) => { await pool.query('DELETE FROM project_equipment WHERE id=$1 AND project_id=$2',[request.params.itemId,request.params.id]); await audit(request,'delete','project_equipment',request.params.itemId,{projectId:request.params.id}); response.status(204).end(); });
 
-  router.get('/reports/overview', async (_request, response) => {
+  router.get('/reports/overview', async (request, response) => {
     const reportQuery = async (name, sql, fallback) => {
       try {
         return (await pool.query(sql)).rows;
@@ -266,7 +266,16 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
         COALESCE(SUM(estimated_cost_usd),0)::numeric estimated_cost
         FROM ai_usage_log WHERE created_at>=CURRENT_DATE-29`, [{ questions:0,insights:0,tokens:0,estimated_cost:0 }]),
     ]);
-    response.json({ stages, tasks, finance: finance[0] || { total: 0, paid: 0, open: 0 }, managers, monthly, systems, components, projectSizes, contractorStages, deadlines, documents, aiUsage, aiUsageSummary:aiUsageSummary[0] || { questions:0,insights:0,tokens:0,estimated_cost:0 } });
+    const canViewFinance=request.user.financeAccess!==false;
+    response.json({
+      stages:canViewFinance?stages:stages.map(({value: _value,...stage})=>stage),
+      tasks,
+      finance:canViewFinance?(finance[0] || { total: 0, paid: 0, open: 0 }):{ restricted:true,total:0,paid:0,open:0 },
+      managers,
+      monthly:canViewFinance?monthly:[],
+      systems, components, projectSizes, contractorStages, deadlines, documents, aiUsage,
+      aiUsageSummary:aiUsageSummary[0] || { questions:0,insights:0,tokens:0,estimated_cost:0 },
+    });
   });
 
   return router;

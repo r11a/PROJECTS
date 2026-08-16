@@ -93,6 +93,7 @@ export function MessageCenter({
           <Plus size={16} />
           הודעה חדשה
         </button>
+        <div className="online-team"><strong>מחוברים כעת</strong><div>{users.filter(item=>item.online&&String(item.id)!==String(user.id)).map(item=><span key={item.id} style={{"--online-color":item.avatarColor||"#6957df"}}>{item.displayName}</span>)}{!users.some(item=>item.online&&String(item.id)!==String(user.id))&&<small>אין משתמשים נוספים מחוברים כרגע</small>}</div></div>
         {selected.length>0&&<div className="message-selection"><span>{selected.length} נבחרו</span><button className="ops-danger" onClick={()=>remove(selected)}><Trash2 size={15}/>מחיקת מסומנות</button></div>}
         {compose && (
           <form className="message-compose" onSubmit={send}>
