@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, CornerUpLeft, Link2, Mail, MessageSquare, Plus, Send, Trash2, X } from "lucide-react";
+import { Check, CheckCheck, CornerUpLeft, Link2, Mail, MessageSquare, Plus, Send, Trash2, X } from "lucide-react";
 import { ModalPortal } from "./AppModal";
 
 export function MessageCenter({
@@ -171,6 +171,16 @@ export function MessageCenter({
                   · {new Date(message.createdAt).toLocaleString("he-IL")}
                 </small>
                 <p>{message.body}</p>
+                {String(message.senderId) === String(user.id) && (
+                  <small className={`message-delivery-state ${message.readAt ? "read" : message.deliveredAt ? "delivered" : "sent"}`}>
+                    <CheckCheck size={13} />
+                    {message.readAt
+                      ? `נפתחה ונקראה · ${new Date(message.readAt).toLocaleString("he-IL")}`
+                      : message.deliveredAt
+                        ? `הגיעה לנמען · ${new Date(message.deliveredAt).toLocaleString("he-IL")}`
+                        : "נשלחה"}
+                  </small>
+                )}
                 {message.linkedUrl&&<button type="button" className="message-linked" onClick={(event)=>openLinked(event,message)}><Link2 size={13}/>פתיחת המשימה במקור</button>}
               </div>
               <div className="message-row-actions">{message.readAt && <Check size={15} />}<button onClick={event=>{event.stopPropagation();reply(message)}} title="שליחת תגובה"><CornerUpLeft size={14}/></button><button onClick={event=>{event.stopPropagation();remove([message.id])}} title="מחיקת הודעה"><Trash2 size={14}/></button></div>

@@ -328,7 +328,7 @@ function cookieValue(request, name) {
 }
 
 function publicUser(row) {
-  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, permissions:row.permissions||{}, financeAccess:row.finance_access!==false, mustChangePassword:Boolean(row.must_change_password), haUserId: row.ha_user_id, mergedIntoUserId:row.merged_into_user_id, identityTypes:[row.username?'web':null,row.ha_user_id?'ingress':null].filter(Boolean), avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', avatarImage: row.avatar_image || '', appearanceTheme: row.appearance_theme || 'light', messageSoundEnabled:row.message_sound_enabled !== false, lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
+  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, permissions:row.permissions||{}, financeAccess:canViewFinanceUser(row), mustChangePassword:Boolean(row.must_change_password), haUserId: row.ha_user_id, mergedIntoUserId:row.merged_into_user_id, identityTypes:[row.username?'web':null,row.ha_user_id?'ingress':null].filter(Boolean), avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', avatarImage: row.avatar_image || '', appearanceTheme: row.appearance_theme || 'light', messageSoundEnabled:row.message_sound_enabled !== false, lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
 }
 
 const ROLE_PERMISSIONS={
@@ -337,9 +337,38 @@ const ROLE_PERMISSIONS={
   technician:{projects:'read',tasks:'write',calendar:'read',forms:'write',catalog:'read',messages:'write'},
   finance:{projects:'read',clients:'read',finance:'write',reports:'read',messages:'write'}, viewer:{projects:'read',clients:'read',professionals:'read',tasks:'read',calendar:'read',forms:'read',catalog:'read',reports:'read',messages:'write'}, custom:{},
 };
+function canViewFinanceUser(user){
+  if(!user||(user.financeAccess??user.finance_access)===false)return false;
+  if(user.role==='admin')return true;
+  const explicit=user.permissions?.finance;
+  const level=explicit??ROLE_PERMISSIONS[user.role]?.finance??'none';
+  return level==='read'||level==='write';
+}
 function permissionResource(request){const path=String(request.originalUrl||request.path).split('?')[0];if(/\/users|\/audit|\/backup|\/system\//.test(path))return 'settings';if(/payment|finance/.test(path))return 'finance';if(/equipment|catalog/.test(path))return 'catalog';if(/professional/.test(path))return 'professionals';if(/client/.test(path))return 'clients';if(/message/.test(path))return 'messages';if(/calendar/.test(path))return 'calendar';if(/task|milestone|gantt|my-work/.test(path))return 'tasks';if(/form|document|file|inspection|meeting/.test(path))return 'forms';if(/report|insight|presentation/.test(path))return 'reports';if(/project/.test(path))return 'projects';return null;}
-function accessLevel(user,resource){if(user.role==='admin')return 'write';if(resource==='finance'&&!user.financeAccess)return 'none';return user.permissions?.[resource]||ROLE_PERMISSIONS[user.role]?.[resource]||'none';}
+function accessLevel(user,resource){if(resource==='finance'&&!canViewFinanceUser(user))return 'none';if(user.role==='admin')return 'write';return user.permissions?.[resource]||ROLE_PERMISSIONS[user.role]?.[resource]||'none';}
 function requestAllowed(user,request){const resource=permissionResource(request);if(!resource)return true;const required=['GET','HEAD','OPTIONS'].includes(request.method)?'read':'write';const level=accessLevel(user,resource);return level==='write'||(required==='read'&&level==='read');}
+
+const FINANCE_RESPONSE_KEYS = new Set([
+  'finance','financeProjects','payments','financeBreakdown','financeMode','paymentTerms',
+  'depositAmount','depositPaid','priceImpact','estimatedCost','estimatedCostUsd',
+  'finance_projects','finance_breakdown','finance_mode','payment_terms','deposit_amount',
+  'deposit_paid','price_impact','estimated_cost','estimated_cost_usd','monthlyBudgetUsd',
+  'monthly_budget_usd','overdue_payments',
+]);
+function redactFinancePayload(value) {
+  if (Array.isArray(value)) return value.map(redactFinancePayload);
+  if (!value || typeof value !== 'object' || value instanceof Date || Buffer.isBuffer(value)) return value;
+  const projectLike=('serialCode' in value||'serial_code' in value)&&('stage' in value||'client' in value);
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !FINANCE_RESPONSE_KEYS.has(key)&&!(projectLike&&(key==='value'||key==='paid')))
+    .map(([key, item]) => [key, redactFinancePayload(item)]));
+}
+function enforceFinanceResponsePolicy(response, user) {
+  if (user?.financeAccess !== false || response.locals.financePolicyApplied) return;
+  response.locals.financePolicyApplied = true;
+  const sendJson = response.json.bind(response);
+  response.json = (payload) => sendJson(redactFinancePayload(payload));
+}
 
 const presenceWrites=new Map();
 async function touchPresence(user){const previous=presenceWrites.get(String(user.id))||0;if(Date.now()-previous<45000)return;presenceWrites.set(String(user.id),Date.now());const returningAfterAbsence=!user.lastSeenAt||Date.now()-new Date(user.lastSeenAt).getTime()>15*60*1000;await pool.query('UPDATE users SET last_seen_at=NOW(),last_login_at=CASE WHEN $2 THEN NOW() ELSE last_login_at END WHERE id=$1',[user.id,returningAfterAbsence]);if(returningAfterAbsence)await audit({user},'login','session',String(user.id),{automatic:true});}
@@ -361,6 +390,7 @@ async function authenticate(request, response, next) {
       );
       request.user = publicUser(result.rows[0]);
       if (!request.user.active) return response.status(403).json({ error: 'User is disabled' });
+      enforceFinanceResponsePolicy(response, request.user);
       await touchPresence(request.user);
       if(!requestAllowed(request.user,request))return response.status(403).json({error:'Insufficient permissions'});
       return next();
@@ -372,6 +402,7 @@ async function authenticate(request, response, next) {
     const result = await pool.query('SELECT * FROM users WHERE id = $1 AND active = TRUE', [payload.sub]);
     if (!result.rowCount) return response.status(401).json({ error: 'User is unavailable' });
     request.user = publicUser(result.rows[0]);
+    enforceFinanceResponsePolicy(response, request.user);
     if (request.user.mustChangePassword && !['/api/auth/me','/api/auth/password','/api/auth/logout'].includes(request.path)) return response.status(428).json({ error:'Password change required',code:'PASSWORD_CHANGE_REQUIRED' });
     await touchPresence(request.user);
     if(!requestAllowed(request.user,request))return response.status(403).json({error:'Insufficient permissions'});

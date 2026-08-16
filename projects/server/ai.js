@@ -216,23 +216,26 @@ ${JSON.stringify(snapshot)}`;
 
 export async function buildChatContext(pool, question, user = { role:'admin',id:null }) {
   const normalized = String(question || '').toLowerCase();
+  const canViewFinance = user?.financeAccess !== false;
   const wantsHelp = /(איך|איפה|כיצד).*(יוצר|מפיק|מגדיר|משתמש|מעלה|משתף|מוסיף|עורך|מוחק|פותח)|מה.*(עושה|המטרה)|הסבר|טאב|פעולה|עזרה|מדריך|how to|where.*setting|help|create|export/.test(normalized);
   const wantsProjects = /פרויקט|לקוח|כתובת|שלב|התקדמות|project|client/.test(normalized);
   const wantsTasks = /משימ|איחור|לבצע|תאריך|יומן|לוח שנה|task|calendar/.test(normalized);
   const wantsFinance = /כספ|תשלום|גבייה|יתרה|שקל|חשבונ|payment|finance/.test(normalized);
   const wantsPeople = /איש מקצוע|טכנאי|מנהל|אדריכל|חשמלאי|מפקח|ספק|עובד|professional|manager/.test(normalized);
   const wantsSystems = /מערכת|רכיב|מצלמ|אזעק|תקשורת|בית חכם|ציוד|knx|system|equipment/.test(normalized);
-  const queries = [
-    pool.query(`SELECT COUNT(*)::int projects,
+  const queries = [pool.query(canViewFinance ? `SELECT COUNT(*)::int projects,
       COUNT(*) FILTER (WHERE archived_at IS NULL)::int active_projects,
       COALESCE(ROUND(AVG(progress) FILTER (WHERE archived_at IS NULL)),0)::int average_progress,
       COALESCE(SUM(value-paid) FILTER (WHERE archived_at IS NULL),0)::numeric outstanding
-      FROM projects`),
-  ];
+      FROM projects` : `SELECT COUNT(*)::int projects,
+      COUNT(*) FILTER (WHERE archived_at IS NULL)::int active_projects,
+      COALESCE(ROUND(AVG(progress) FILTER (WHERE archived_at IS NULL)),0)::int average_progress
+      FROM projects`)];
   const keys = ['overview'];
   if ((!wantsHelp && wantsProjects) || (!wantsHelp && !wantsTasks && !wantsFinance && !wantsPeople && !wantsSystems)) {
     keys.push('projects');
-    queries.push(pool.query(`SELECT serial_code,name,client,address,stage,progress,manager,value,paid,due,health,flag,project_size,contractor_progress
+    queries.push(pool.query(canViewFinance ? `SELECT serial_code,name,client,address,stage,progress,manager,value,paid,due,health,flag,project_size,contractor_progress
+      FROM projects WHERE archived_at IS NULL ORDER BY updated_at DESC LIMIT 60` : `SELECT serial_code,name,client,address,stage,progress,manager,due,health,flag,project_size,contractor_progress
       FROM projects WHERE archived_at IS NULL ORDER BY updated_at DESC LIMIT 60`));
     keys.push('clients');
     queries.push(pool.query(`SELECT name,phone,email,address,city,priority_customer_number,status
@@ -246,7 +249,7 @@ export async function buildChatContext(pool, question, user = { role:'admin',id:
       LEFT JOIN professionals pr ON pr.id=t.assignee_professional_id
       WHERE t.status NOT IN ('done','cancelled') ORDER BY t.due_date,t.priority DESC LIMIT 60`));
   }
-  if (wantsFinance) {
+  if (wantsFinance && canViewFinance) {
     keys.push('finance');
     queries.push(pool.query(`SELECT serial_code,name,client,value,paid,(value-paid) outstanding,due
       FROM projects WHERE archived_at IS NULL AND value>paid ORDER BY (value-paid) DESC LIMIT 50`));
@@ -270,6 +273,7 @@ export async function buildChatContext(pool, question, user = { role:'admin',id:
   }
   const results = await Promise.all(queries);
   const context = Object.fromEntries(results.map((result,index)=>[keys[index],result.rows]));
+  if (wantsFinance && !canViewFinance) context.financeAccess = { allowed:false, message:'למשתמש אין הרשאה לצפות בנתונים כספיים.' };
   if (wantsHelp) context.help = {
     createProject:[
       'לחצו על פרויקט חדש בכותרת הראשית.',
@@ -324,8 +328,11 @@ const STAGE_LABELS = {
 
 const money = (value) => `${Number(value || 0).toLocaleString('he-IL',{ minimumFractionDigits:2,maximumFractionDigits:2 })} ש״ח`;
 
-export async function buildLocalChatAnswer(pool, question) {
+export async function buildLocalChatAnswer(pool, question, user = { role:'admin',id:null }) {
   const normalized=String(question || '').toLowerCase();
+  const canViewFinance=user?.financeAccess !== false;
+  const asksFinance=/יתרה|גבייה|כספ|תשלום|שקל|חשבון|payment|finance/.test(normalized);
+  if (asksFinance && !canViewFinance) return 'אין לך הרשאה לצפות בנתונים כספיים. ניתן לבקש ממנהל המערכת להפעיל עבורך הרשאת צפייה בכספים.';
   if (/(איך|כיצד).*(יוצר|פותח|מקים).*פרויקט/.test(normalized)) return [
     'ליצירת פרויקט חדש:',
     '1. לחצו על „פרויקט חדש” בכותרת הראשית.',
@@ -341,15 +348,15 @@ export async function buildLocalChatAnswer(pool, question) {
   }
   if (/תמונת מצב.*פרויקט|מצב.*פרויקט.*פעיל|סיכום.*פרויקט/.test(normalized)) {
     const [summary,stages,tasks]=await Promise.all([
-      pool.query(`SELECT COUNT(*)::int active,COALESCE(ROUND(AVG(progress)),0)::int progress,
-        COALESCE(SUM(value-paid),0)::numeric outstanding FROM projects WHERE archived_at IS NULL`),
+      pool.query(canViewFinance ? `SELECT COUNT(*)::int active,COALESCE(ROUND(AVG(progress)),0)::int progress,
+        COALESCE(SUM(value-paid),0)::numeric outstanding FROM projects WHERE archived_at IS NULL` : `SELECT COUNT(*)::int active,COALESCE(ROUND(AVG(progress)),0)::int progress FROM projects WHERE archived_at IS NULL`),
       pool.query(`SELECT stage,COUNT(*)::int count FROM projects WHERE archived_at IS NULL GROUP BY stage ORDER BY count DESC,stage LIMIT 5`),
       pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled'))::int open,
         COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND due_date<CURRENT_DATE)::int overdue FROM tasks`),
     ]);
     const item=summary.rows[0] || {};
     const stageText=stages.rows.map((row)=>`${STAGE_LABELS[row.stage] || row.stage}: ${row.count}`).join(', ') || 'אין חלוקת שלבים';
-    return `תמונת מצב: ${item.active || 0} פרויקטים פעילים, התקדמות ממוצעת ${item.progress || 0}%, יתרה לגבייה ${money(item.outstanding)}. משימות פתוחות: ${tasks.rows[0]?.open || 0}, מתוכן באיחור: ${tasks.rows[0]?.overdue || 0}. חלוקת שלבים: ${stageText}.`;
+    return `תמונת מצב: ${item.active || 0} פרויקטים פעילים, התקדמות ממוצעת ${item.progress || 0}%${canViewFinance ? `, יתרה לגבייה ${money(item.outstanding)}` : ''}. משימות פתוחות: ${tasks.rows[0]?.open || 0}, מתוכן באיחור: ${tasks.rows[0]?.overdue || 0}. חלוקת שלבים: ${stageText}.`;
   }
   if (/תשומת לב|בסיכון|דורש.*טיפול|דורשים.*טיפול/.test(normalized)) {
     const result=await pool.query(`SELECT p.name,p.stage,p.progress,p.health,p.flag,
@@ -537,7 +544,7 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     send({ type:'status',status:'working' });
     const heartbeat=setInterval(()=>{ if (!response.writableEnded && !response.destroyed) response.write(`: heartbeat ${Date.now()}\n\n`); },5000);
     try {
-      const localAnswer=await buildLocalChatAnswer(pool,question);
+      const localAnswer=await buildLocalChatAnswer(pool,question,request.user);
       if (localAnswer) {
         send({ type:'answer',answer:localAnswer,provider:'local',providerName:'PROJECTS',model:'מנוע נתונים מקומי',generatedAt:new Date().toISOString() });
         return;
@@ -614,7 +621,11 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     const model = String(request.body.model || '');
     if (!PROVIDERS[provider].models.some((item)=>item.id === model)) return response.status(400).json({ error:'המודל שנבחר אינו נתמך' });
     const activeProvider = PROVIDERS[request.body.activeProvider] ? request.body.activeProvider : provider;
-    const monthlyBudgetUsd = Math.min(Math.max(Number(request.body.monthlyBudgetUsd) || 0, 0), 100000);
+    const currentGlobal = await pool.query("SELECT value FROM app_settings WHERE key='ai'");
+    const storedMonthlyBudgetUsd = Math.min(Math.max(Number(currentGlobal.rows[0]?.value?.monthlyBudgetUsd) || 0, 0), 100000);
+    const monthlyBudgetUsd = request.user.financeAccess === false
+      ? storedMonthlyBudgetUsd
+      : Math.min(Math.max(Number(request.body.monthlyBudgetUsd) || 0, 0), 100000);
     const current = await pool.query('SELECT api_key_encrypted FROM ai_provider_settings WHERE provider=$1', [provider]);
     let encryptedKey = current.rows[0]?.api_key_encrypted || '';
     const keyChanged = typeof request.body.apiKey === 'string' && request.body.apiKey.trim().length > 0;

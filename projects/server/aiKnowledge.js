@@ -6,6 +6,25 @@ const SENSITIVE_TABLES = new Set([
   'user_alert_dismissals',
 ]);
 
+const FINANCE_TABLES = new Set(['project_payments']);
+const FINANCE_KEY = /^(finance|financeProjects|payments|financeBreakdown|financeMode|paymentTerms|depositAmount|depositPaid|priceImpact|estimatedCost|estimatedCostUsd|monthlyBudgetUsd|value|paid|balance|amount|finance_projects|finance_breakdown|finance_mode|payment_terms|deposit_amount|deposit_paid|price_impact|estimated_cost|estimated_cost_usd|monthly_budget_usd|overdue_payments)$/i;
+const FINANCE_TEXT = /(finance|payment|paid|price|cost|budget|deposit|credit|amount|\u05db\u05e1\u05e4|\u05d2\u05d1\u05d9|\u05ea\u05e9\u05dc\u05d5\u05dd|\u05d9\u05ea\u05e8\u05d4|\u05ea\u05e7\u05e6\u05d9\u05d1|\u05de\u05d7\u05d9\u05e8|\u05e2\u05dc\u05d5\u05ea|\u05de\u05e7\u05d3\u05de\u05d4|\u05d6\u05d9\u05db\u05d5\u05d9|\u05e1\u05db\u05d5\u05dd)/i;
+
+function containsFinanceText(value) {
+  try { return FINANCE_TEXT.test(typeof value === 'string' ? value : JSON.stringify(value)); }
+  catch { return false; }
+}
+
+function stripFinanceKnowledge(value) {
+  if (Array.isArray(value)) return value.map(stripFinanceKnowledge).filter((item)=>item !== null);
+  if (typeof value === 'string') return containsFinanceText(value) ? null : value;
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key])=>!FINANCE_KEY.test(key))
+    .map(([key,item])=>[key,stripFinanceKnowledge(item)])
+    .filter(([,item])=>item !== null));
+}
+
 export const PRODUCT_CAPABILITIES = [
   { area:'תמונת מצב', features:['מדדי פרויקטים','תובנות אוטומטיות','משימות והתראות','פעילות אחרונה'] },
   { area:'העבודה שלי', features:['משימות אישיות','איחורים','ממתינות לתלות','תצוגות שמורות'] },
@@ -85,11 +104,11 @@ function redactSecrets(value) {
   ]));
 }
 
-function sanitizeSettings(rows) {
+function sanitizeSettings(rows, canViewFinance = true) {
   return rows.map((row) => {
     if (row.key !== 'ai') return { ...row,value:redactSecrets(row.value) };
     const value = redactSecrets(row.value || {});
-    return { ...row, value:{ activeProvider:value.activeProvider,monthlyBudgetUsd:value.monthlyBudgetUsd,readOnly:true } };
+    return { ...row, value:{ activeProvider:value.activeProvider,...(canViewFinance ? { monthlyBudgetUsd:value.monthlyBudgetUsd } : {}),readOnly:true } };
   });
 }
 
@@ -106,6 +125,7 @@ function normalizeColumns(value) {
 
 export async function buildLiveSystemKnowledge(pool, question, user = { role:'admin',id:null }) {
   const isAdmin = user?.role === 'admin';
+  const canViewFinance = user?.financeAccess !== false;
   const broad = isBroadQuestion(question);
   const helpOrMeta = broad || /איך|איפה|עזרה|מדריך|אפשר|יכולת|מסך|תפריט|טאב|פעולה|מה.*(עושה|המטרה)|הסבר|help|how|where/i.test(String(question || ''));
   const [inventory, recentChanges, users] = await Promise.all([
@@ -127,29 +147,36 @@ export async function buildLiveSystemKnowledge(pool, question, user = { role:'ad
         : Promise.resolve([]),
   ]);
 
-  const visibleInventory = inventory.filter((item) => !SENSITIVE_TABLES.has(item.table_name));
+  const visibleInventory = inventory.filter((item) => !SENSITIVE_TABLES.has(item.table_name) && (canViewFinance || !FINANCE_TABLES.has(item.table_name)));
+  const safeRecentChanges = canViewFinance
+    ? recentChanges
+    : recentChanges.filter((item)=>!containsFinanceText(item)).map(stripFinanceKnowledge);
   const knowledge = {
     generatedAt:new Date().toISOString(),
     freshness:'נבנה מחדש מבסיס הנתונים בזמן השאלה',
     currentUser:{ id:user?.id || null,displayName:user?.displayName || '',role:user?.role || 'user' },
-    capabilities:PRODUCT_CAPABILITIES.filter((item)=>!item.access || isAdmin),
+    capabilities:canViewFinance
+      ? PRODUCT_CAPABILITIES.filter((item)=>!item.access || isAdmin)
+      : stripFinanceKnowledge(PRODUCT_CAPABILITIES.filter((item)=>!item.access || isAdmin).filter((item)=>!containsFinanceText(item.area))),
     dataInventory:visibleInventory,
-    recentChanges:recentChanges.map((item)=>({ ...item,details:redactSecrets(item.details) })),
+    recentChanges:safeRecentChanges.map((item)=>({ ...item,details:redactSecrets(item.details) })),
     users,
   };
 
-  if (helpOrMeta) knowledge.helpGuide = selectHelpGuide(question,isAdmin,broad);
+  if (helpOrMeta) knowledge.helpGuide = canViewFinance
+    ? selectHelpGuide(question,isAdmin,broad)
+    : stripFinanceKnowledge(selectHelpGuide(question,isAdmin,broad).filter((item)=>!containsFinanceText(item.area)));
 
   if (helpOrMeta && isAdmin) {
     const schema = await safeQuery(pool, `SELECT table_name,json_agg(column_name ORDER BY ordinal_position) columns
       FROM information_schema.columns WHERE table_schema='public'
       GROUP BY table_name ORDER BY table_name`);
-    knowledge.liveSchema = schema.filter((item)=>!SENSITIVE_TABLES.has(item.table_name))
-      .map((item)=>({ ...item,columns:normalizeColumns(item.columns).filter((column)=>!/(password|secret|token|api_key)/i.test(column)) }));
+    knowledge.liveSchema = schema.filter((item)=>!SENSITIVE_TABLES.has(item.table_name) && (canViewFinance || !FINANCE_TABLES.has(item.table_name)))
+      .map((item)=>({ ...item,columns:normalizeColumns(item.columns).filter((column)=>!/(password|secret|token|api_key)/i.test(column) && (canViewFinance || !FINANCE_KEY.test(column))) }));
   }
 
   if (isAdmin && (broad || wants(question,'settings'))) {
-    knowledge.settings = sanitizeSettings(await safeQuery(pool, 'SELECT key,value,updated_at FROM app_settings ORDER BY key'));
+    knowledge.settings = sanitizeSettings(await safeQuery(pool, 'SELECT key,value,updated_at FROM app_settings ORDER BY key'),canViewFinance);
   }
   if (broad || wants(question,'documents')) {
     knowledge.documents = await safeQuery(pool, `SELECT f.title,f.original_name,f.mime_type,f.category,f.size_bytes,f.version,f.created_at,
@@ -182,10 +209,11 @@ export async function buildLiveSystemKnowledge(pool, question, user = { role:'ad
       WHERE h.status<>'deleted' ORDER BY h.event_at DESC LIMIT 40`);
   }
   if (broad || wants(question,'messages')) {
-    knowledge.messages = user?.id ? await safeQuery(pool, `SELECT m.subject,m.body,m.read_at,m.created_at,
+    const messages = user?.id ? await safeQuery(pool, `SELECT m.subject,m.body,m.read_at,m.created_at,
       sender.display_name sender_name,recipient.display_name recipient_name
       FROM user_messages m LEFT JOIN users sender ON sender.id=m.sender_id LEFT JOIN users recipient ON recipient.id=m.recipient_id
-      WHERE m.sender_id=$1 OR m.recipient_id=$1 ORDER BY m.created_at DESC LIMIT 30`,[user.id]) : [];
+       WHERE m.sender_id=$1 OR m.recipient_id=$1 ORDER BY m.created_at DESC LIMIT 30`,[user.id]) : [];
+    knowledge.messages = canViewFinance ? messages : messages.filter((item)=>!containsFinanceText(item));
   }
   if (broad || wants(question,'governance')) {
     knowledge.governance = {
@@ -195,8 +223,9 @@ export async function buildLiveSystemKnowledge(pool, question, user = { role:'ad
         FROM automation_rules r ORDER BY r.updated_at DESC LIMIT 25`),
       baselines:await safeQuery(pool, `SELECT b.label,b.created_at,p.name project_name FROM project_baselines b
         LEFT JOIN projects p ON p.id=b.project_id ORDER BY b.created_at DESC LIMIT 25`),
-      changes:await safeQuery(pool, `SELECT c.title,c.status,c.price_impact,c.schedule_impact_days,c.updated_at,p.name project_name
-        FROM project_change_requests c LEFT JOIN projects p ON p.id=c.project_id ORDER BY c.updated_at DESC LIMIT 30`),
+      changes:await safeQuery(pool, canViewFinance
+        ? `SELECT c.title,c.status,c.price_impact,c.schedule_impact_days,c.updated_at,p.name project_name FROM project_change_requests c LEFT JOIN projects p ON p.id=c.project_id ORDER BY c.updated_at DESC LIMIT 30`
+        : `SELECT c.title,c.status,c.schedule_impact_days,c.updated_at,p.name project_name FROM project_change_requests c LEFT JOIN projects p ON p.id=c.project_id ORDER BY c.updated_at DESC LIMIT 30`),
     };
   }
   return knowledge;

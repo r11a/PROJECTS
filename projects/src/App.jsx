@@ -327,6 +327,13 @@ function App() {
     () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
   );
 
+  useEffect(() => {
+    if (user && pageResources[page] && !userCanAccess(user, page)) {
+      setSelectedProject(null);
+      setPage("dashboard");
+    }
+  }, [user, page]);
+
   const loadReferenceData = async () => {
     const [
       settingsResult,
@@ -797,9 +804,9 @@ function App() {
   const stageOptions = configuration.catalogs.filter(
     (item) => item.category === "stage" && item.active,
   );
-  const openCollectionCount = projects.filter(
-    (project) => Number(project.paid) < Number(project.value),
-  ).length;
+  const openCollectionCount = userCanAccess(user,"finance")
+    ? projects.filter((project) => Number(project.paid) < Number(project.value)).length
+    : 0;
 
   return (
     <div className={`app-shell${darkMode ? " theme-dark" : ""}`}>
@@ -1110,7 +1117,7 @@ function App() {
               setNotice={setNotice}
             />
           )}
-          {page === "finance" && (
+          {page === "finance" && userCanAccess(user, "finance") && (
             <FinanceWorkspace
               api={api}
               user={user}
@@ -1255,7 +1262,7 @@ const uiRoleResources={
   finance:["projects","clients","finance","reports","messages"],
   viewer:["projects","clients","professionals","tasks","calendar","forms","catalog","reports","messages"],
 };
-function userCanAccess(user,page){const resource=pageResources[page]||page;if(user.role==="admin")return true;if(resource==="finance"&&user.financeAccess===false)return false;if(user.role==="custom")return ["read","write"].includes(user.permissions?.[resource]);return (uiRoleResources[user.role]||[]).includes(resource);}
+function userCanAccess(user,page){const resource=pageResources[page]||page;if(resource==="finance"&&user.financeAccess===false)return false;if(user.role==="admin")return true;if(user.role==="custom")return ["read","write"].includes(user.permissions?.[resource]);return (uiRoleResources[user.role]||[]).includes(resource);}
 const avatarIcons = {
   user: "אדם",
   wrench: "כלי עבודה",
@@ -1511,42 +1518,50 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                   <small className={item.online ? "user-online" : "user-offline"}>{item.online ? "מחובר כעת" : item.lastSeenAt ? `נראה לאחרונה ${new Date(item.lastSeenAt).toLocaleString("he-IL")}` : "טרם התחבר"}</small>
                   <small className="user-last-login">התחברות אחרונה: {item.lastLoginAt ? new Date(item.lastLoginAt).toLocaleString("he-IL") : "טרם התחבר"}</small>
                 </div>
+                <div className="admin-user-glance">
+                  <span className="admin-role-badge">{roleLabels[item.role]}</span>
+                  <span className={item.financeAccess !== false ? "admin-finance-badge allowed" : "admin-finance-badge blocked"}>
+                    {item.financeAccess !== false ? "כספים גלויים" : "כספים מוסתרים"}
+                  </span>
+                  <label className="admin-switch" title={item.active ? "החשבון פעיל" : "החשבון מושבת"}>
+                    <input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} />
+                    <span aria-hidden="true" />
+                    <b>{item.active ? "פעיל" : "מושבת"}</b>
+                  </label>
+                </div>
               </div>
-              <div className="admin-user-controls">
-                <label className="user-control-field">
-                  <span>תפקיד והרשאה</span>
-                  <select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>
-                    {Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </select>
-                </label>
-                <label className="user-control-field finance-access-toggle" title="שליטה נפרדת בחשיפת נתונים כספיים">
-                  <span>נתונים כספיים</span>
-                  <input type="checkbox" checked={item.financeAccess !== false} onChange={(event) => updateUser(item.id, { financeAccess: event.target.checked })} />
-                  <b>{item.financeAccess !== false ? "מוצגים" : "מוסתרים"}</b>
-                </label>
-                <label className="user-control-field user-color-field">
-                  <span>צבע</span>
-                  <input aria-label="צבע משתמש" type="color" value={item.avatarColor} onChange={(e) => updateUser(item.id, { avatarColor: e.target.value })} />
-                </label>
-                <label className="user-control-field">
-                  <span>אייקון</span>
-                  <select aria-label="אייקון משתמש" value={item.avatarIcon} onChange={(e) => updateUser(item.id, { avatarIcon: e.target.value })}>
-                    {Object.entries(avatarIcons).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </select>
-                </label>
-                <label className="user-control-field user-photo-upload" title="העלאת תמונת משתמש">
-                  <span>תמונה</span>
-                  <input type="file" accept="image/*" onChange={(event) => { uploadAvatar(item.id, event.target.files?.[0]); event.target.value = ""; }} />
-                  <b>{item.avatarImage ? "החלפה" : "העלאה"}</b>
-                </label>
-                {item.avatarImage && <button type="button" className="user-photo-remove" onClick={() => removeAvatar(item.id)}>הסרה</button>}
-                <label className="active-toggle user-active-control" title={item.active ? "החשבון פעיל" : "החשבון מושבת"}>
-                  <input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} />
-                  <span />
-                </label>
-                <button className="user-delete" disabled={String(item.id) === String(currentUser.id)} onClick={() => deleteUser(item)} title="מחיקת משתמש"><Trash2 size={16} /></button>
-              </div>
-              {item.role === "custom" && <details className="user-permissions"><summary>הרשאות מפורטות</summary><PermissionMatrix value={item.permissions} onChange={(permissions) => updateUser(item.id, { permissions })} /></details>}
+              <details className="admin-user-settings">
+                <summary><span>עריכת משתמש והרשאות</span><ChevronDown size={16} /></summary>
+                <div className="admin-user-controls">
+                  <label className="user-control-field admin-icon-field">
+                    <span>תפקיד והרשאה</span>
+                    <select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>
+                      {Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label>
+                  <label className="admin-checkbox-option" title="שליטה נפרדת בחשיפת נתונים כספיים">
+                    <input type="checkbox" checked={item.financeAccess !== false} onChange={(event) => updateUser(item.id, { financeAccess: event.target.checked })} />
+                    <span><b>גישה לנתונים כספיים</b><small>{item.financeAccess !== false ? "מוצגים למשתמש" : "מוסתרים מהמשתמש"}</small></span>
+                  </label>
+                  <label className="user-control-field user-color-field">
+                    <span>צבע משתמש</span>
+                    <input aria-label="צבע משתמש" type="color" value={item.avatarColor} onChange={(e) => updateUser(item.id, { avatarColor: e.target.value })} />
+                  </label>
+                  <label className="user-control-field">
+                    <span>אייקון</span>
+                    <select aria-label="אייקון משתמש" value={item.avatarIcon} onChange={(e) => updateUser(item.id, { avatarIcon: e.target.value })}>
+                      {Object.entries(avatarIcons).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label>
+                  <label className="admin-photo-upload" title="העלאת תמונת משתמש">
+                    <Upload size={15} /><span>{item.avatarImage ? "החלפת תמונה" : "העלאת תמונה"}</span>
+                    <input type="file" accept="image/*" onChange={(event) => { uploadAvatar(item.id, event.target.files?.[0]); event.target.value = ""; }} />
+                  </label>
+                  {item.avatarImage && <button type="button" className="admin-secondary-action" onClick={() => removeAvatar(item.id)}>הסרת תמונה</button>}
+                  <button type="button" className="admin-delete-action" disabled={String(item.id) === String(currentUser.id)} onClick={() => deleteUser(item)} title="מחיקת משתמש"><Trash2 size={15} /><span>מחיקה</span></button>
+                </div>
+                {item.role === "custom" && <details className="user-permissions"><summary>הרשאות מפורטות</summary><PermissionMatrix value={item.permissions} onChange={(permissions) => updateUser(item.id, { permissions })} /></details>}
+              </details>
             </article>
           ))}
         </div>
@@ -1775,8 +1790,9 @@ function SystemPage({ setNotice }) {
 
 function Dashboard({ projects, openProject, setPage, insights, insightsRefreshing, onRefreshInsights, user }) {
   const active = projects.filter((p) => p.stage !== "completed");
-  const value = active.reduce((sum, p) => sum + p.value, 0);
-  const unpaid = active.reduce((sum, p) => sum + (p.value - p.paid), 0);
+  const canViewFinance = userCanAccess(user,"finance");
+  const value = canViewFinance ? active.reduce((sum, p) => sum + p.value, 0) : 0;
+  const unpaid = canViewFinance ? active.reduce((sum, p) => sum + (p.value - p.paid), 0) : 0;
   const avg = active.length
     ? Math.round(active.reduce((sum, p) => sum + p.progress, 0) / active.length)
     : 0;
@@ -1787,13 +1803,13 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
       color: value.color,
     }))
     .filter((x) => x.value);
-  const cashData = projects
+  const cashData = canViewFinance ? projects
     .slice(0, 6)
     .map((project) => ({
       month: project.id.replace("PRJ-", ""),
       paid: Math.round(project.paid / 1000),
       expected: Math.round(project.value / 1000),
-    }));
+    })) : [];
   const upcomingMilestones = projects
     .filter((project) => project.stage !== "completed")
     .slice(0, 4);
@@ -1830,14 +1846,14 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
           change={`${projects.length - active.length} פרויקטים הושלמו`}
           onClick={() => setPage("projects")}
         />
-        <KpiCard
+        {canViewFinance && <KpiCard
           icon={TrendingUp}
           tone="blue"
           label="היקף פרויקטים פעילים"
           value={compactMoney(value)}
           change="לפי שווי החוזים המעודכן"
           onClick={() => setPage("projects")}
-        />
+        />}
         <KpiCard
           icon={Gauge}
           tone="green"
@@ -1846,7 +1862,7 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
           change={`ממוצע של ${active.length} פרויקטים פעילים`}
           onClick={() => setPage("projects")}
         />
-        <KpiCard
+        {canViewFinance && <KpiCard
           icon={CircleDollarSign}
           tone="orange"
           label="יתרה פתוחה לגבייה"
@@ -1854,14 +1870,14 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
           change={`${active.filter((p) => Number(p.paid) < Number(p.value)).length} פרויקטים עם יתרה`}
           alert
           onClick={() => setPage("finance")}
-        />
+        />}
       </section>
       <InsightsTile insights={insights} onNavigate={setPage} refreshing={insightsRefreshing} onRefresh={onRefreshInsights} />
       <section className="dashboard-grid top">
         <div className="panel portfolio-panel">
           <PanelHead
             title="פרויקטים שדורשים תשומת לב"
-            subtitle="לפי סיכון, חריגה ותשלומים"
+            subtitle={canViewFinance ? "לפי סיכון, חריגה ותשלומים" : "לפי סיכון וחריגה תפעולית"}
             action="לכל הפרויקטים"
             onAction={() => setPage("projects")}
           />
@@ -1951,7 +1967,7 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
         </div>
       </section>
       <section className="dashboard-grid bottom">
-        <div className="panel cash-panel">
+        {canViewFinance && <div className="panel cash-panel">
           <PanelHead
             title="גבייה לפי פרויקט"
             subtitle="חוזה מול תשלומים שהתקבלו · באלפי ₪"
@@ -1999,7 +2015,7 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
               <Bar dataKey="paid" fill="#6d5de8" radius={[5, 5, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </div>}
         <div className="panel milestones-panel">
           <PanelHead
             title="אבני דרך קרובות"
@@ -2117,6 +2133,7 @@ function ProjectsPage({
   user,
   setNotice,
 }) {
+  const canViewFinance=userCanAccess(user,"finance");
   const [view, setView] = useState("table");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -2186,10 +2203,10 @@ function ProjectsPage({
   );
   const visibleProjects = useMemo(() => {
     const stageOrder=Object.keys(stageMeta);
-    const value=(project,key)=>key==="name"?(project.name||""):key==="stage"?stageOrder.indexOf(project.stage):key==="progress"?Number(project.progress||0):key==="manager"?(project.manager||""):key==="milestone"?new Date(project.due||"9999-12-31").getTime():key==="balance"?Number(project.value||0)-Number(project.paid||0):"";
+    const value=(project,key)=>key==="name"?(project.name||""):key==="stage"?stageOrder.indexOf(project.stage):key==="progress"?Number(project.progress||0):key==="manager"?(project.manager||""):key==="milestone"?new Date(project.due||"9999-12-31").getTime():key==="balance"&&canViewFinance?Number(project.value||0)-Number(project.paid||0):"";
     const direction=projectSort.direction==="asc"?1:-1;
     return [...filteredProjects].sort((a,b)=>{const left=value(a,projectSort.key),right=value(b,projectSort.key);return (typeof left==="string"?left.localeCompare(right,"he"):(left-right))*direction;});
-  },[filteredProjects,projectSort]);
+  },[filteredProjects,projectSort,canViewFinance]);
   const toggleProjectSort=(key)=>setProjectSort(current=>({key,direction:current.key===key&&current.direction==="asc"?"desc":"asc"}));
   const managers = [
     ...new Set(
@@ -2353,7 +2370,7 @@ function ProjectsPage({
                 <th><button className={projectSort.key==="progress"?"active":""} onClick={()=>toggleProjectSort("progress")}>התקדמות<ArrowUpDown size={13}/></button></th>
                 <th><button className={projectSort.key==="manager"?"active":""} onClick={()=>toggleProjectSort("manager")}>מנהל פרויקט<ArrowUpDown size={13}/></button></th>
                 <th><button className={projectSort.key==="milestone"?"active":""} onClick={()=>toggleProjectSort("milestone")}>אבן דרך הבאה<ArrowUpDown size={13}/></button></th>
-                <th><button className={projectSort.key==="balance"?"active":""} onClick={()=>toggleProjectSort("balance")}>יתרה לגבייה<ArrowUpDown size={13}/></button></th>
+                {canViewFinance&&<th><button className={projectSort.key==="balance"?"active":""} onClick={()=>toggleProjectSort("balance")}>יתרה לגבייה<ArrowUpDown size={13}/></button></th>}
                 <th />
               </tr>
             </thead>
@@ -2413,11 +2430,11 @@ function ProjectsPage({
                       </span>
                     </div>
                   </td>
-                  <td>
+                  {canViewFinance&&<td>
                     <strong className="money-cell">
                       {money.format(project.value - project.paid)}
                     </strong>
-                  </td>
+                  </td>}
                   <td>
                     <div className="archive-row-actions">
                       {showArchived && user.role === "admin" && <button className="archive-delete" onClick={(event) => { event.stopPropagation(); beginPermanentDelete(project); }} title="מחיקה לצמיתות"><Trash2 size={17} /></button>}

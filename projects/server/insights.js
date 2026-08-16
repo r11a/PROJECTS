@@ -1,10 +1,13 @@
 export async function buildOperationalInsights({ pool, user }) {
+  const canViewFinance=user?.financeAccess !== false;
   const [taskStats, collection, risks, alerts, recent, stages, workload] = await Promise.all([
     pool.query(`SELECT COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND due_date<CURRENT_DATE)::int overdue,
                        COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND due_date BETWEEN CURRENT_DATE AND CURRENT_DATE+7)::int due_soon,
                        COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled'))::int open,
                        COUNT(*) FILTER (WHERE status='done' AND completed_at>=NOW()-INTERVAL '7 days')::int completed_week FROM tasks`),
-    pool.query(`SELECT COALESCE(SUM(value-paid),0)::numeric outstanding,COUNT(*) FILTER (WHERE paid<value)::int open_projects FROM projects WHERE archived_at IS NULL`),
+    canViewFinance
+      ? pool.query(`SELECT COALESCE(SUM(value-paid),0)::numeric outstanding,COUNT(*) FILTER (WHERE paid<value)::int open_projects FROM projects WHERE archived_at IS NULL`)
+      : Promise.resolve({ rows:[{}] }),
     pool.query(`SELECT COUNT(*) FILTER (WHERE health<70)::int health_risks,COUNT(*) FILTER (WHERE flag<>'')::int flagged,
                        COUNT(*)::int total_projects,COALESCE(ROUND(AVG(progress)),0)::int average_progress
                 FROM projects WHERE archived_at IS NULL`),
@@ -27,15 +30,14 @@ export async function buildOperationalInsights({ pool, user }) {
   ]);
   const stats = {
     ...taskStats.rows[0],
-    outstanding:Number(collection.rows[0].outstanding),
-    openProjects:collection.rows[0].open_projects,
     ...risks.rows[0],
+    ...(canViewFinance ? { outstanding:Number(collection.rows[0].outstanding),openProjects:collection.rows[0].open_projects } : {}),
   };
   const suggestions = [];
   if (stats.overdue) suggestions.push({ tone:'danger', title:`${stats.overdue} משימות באיחור`, text:'נדרשת הקצאה מחדש או עדכון יעד', target:'tasks' });
   if (stats.due_soon) suggestions.push({ tone:'warning', title:`${stats.due_soon} משימות לשבוע הקרוב`, text:'כדאי לוודא משאבים וחומרים', target:'calendar' });
   if (stats.health_risks) suggestions.push({ tone:'danger', title:`${stats.health_risks} פרויקטים בסיכון`, text:'מדד הבריאות נמוך מ־70', target:'projects' });
-  if (stats.outstanding) suggestions.push({ tone:'info', title:`₪${Math.round(stats.outstanding).toLocaleString('he-IL')} לגבייה`, text:`${stats.openProjects} פרויקטים עם יתרה פתוחה`, target:'finance' });
+  if (canViewFinance && stats.outstanding) suggestions.push({ tone:'info', title:`₪${Math.round(stats.outstanding).toLocaleString('he-IL')} לגבייה`, text:`${stats.openProjects} פרויקטים עם יתרה פתוחה`, target:'finance' });
   if (!suggestions.length) suggestions.push({ tone:'success', title:'המערכת מאוזנת', text:'אין כרגע חריגות הדורשות טיפול', target:'dashboard' });
   return {
     stats,

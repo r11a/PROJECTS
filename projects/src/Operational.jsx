@@ -3037,13 +3037,14 @@ export function OperationalSettings({
           setNotice={setNotice}
         />
       )}
-      {tab === "ai" && <AiSettings api={api} setNotice={setNotice} />}
+      {tab === "ai" && <AiSettings api={api} user={user} setNotice={setNotice} />}
       {tab === "productivity" && <ProductivitySettings api={api} user={user} setNotice={setNotice} />}
     </div>
   );
 }
 
-function AiSettings({ api, setNotice }) {
+function AiSettings({ api, user, setNotice }) {
+  const canViewFinance = user?.financeAccess !== false;
   const [settings, setSettings] = useState(null);
   const [selectedProvider, setSelectedProvider] = useState("gemini");
   const [apiKeys, setApiKeys] = useState({ gemini: "", openai: "" });
@@ -3084,7 +3085,7 @@ function AiSettings({ api, setNotice }) {
         model: provider.model,
         enabled: provider.enabled,
         apiKey: apiKeys[selectedProvider],
-        monthlyBudgetUsd: settings.monthlyBudgetUsd,
+        ...(canViewFinance ? { monthlyBudgetUsd: settings.monthlyBudgetUsd } : {}),
         readOnly: settings.readOnly,
         ...extra,
       }),
@@ -3140,7 +3141,7 @@ function AiSettings({ api, setNotice }) {
           <span><Sparkles size={23} /></span>
           <div>
             <h3>מנוע ה-AI של PROJECTS</h3>
-            <p>בחרו ספק, מודל ומגבלת עלות. ניתן לעבור ספק בכל עת בלי לשנות את המערכת.</p>
+            <p>{canViewFinance ? "בחרו ספק, מודל ומגבלת עלות. ניתן לעבור ספק בכל עת בלי לשנות את המערכת." : "בחרו ספק ומודל. ניתן לעבור ספק בכל עת בלי לשנות את המערכת."}</p>
           </div>
           <span className={`ai-status ${provider.configured && provider.lastTestStatus === "success" ? "ready" : ""}`}>
             <i />
@@ -3168,15 +3169,15 @@ function AiSettings({ api, setNotice }) {
           {provider.models.map((model) => (
             <button key={model.id} className={provider.model === model.id ? "active" : ""} onClick={() => updateProvider({ model: model.id })}>
               <span className="ai-model-radio"><i /></span>
-              <div><strong>{model.name}</strong><code>{model.id}</code><p>{model.description}</p><footer><b>{model.recommendation}</b><span>{model.cost}</span></footer></div>
+              <div><strong>{model.name}</strong><code>{model.id}</code><p>{model.description}</p><footer><b>{model.recommendation}</b>{canViewFinance && <span>{model.cost}</span>}</footer></div>
             </button>
           ))}
         </div>
       </section>
       <aside className="panel ai-control-panel">
-        <header><ShieldCheck size={22} /><div><h3>שליטה ובטיחות</h3><p>ברירות מחדל שמונעות הפתעות בעלות ובפעולות.</p></div></header>
+        <header><ShieldCheck size={22} /><div><h3>שליטה ובטיחות</h3><p>{canViewFinance ? "ברירות מחדל שמונעות הפתעות בעלות ובפעולות." : "ברירות מחדל לשליטה בספק ובהרשאות הסוכן."}</p></div></header>
         <label className="ai-field">ספק פעיל<select value={settings.activeProvider} onChange={(event) => setSettings({ ...settings, activeProvider: event.target.value })}>{Object.values(settings.providers).map((item) => <option key={item.provider} value={item.provider}>{item.name}</option>)}</select></label>
-        <label className="ai-field">תקרת תקציב חודשית (USD)<input type="number" min="0" max="100000" value={settings.monthlyBudgetUsd} onChange={(event) => setSettings({ ...settings, monthlyBudgetUsd: Number(event.target.value) })} /><small>נוצלו החודש כ־${Number(settings.monthUsageUsd || 0).toFixed(4)}. בהגעה לתקרה יצירת תשובות נעצרת; 0 מאפשר שימוש ללא הגבלה.</small></label>
+        {canViewFinance && <label className="ai-field">תקרת תקציב חודשית (USD)<input type="number" min="0" max="100000" value={settings.monthlyBudgetUsd} onChange={(event) => setSettings({ ...settings, monthlyBudgetUsd: Number(event.target.value) })} /><small>נוצלו החודש כ־${Number(settings.monthUsageUsd || 0).toFixed(4)}. בהגעה לתקרה יצירת תשובות נעצרת; 0 מאפשר שימוש ללא הגבלה.</small></label>}
         <label className="setting-toggle ai-toggle"><span><b>הפעלת {provider.name}</b><small>מאפשרת להשתמש בספק לאחר בדיקת החיבור.</small></span><input type="checkbox" checked={provider.enabled} onChange={(event) => updateProvider({ enabled: event.target.checked })} /><i /></label>
         <label className="setting-toggle ai-toggle"><span><b>מצב קריאה בלבד — נעול</b><small>הסוכן יענה וינתח, אך אין לו מסלול לשינוי נתונים. מידע רלוונטי לשאלה נשלח לספק ה־AI הפעיל.</small></span><input type="checkbox" checked disabled /><i /></label>
         {provider.lastTestedAt && <div className={`ai-last-test ${provider.lastTestStatus}`}><CheckCircle2 size={17} /><div><strong>{provider.lastTestStatus === "success" ? "בדיקה אחרונה הצליחה" : "בדיקה אחרונה נכשלה"}</strong><small>{new Date(provider.lastTestedAt).toLocaleString("he-IL")}{provider.lastTestError ? ` · ${provider.lastTestError}` : ""}</small></div></div>}
@@ -3184,7 +3185,7 @@ function AiSettings({ api, setNotice }) {
           <button className="ops-secondary" onClick={test} disabled={Boolean(busy) || (!provider.configured && !apiKeys[selectedProvider])}>{busy === "test" ? <RefreshCw className="spin" size={16} /> : <Zap size={16} />} בדיקת חיבור</button>
           <button className="ops-primary" onClick={save} disabled={Boolean(busy)}>{busy === "save" ? <RefreshCw className="spin" size={16} /> : <Save size={16} />} שמירה</button>
         </footer>
-        <p className="ai-foundation-note"><Sparkles size={15} /> הספק הפעיל משמש את הצ׳אט ואת התובנות האוטומטיות. הסוכן פועל בקריאה בלבד, מכבד את תקרת התקציב ומתעד שימוש לצורך בקרה.</p>
+        <p className="ai-foundation-note"><Sparkles size={15} /> {canViewFinance ? "הספק הפעיל משמש את הצ׳אט ואת התובנות האוטומטיות. הסוכן פועל בקריאה בלבד, מכבד את תקרת התקציב ומתעד שימוש לצורך בקרה." : "הספק הפעיל משמש את הצ׳אט ואת התובנות האוטומטיות. הסוכן פועל בקריאה בלבד ומתעד שימוש לצורך בקרה."}</p>
       </aside>
     </div>
   );

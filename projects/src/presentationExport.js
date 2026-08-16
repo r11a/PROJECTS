@@ -43,9 +43,10 @@ export async function exportManagementPresentation({ projects=[], data={}, compa
   const riskThreshold = Math.max(0,Math.min(100,number(options.riskThreshold ?? 50)));
   const maxItems = Math.max(3,Math.min(10,number(options.maxItems ?? 7)));
   const scopeLabel = selectedIds.size ? `${scopedProjects.length} פרויקטים שנבחרו` : "כל הפרויקטים הפעילים";
-  const finance = data.finance || {};
-  const scopedTotal = selectedIds.size ? scopedProjects.reduce((sum,item)=>sum+number(item.value),0) : number(finance.total);
-  const scopedPaid = selectedIds.size ? scopedProjects.reduce((sum,item)=>sum+number(item.paid),0) : number(finance.paid);
+  const includeFinance = sections.finance !== false;
+  const finance = includeFinance ? data.finance || {} : {};
+  const scopedTotal = includeFinance ? (selectedIds.size ? scopedProjects.reduce((sum,item)=>sum+number(item.value),0) : number(finance.total)) : 0;
+  const scopedPaid = includeFinance ? (selectedIds.size ? scopedProjects.reduce((sum,item)=>sum+number(item.paid),0) : number(finance.paid)) : 0;
   const scopedOpen = Math.max(0,scopedTotal-scopedPaid);
   const openTasks = (data.tasks || []).filter((item)=>item.status!=="done").reduce((sum,item)=>sum+number(item.count),0);
   const risks = scopedProjects.filter((item)=>number(item.progress)<riskThreshold||item.priority==="critical"||item.flag).sort((a,b)=>number(a.progress)-number(b.progress)).slice(0,maxItems);
@@ -72,9 +73,9 @@ export async function exportManagementPresentation({ projects=[], data={}, compa
 
   if (sections.overview) {
     slide = pptx.addSlide("PROJECTS_MASTER"); addHeader(slide,"תמונת מצב מנהלים",`${scopeLabel} · נתונים מרכזיים`,++page);
-    addKpi(slide,8.75,"פרויקטים",scopedProjects.length,COLORS.primary); addKpi(slide,4.84,"משימות פתוחות",openTasks,COLORS.amber); addKpi(slide,0.93,"יתרה לגבייה",money.format(scopedOpen),COLORS.green);
+    addKpi(slide,8.75,"פרויקטים",scopedProjects.length,COLORS.primary); addKpi(slide,4.84,"משימות פתוחות",openTasks,COLORS.amber); addKpi(slide,0.93,includeFinance?"יתרה לגבייה":"דורשי תשומת לב",includeFinance?money.format(scopedOpen):risks.length,includeFinance?COLORS.green:COLORS.red);
     slide.addText("מיקוד לישיבה", { x:8.75,y:4.55,w:3.65,h:0.34,fontFace:"Arial",fontSize:18,bold:true,color:COLORS.ink,align:"right",rtlMode:true,margin:0 });
-    addList(slide,[`${risks.length} פרויקטים דורשים תשומת לב`,`${openTasks} משימות עדיין פתוחות`,`היקף כולל: ${money.format(scopedTotal)}`],{x:6.55,y:4.98,w:5.85,h:1.55});
+    addList(slide,[`${risks.length} פרויקטים דורשים תשומת לב`,`${openTasks} משימות עדיין פתוחות`,includeFinance?`היקף כולל: ${money.format(scopedTotal)}`:`${scopedProjects.length} פרויקטים נכללים בתמונה`],{x:6.55,y:4.98,w:5.85,h:1.55});
   }
   if (sections.risks) {
     slide = pptx.addSlide("PROJECTS_MASTER"); addHeader(slide,"מוקדי תשומת לב",`סף סיכון: התקדמות מתחת ל־${riskThreshold}%`,++page);
@@ -92,7 +93,7 @@ export async function exportManagementPresentation({ projects=[], data={}, compa
     slide.addText("מערכות מובילות",{x:7,y:1.55,w:5.4,h:0.4,fontFace:"Arial",fontSize:20,bold:true,color:COLORS.ink,align:"right",rtlMode:true,margin:0}); addList(slide,systems,{x:6.65,y:2.05,w:5.75,h:3.9,color:COLORS.blue});
     slide.addText("רכיבים מובילים",{x:1,y:1.55,w:5.4,h:0.4,fontFace:"Arial",fontSize:20,bold:true,color:COLORS.ink,align:"right",rtlMode:true,margin:0}); addList(slide,components,{x:0.65,y:2.05,w:5.75,h:3.9,color:COLORS.green});
   }
-  if (sections.finance) {
+  if (includeFinance) {
     slide = pptx.addSlide("PROJECTS_MASTER"); addHeader(slide,"כספים וגבייה",scopeLabel,++page);
     addKpi(slide,8.75,"היקף",money.format(scopedTotal),COLORS.primary); addKpi(slide,4.84,"נגבה",money.format(scopedPaid),COLORS.green); addKpi(slide,0.93,"יתרה",money.format(scopedOpen),COLORS.red);
     const collectionRate=scopedTotal?Math.round(scopedPaid/scopedTotal*100):0; slide.addText(`שיעור גבייה: ${collectionRate}%`,{x:3,y:4.55,w:7.3,h:0.5,fontFace:"Arial",fontSize:25,bold:true,color:COLORS.ink,align:"center",rtlMode:true,margin:0});

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.23.3
+
+- Enforced finance visibility as a global security policy across APIs, projects, dashboards, reports, charts, exports and AI context.
+- Finance access now requires both the per-user finance switch and an allowed finance role/resource permission, including for administrators explicitly restricted by the switch.
+- Added delivery, opening and read status indicators for private messages.
+
 ## 0.23.2
 
 - Synchronized every system and component row with its parent system-type color.
