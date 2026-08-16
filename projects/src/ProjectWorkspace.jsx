@@ -111,7 +111,7 @@ export function ProjectWorkspace({
   const [editClientMode, setEditClientMode] = useState("existing");
   const [editClientId, setEditClientId] = useState(project.clientId || "");
   const [editClientName, setEditClientName] = useState(project.client || "");
-  const canEdit = ["admin", "manager", "technician"].includes(user.role);
+  const canEdit = user.permissions?.projects === "write" || ["admin", "manager", "technician", "supervisor"].includes(user.role);
   const canManage = ["admin", "manager"].includes(user.role);
   const load = async () => {
     try {

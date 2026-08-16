@@ -16,10 +16,10 @@ async function syncProjectMetrics(pool, projectId) {
 
 async function mayEditProject(pool, request, projectId) {
   if (request.user.role === 'admin') return true;
-  if (!projectId || request.user.role !== 'manager') return false;
-  const result = await pool.query(`SELECT 1 FROM projects p JOIN professionals pr ON pr.id=p.manager_professional_id
-    WHERE p.id=$1 AND pr.linked_user_id=$2`, [projectId, request.user.id]);
-  return Boolean(result.rowCount);
+  if (request.user.permissions?.projects === 'write') return true;
+  if (!projectId) return false;
+  if (!['manager', 'technician', 'supervisor'].includes(request.user.role)) return false;
+  return true;
 }
 
 async function moveToRecycleBin(pool, request, entityType, row, displayName, projectId) {

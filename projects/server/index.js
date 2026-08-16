@@ -602,13 +602,10 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
     await db.query('BEGIN');
     const current = await db.query('SELECT * FROM projects WHERE id=$1 FOR UPDATE', [request.params.id]);
     if (!current.rowCount) { await db.query('ROLLBACK'); return response.status(404).json({ error: 'Project not found' }); }
-    if (request.user.role !== 'admin') {
-      const assigned = await db.query(`SELECT 1 FROM professionals
-        WHERE id=$1 AND linked_user_id=$2 AND active=TRUE`, [current.rows[0].manager_professional_id, request.user.id]);
-      if (!assigned.rowCount) {
-        await db.query('ROLLBACK');
-        return response.status(403).json({ error:'רק מנהל הפרויקט המשויך רשאי לערוך את נתוני הפרויקט והמשימות שלו' });
-      }
+    const editPermission = request.user.role === 'admin' || request.user.permissions?.projects === 'write' || ['manager', 'technician', 'supervisor'].includes(request.user.role);
+    if (!editPermission) {
+      await db.query('ROLLBACK');
+      return response.status(403).json({ error:'אין הרשאה לערוך את פרטי הפרויקט' });
     }
     const collectionRules = { threading:10, installation_a:40, activation_programming:70 };
     const requestedStage = request.body?.stage;

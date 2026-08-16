@@ -554,7 +554,7 @@ export function TasksWorkspace({
     localStorage.setItem(`${filterStorageKey}:pinned`, next ? "1" : "0");
     if (!next) localStorage.removeItem(filterStorageKey);
   };
-  const canEdit = ["admin", "manager", "technician"].includes(user.role);
+  const canEdit = user.permissions?.projects === "write" || ["admin", "manager", "technician", "supervisor"].includes(user.role);
   currentTaskOptions = tasks;
   const save = async (value) => {
     try {
@@ -1012,7 +1012,7 @@ export function FinanceWorkspace({
       setNotice(e.message);
     }
   };
-  const canEdit = ["admin", "manager", "finance"].includes(user.role);
+  const canEdit = user.permissions?.finance === "write" || ["admin", "manager", "finance"].includes(user.role);
   return (
     <div className={`ops-page work-page ${projectId ? "embedded-work" : ""}`}>
       <section className="finance-work-hero">
