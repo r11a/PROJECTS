@@ -267,7 +267,7 @@ export function createProductivityRouter({ pool, authenticate, requireRoles, aud
     if (request.body.conditions !== undefined) { update.push(`conditions=$${index++}`); values.push(JSON.stringify(mapAutomationConditionsForSave(request.body.conditions))); }
     if (request.body.actions !== undefined) { update.push(`actions=$${index++}`); values.push(JSON.stringify(mapAutomationActionsForSave(request.body.actions))); }
     if (typeof request.body.active === 'boolean') { update.push(`active=$${index++}`); values.push(request.body.active); }
-    if (!update.length) return response.status(400).json({ error: '×©× ×§×”×“××•×ª ×‘×™× ×•×¡ ××•×™× ×” ×œ×”×™×•×ª ×‘×¡×™×¡×™' });
+    if (!update.length) return response.status(400).json({ error: 'לא נשלחו שדות לעדכון' });
     update.push('updated_at=NOW()');
     values.push(request.params.id);
     const result=await pool.query(

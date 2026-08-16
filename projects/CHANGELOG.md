@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.24.8
+
+- Fixed a regression in Hebrew/RTL rendering in core workspace and server endpoints so UI labels and messages now display consistently across the app.
+- Hardening and consistency pass for automation UX text (hebrew labels + ordering actions/conditions), including cleaner field structure for practical editing.
+- Reduced release-cache friction by improving metadata synchronization for addon upgrades (config + Docker manifest + frontend/backend package versions now aligned to the release number).
+
 ## 0.24.7
 
 - Focused automation engine UI for practical usability with compact trigger/action set:
