@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.24.7
+
+- Focused automation engine UI for practical usability with compact trigger/action set:
+  - Reduced triggers and actions to core, high-value flow for reliable use in production.
+  - Added stage-change automation action (`set_project_stage`).
+  - Added assignee/owner-aware context propagation for task automations.
+  - Added in-form ordering controls for conditions and actions to improve maintainability.
+
 ## 0.24.5
 
 - Stabilized modal/window ergonomics for tight inputs and edge clipping by introducing dedicated modal layout safeguards across desktop and mobile views.

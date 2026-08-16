@@ -567,7 +567,7 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
     }
     await db.query('COMMIT');
     await audit(request, 'create', 'project', project.id, { clientId: selectedClient.id });
-    await executeAutomations({ pool,triggerType:'project_created',entityType:'project',entityId:project.id,context:{ projectId:project.id,stage:project.stage },userId:request.user.id });
+    await executeAutomations({ pool,triggerType:'project_created',entityType:'project',entityId:project.id,context:{ projectId:project.id,stage:project.stage,managerProfessionalId: selectedManager?.id || null },userId:request.user.id });
     const createdProject = await pool.query('SELECT * FROM projects WHERE id=$1',[project.id]);
     response.status(201).json({ project: projectForUser(createdProject.rows[0], request.user) });
   } catch (error) {
@@ -647,7 +647,21 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
     const result = await db.query(`UPDATE projects SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`, values);
     await db.query('COMMIT');
     await audit(request, 'update', 'project', request.params.id, Object.fromEntries(entries));
-    if(request.body.stage && request.body.stage!==current.rows[0].stage) await executeAutomations({ pool,triggerType:'project_stage_changed',entityType:'project',entityId:request.params.id,context:{ projectId:request.params.id,stage:request.body.stage,fromStage:current.rows[0].stage },userId:request.user.id });
+    if(request.body.stage && request.body.stage!==current.rows[0].stage) {
+      await executeAutomations({
+        pool,
+        triggerType:'project_stage_changed',
+        entityType:'project',
+        entityId:request.params.id,
+        context:{
+          projectId:request.params.id,
+          stage:request.body.stage,
+          fromStage:current.rows[0].stage,
+          managerProfessionalId:current.rows[0].manager_professional_id || null,
+        },
+        userId:request.user.id,
+      });
+    }
     response.json({ project: projectForUser(result.rows[0], request.user) });
   } catch (error) {
     await db.query('ROLLBACK');

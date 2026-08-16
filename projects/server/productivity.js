@@ -90,6 +90,8 @@ const mapAutomationActionsForSave = (input = []) => asArray(input).map((action, 
   priority: action.priority || "normal",
   critical: toBoolean(action.critical),
   taskType: action.taskType || "task",
+  targetStage: action.targetStage || "waiting",
+  reason: action.reason || "",
   subject: action.subject || "",
   body: action.body || "",
   linkedUrl: action.linkedUrl || "",
@@ -119,6 +121,11 @@ export async function executeAutomations({ pool, triggerType, entityType, entity
             SELECT COALESCE($1,(SELECT id FROM users WHERE active=TRUE ORDER BY (role='admin') DESC,id LIMIT 1)),pr.linked_user_id,$2,$3,$4 FROM projects p JOIN professionals pr ON pr.id=p.manager_professional_id
             WHERE p.id=$5 AND pr.linked_user_id IS NOT NULL RETURNING id`, [userId,action.subject||'עדכון אוטומטי בפרויקט',action.body||rule.name,`?project=${encodeURIComponent(context.projectId)}`,context.projectId]);
           details.push({ type:action.type, messages:sent.rowCount });
+        } else if (action.type === 'set_project_stage' && context.projectId) {
+          const updated = await db.query('UPDATE projects SET stage=$1,updated_at=NOW() WHERE id=$2 RETURNING stage', [action.targetStage, context.projectId]);
+          if (updated.rowCount) {
+            details.push({ type: action.type, fromStage: context.stage || context.fromStage || null, toStage: action.targetStage, reason: action.reason || '' });
+          }
         }
       }
       await db.query(`INSERT INTO automation_runs(rule_id,entity_type,entity_id,outcome,details) VALUES($1,$2,$3,'completed',$4)`, [rule.id,entityType,String(entityId),JSON.stringify(details)]);

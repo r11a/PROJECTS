@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, BarChart3, BellRing, Bot, Check, CheckCircle2, Clock3, FolderKanban, Gauge, Layers3, Plus, RefreshCw, Save, Settings2, ShieldAlert, SlidersHorizontal, Sparkles, Trash2, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowDown, ArrowUp, BarChart3, BellRing, Bot, Check, CheckCircle2, Clock3, FolderKanban, Gauge, Layers3, Plus, RefreshCw, Save, Settings2, ShieldAlert, SlidersHorizontal, Sparkles, Trash2, Users, X } from "lucide-react";
 import { TaskEditor } from "./Workspaces";
 import { AppModal } from "./AppModal";
 import "./my-work-enhancements.css";
@@ -23,6 +23,7 @@ const AUTOMATION_FIELDS=[
   {value:"status",label:"×¡×˜×˜×•×¡"},
   {value:"fromStatus",label:"×¡×˜×˜×•×¡ ×§×•×“× ×©×œ ×”×ž×©×™×ž×”"},
   {value:"projectId",label:"×¤×¨×•×™×§×˜"},
+  {value:"assignee",label:"אדם אחראי"},
 ];
 const AUTOMATION_OPERATORS=[
   {value:"equals",label:"×©×•×•×” ×œ"},
@@ -35,6 +36,7 @@ const AUTOMATION_OPERATORS=[
 const AUTOMATION_ACTION_TEMPLATES=[
   {value:"create_task",label:"×™×¦×™×¨×ª ×ž×©×™×ž×”"},
   {value:"notify_manager",label:"×ž×©×œ×•×— ×”×•×“×¢×” ×œ×ž× ×”×œ"},
+  {value:"set_project_stage",label:"עדכון שלב פרויקט"},
 ];
 const automationDefaults=(triggerTypes=["task_overdue"])=>({
   name:"",
@@ -322,6 +324,15 @@ export function ProductivitySettings({ api, user, setNotice }) {
     setDraft({ ...draft, conditions: { ...draft.conditions, groups } });
   };
 
+  const moveItem = (items = [], from = 0, to = 0) => {
+    if (from === to) return items;
+    if (to < 0 || to >= items.length) return items;
+    const next = [...items];
+    const item = next.splice(from, 1)[0];
+    next.splice(to, 0, item);
+    return next;
+  };
+
   const addCondition = (groupIndex) => {
     const groups = [...draft.conditions.groups];
     const order = groups[groupIndex]?.conditions?.length || 0;
@@ -329,6 +340,7 @@ export function ProductivitySettings({ api, user, setNotice }) {
       ...groups[groupIndex],
       conditions: [...(groups[groupIndex]?.conditions || []), { ...getEmptyCondition(), id: cryptoRandomId(), order }],
     };
+    groups[groupIndex].conditions = groups[groupIndex].conditions.map((item, index) => ({ ...item, order: index }));
     setDraft({ ...draft, conditions: { ...draft.conditions, groups } });
   };
 
@@ -337,6 +349,8 @@ export function ProductivitySettings({ api, user, setNotice }) {
     groups[groupIndex] = { ...groups[groupIndex], conditions: groups[groupIndex].conditions.filter((_, index) => index !== conditionIndex) };
     if (!groups[groupIndex].conditions.length) {
       groups[groupIndex].conditions = [{ ...getEmptyCondition(), id: cryptoRandomId(), order: 0 }];
+    } else {
+      groups[groupIndex].conditions = groups[groupIndex].conditions.map((item, index) => ({ ...item, order: index }));
     }
     setDraft({ ...draft, conditions: { ...draft.conditions, groups } });
   };
@@ -346,6 +360,15 @@ export function ProductivitySettings({ api, user, setNotice }) {
     const nextConditions = [...groups[groupIndex].conditions];
     nextConditions[conditionIndex] = { ...nextConditions[conditionIndex], ...patch };
     groups[groupIndex] = { ...groups[groupIndex], conditions: nextConditions };
+    setDraft({ ...draft, conditions: { ...draft.conditions, groups } });
+  };
+
+  const moveCondition = (groupIndex, conditionIndex, direction) => {
+    const groups = [...draft.conditions.groups];
+    const source = groups[groupIndex];
+    const nextConditions = moveItem(source.conditions || [], conditionIndex, conditionIndex + direction).map((item, index) => ({ ...item, order: index }));
+    if (nextConditions === source.conditions) return;
+    groups[groupIndex] = { ...source, conditions: nextConditions };
     setDraft({ ...draft, conditions: { ...draft.conditions, groups } });
   };
 
@@ -363,20 +386,29 @@ export function ProductivitySettings({ api, user, setNotice }) {
   };
 
   const addAction = () => {
-    setDraft({ ...draft, actions: [...(draft.actions || []), getEmptyAction()] });
+    setDraft({
+      ...draft,
+      actions: [...(draft.actions || []), getEmptyAction()].map((action, index) => ({ ...action, order: index })),
+    });
   };
 
   const removeAction = (index) => {
     if ((draft.actions || []).length <= 1) return;
     const actions = [...draft.actions];
     actions.splice(index, 1);
-    setDraft({ ...draft, actions });
+    setDraft({ ...draft, actions: actions.map((action, position) => ({ ...action, order: position })) });
   };
 
   const updateAction = (index, patch) => {
     const actions = [...draft.actions];
     actions[index] = { ...actions[index], ...patch };
     setDraft({ ...draft, actions });
+  };
+
+  const moveAction = (actionIndex, direction) => {
+    const nextActions = moveItem(draft.actions || [], actionIndex, actionIndex + direction).map((action, index) => ({ ...action, order: index }));
+    if (nextActions === (draft.actions || [])) return;
+    setDraft({ ...draft, actions: nextActions });
   };
 
   return (
@@ -533,7 +565,10 @@ export function ProductivitySettings({ api, user, setNotice }) {
               {(draft.conditions.groups || []).map((group, groupIndex) => (
                 <article key={`${groupIndex}-${group.logic || "AND"}`} className="automation-condition-group">
                   <header>
-                    <strong>קבוצה {groupIndex + 1}</strong>
+                    <div className="automation-group-headline">
+                      <strong>קבוצה {groupIndex + 1}</strong>
+                      <span className="automation-group-summary">{group.conditions?.length || 0} תנאים</span>
+                    </div>
                     <div className="group-control">
                       <label>
                         בין תנאים:
@@ -547,6 +582,14 @@ export function ProductivitySettings({ api, user, setNotice }) {
                   </header>
                   {(group.conditions || []).map((condition, conditionIndex) => (
                     <div key={condition.id} className="automation-condition">
+                      <div className="automation-reorder">
+                        <button type="button" onClick={() => moveCondition(groupIndex, conditionIndex, -1)} disabled={conditionIndex === 0} title="הזז מעלה">
+                          <ArrowUp size={14} />
+                        </button>
+                        <button type="button" onClick={() => moveCondition(groupIndex, conditionIndex, 1)} disabled={conditionIndex === (group.conditions || []).length - 1} title="הזז מטה">
+                          <ArrowDown size={14} />
+                        </button>
+                      </div>
                       <label>
                         שדה
                         <select
@@ -595,7 +638,18 @@ export function ProductivitySettings({ api, user, setNotice }) {
               {(draft.actions || []).map((action, actionIndex) => {
                 const type = action.type || "create_task";
                 return (
-                  <article key={action.id} className="automation-action">
+                    <article key={action.id} className="automation-action">
+                    <header className="automation-item-headline">
+                      <strong>פעולה {actionIndex + 1}</strong>
+                      <div className="automation-actions-reorder">
+                        <button type="button" onClick={() => moveAction(actionIndex, -1)} disabled={actionIndex === 0} title="הזז מעלה">
+                          <ArrowUp size={14} />
+                        </button>
+                        <button type="button" onClick={() => moveAction(actionIndex, 1)} disabled={actionIndex === (draft.actions || []).length - 1} title="הזז מטה">
+                          <ArrowDown size={14} />
+                        </button>
+                      </div>
+                    </header>
                     <label>
                       סוג פעולה
                       <select
@@ -666,6 +720,34 @@ export function ProductivitySettings({ api, user, setNotice }) {
                             קריטית
                           </label>
                         </div>
+                      </>
+                    ) : type === "set_project_stage" ? (
+                      <>
+                        <label>
+                          שלב יעד
+                          <select
+                            value={action.targetStage || "waiting"}
+                            onChange={(event) => updateAction(actionIndex, { targetStage: event.target.value })}
+                          >
+                            <option value="waiting">ממתין</option>
+                            <option value="mobilization">הכנות</option>
+                            <option value="infrastructure">תשתיות</option>
+                            <option value="threading">השחלות</option>
+                            <option value="installation_a">התקנה A</option>
+                            <option value="installation_b">התקנה B</option>
+                            <option value="installation_c">התקנה C</option>
+                            <option value="activation_programming">הפעלות ותכנות</option>
+                            <option value="finishes">פינישים</option>
+                            <option value="post_delivery">מוכן למסירה</option>
+                          </select>
+                        </label>
+                        <label>
+                          סיבה (אופציונלי)
+                          <input
+                            value={action.reason || ""}
+                            onChange={(event) => updateAction(actionIndex, { reason: event.target.value })}
+                          />
+                        </label>
                       </>
                     ) : (
                       <>

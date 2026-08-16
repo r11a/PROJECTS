@@ -109,7 +109,20 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,$16,$17,$18,$19) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null,request.body.ownerProfessionalId || null, request.body.startDate || request.body.dueDate, request.body.dueDate, allDay?null:(request.body.startTime || null), allDay?null:(request.body.endTime || null), allDay, durationHours, request.body.taskType || 'task', request.body.dependencyTaskId || null,request.body.parentTaskId || null,Boolean(request.body.critical), request.user.id]);
     await syncProjectMetrics(pool, request.body.projectId);
     await audit(request, 'create', 'task', String(result.rows[0].id), { title, projectId: request.body.projectId });
-    await executeAutomations({ pool,triggerType:'task_created',entityType:'task',entityId:result.rows[0].id,context:{ projectId:request.body.projectId,status:result.rows[0].status,title },userId:request.user.id });
+    await executeAutomations({
+      pool,
+      triggerType:'task_created',
+      entityType:'task',
+      entityId:result.rows[0].id,
+      context:{
+        projectId:request.body.projectId,
+        status:result.rows[0].status,
+        title,
+        assigneeProfessionalId: request.body.assigneeProfessionalId || null,
+        ownerProfessionalId: request.body.ownerProfessionalId || null,
+      },
+      userId:request.user.id,
+    });
     response.status(201).json({ task: result.rows[0] });
   });
 
@@ -133,7 +146,23 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
       completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$18 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id,request.body.ownerProfessionalId ?? row.owner_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, allDay?null:(request.body.startTime ?? row.start_time), allDay?null:(request.body.endTime ?? row.end_time), allDay, durationHours, request.body.taskType ?? row.task_type, dependencyId,parentTaskId,request.body.critical ?? row.critical, request.body.color ?? row.color, request.params.id]);
     await syncProjectMetrics(pool, row.project_id);
     await audit(request, 'update', 'task', request.params.id, request.body);
-    if(status!==row.status) await executeAutomations({ pool,triggerType:'task_status_changed',entityType:'task',entityId:request.params.id,context:{ projectId:row.project_id,status,fromStatus:row.status,title:result.rows[0].title },userId:request.user.id });
+    if(status!==row.status) {
+      await executeAutomations({
+        pool,
+        triggerType:'task_status_changed',
+        entityType:'task',
+        entityId:request.params.id,
+        context:{
+          projectId:row.project_id,
+          status,
+          fromStatus:row.status,
+          title:result.rows[0].title,
+          assigneeProfessionalId: row.assignee_professional_id || null,
+          ownerProfessionalId: row.owner_professional_id || null,
+        },
+        userId:request.user.id,
+      });
+    }
     response.json({ task: result.rows[0] });
   });
 
