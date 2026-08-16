@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.24.5
+
+- Stabilized modal/window ergonomics for tight inputs and edge clipping by introducing dedicated modal layout safeguards across desktop and mobile views.
+- Refreshed release metadata and add-on packaging identifiers to 0.24.5.
+- Minor hardening pass completed so the release is cache-safe for addon upgrades in Home Assistant.
+
 ## 0.24.4
 
 - Calendar event deep-link now opens the linked task/milestone directly inside the project overview (not only project summary), including task and milestone fallback handling.
