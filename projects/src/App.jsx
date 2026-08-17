@@ -97,6 +97,7 @@ import { ProjectWorkspace } from "./ProjectWorkspace";
 import { MyWorkWorkspace, PortfolioControlWorkspace } from "./ProductivityWorkspace";
 import { localDateValue } from "./dateTime";
 import { RiskCenter } from "./features/risk-center/RiskCenter";
+import "./project-category.css";
 
 const projectClassificationOptions = [
   ["private_house", "בית פרטי"],
@@ -108,6 +109,7 @@ const projectClassificationOptions = [
   ["duplex", "דופלקס"],
 ];
 const projectClassificationLabels = Object.fromEntries(projectClassificationOptions);
+const projectCategoryText=(project)=>project.projectCategory==='other'?(project.projectCategoryCustom||'אחר'):'בית חכם';
 const contractorProgressLabels = {
   finishing: "עבודות גמר", carpentry: "הרכבות נגרות", waiting: "בהמתנה",
   infrastructure: "סלילת תשתיות", infrastructure_paving: "סלילת תשתיות", drywall_paint: "עבודות גבס וצבע", stopped: "בעצירה",
@@ -1981,6 +1983,8 @@ function SystemPage({ setNotice }) {
 
 function Dashboard({ api, projects, openProject, setPage, insights, insightsRefreshing, onRefreshInsights, user }) {
   const active = projects.filter((p) => p.stage !== "completed");
+  const smartHomeCount=active.filter((project)=>project.projectCategory!=='other').length;
+  const otherCount=active.length-smartHomeCount;
   const canViewFinance = userCanAccess(user,"finance");
   const value = canViewFinance ? active.reduce((sum, p) => sum + p.value, 0) : 0;
   const unpaid = canViewFinance ? active.reduce((sum, p) => sum + (p.value - p.paid), 0) : 0;
@@ -2034,7 +2038,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
           tone="purple"
           label="פרויקטים פעילים"
           value={active.length}
-          change={`${projects.length - active.length} פרויקטים הושלמו`}
+          change={`${smartHomeCount} בית חכם · ${otherCount} אחרים`}
           onClick={() => setPage("projects")}
         />
         {canViewFinance && <KpiCard
@@ -2338,6 +2342,7 @@ function ProjectsPage({
   const [manager, setManager] = useState("");
   const [priority, setPriority] = useState("");
   const [flagged, setFlagged] = useState(false);
+  const [category,setCategory]=useState("all");
   const [projectSort, setProjectSort] = useState({ key:"name", direction:"asc" });
   const switchArchive = async (scope) => {
     const archived=scope==="archived";
@@ -2391,6 +2396,7 @@ function ProjectsPage({
     (project) =>
       (!manager || project.manager === manager) &&
       (!priority || project.priority === priority) &&
+      (category==="all"||(category==="smart_home"?project.projectCategory!=="other":project.projectCategory==="other")) &&
       (!flagged || project.flag),
   );
   const visibleProjects = useMemo(() => {
@@ -2456,6 +2462,7 @@ function ProjectsPage({
         </div>
       </div>
       <div className="toolbar panel projects-filter-toolbar">
+        <div className="project-category-filter"><button className={category==='all'?'active':''} onClick={()=>setCategory('all')}>הכל</button><button className={category==='smart_home'?'active':''} onClick={()=>setCategory('smart_home')}>בית חכם</button><button className={category==='other'?'active':''} onClick={()=>setCategory('other')}>אחרים</button></div>
         <label className="table-search">
           <Search size={18} />
           <input
@@ -2541,6 +2548,7 @@ function ProjectsPage({
             onClick={() => {
               setManager("");
               setPriority("");
+              setCategory("all");
               setFlagged(false);
             }}
           >
@@ -2578,7 +2586,7 @@ function ProjectsPage({
                       <div>
                         <strong>{project.name}</strong>
                         <span>
-                          {project.location} · {projectClassificationLabels[project.projectClassification] || "בית פרטי"}
+                          {project.location} · {projectCategoryText(project)} · {projectClassificationLabels[project.projectClassification] || "בית פרטי"}
                         </span>
                         {showArchived && (
                           <small className="archived-date">
@@ -2706,7 +2714,7 @@ function BoardView({ projects, openProject }) {
                     {project.location}
                   </small>
                   <div className="systems-mini">
-                    <em>{projectClassificationLabels[project.projectClassification] || "בית פרטי"}</em>
+                    <em>{projectCategoryText(project)} · {projectClassificationLabels[project.projectClassification] || "בית פרטי"}</em>
                     {project.systems.slice(0, 2).map((s) => (
                       <em key={s}>{s}</em>
                     ))}
@@ -3543,6 +3551,7 @@ function NewProjectModal({
     clientCity: "",
     location: "",
     projectClassification: "private_house",
+    projectCategory:"smart_home",projectCategoryCustom:"",projectProfile:{workflowLabel:"",systemsLabel:"",areasLabel:""},
     projectIcon: "home",
     projectColor: "#6957df",
     managerId: managers[0]?.id || "",
@@ -3595,6 +3604,7 @@ function NewProjectModal({
       newClient,
       location: form.location || client?.city || form.clientCity || "",
       projectClassification: form.projectClassification,
+      projectCategory:form.projectCategory,projectCategoryCustom:form.projectCategory==='other'?form.projectCategoryCustom:"",projectProfile:form.projectCategory==='other'?form.projectProfile:{},
       projectIcon:form.projectIcon,
       projectColor:form.projectColor,
       address: client?.address || form.clientAddress || form.location,
@@ -3668,7 +3678,9 @@ function NewProjectModal({
                 placeholder="לדוגמה: וילה משפחת ישראלי"
               />
             </label>
-            <label>
+            <label>תחום הפרויקט<select value={form.projectCategory} onChange={(event)=>setForm({...form,projectCategory:event.target.value})}><option value="smart_home">בית חכם</option><option value="other">אחר</option></select></label>
+            {form.projectCategory==='other'&&<><label>סוג פרויקט חופשי<input required value={form.projectCategoryCustom} onChange={(event)=>setForm({...form,projectCategoryCustom:event.target.value})} placeholder="לדוגמה: מרכז הדרכה"/></label><div className="wide project-profile-fields"><label>שם תהליך עבודה<input value={form.projectProfile.workflowLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,workflowLabel:event.target.value}})} placeholder="אופציונלי"/></label><label>שם אזור המערכות<input value={form.projectProfile.systemsLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,systemsLabel:event.target.value}})} placeholder="אופציונלי"/></label><label>שם אזורי העבודה<input value={form.projectProfile.areasLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,areasLabel:event.target.value}})} placeholder="אופציונלי"/></label></div></>}
+            {form.projectCategory==='smart_home'&&<label>
               סיווג הפרויקט
               <select
                 value={form.projectClassification}
@@ -3680,7 +3692,7 @@ function NewProjectModal({
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
-            </label>
+            </label>}
             <div className="client-mode-switch">
               <button
                 type="button"
@@ -3848,7 +3860,9 @@ function NewProjectModal({
                   placeholder="לדוגמה: וילה משפחת ישראלי"
                 />
               </label>
-              <label>
+              <label>תחום הפרויקט<select value={form.projectCategory} onChange={(event)=>setForm({...form,projectCategory:event.target.value})}><option value="smart_home">בית חכם</option><option value="other">אחר</option></select></label>
+              {form.projectCategory==='other'&&<><label>סוג פרויקט חופשי<input required value={form.projectCategoryCustom} onChange={(event)=>setForm({...form,projectCategoryCustom:event.target.value})} placeholder="לדוגמה: מרכז הדרכה"/></label><div className="wide project-profile-fields"><label>שם תהליך עבודה<input value={form.projectProfile.workflowLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,workflowLabel:event.target.value}})}/></label><label>שם אזור המערכות<input value={form.projectProfile.systemsLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,systemsLabel:event.target.value}})}/></label><label>שם אזורי העבודה<input value={form.projectProfile.areasLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,areasLabel:event.target.value}})}/></label></div></>}
+              {form.projectCategory==='smart_home'&&<label>
                 סיווג הפרויקט
                 <select
                   value={form.projectClassification}
@@ -3860,7 +3874,7 @@ function NewProjectModal({
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
-              </label>
+              </label>}
               <div className="client-mode-switch">
                 <button
                   type="button"

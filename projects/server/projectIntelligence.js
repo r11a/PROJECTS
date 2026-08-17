@@ -22,7 +22,7 @@ export function calculateHealth(row, canViewFinance = true) {
   return {score,tone:score>=80?'green':score>=60?'yellow':'red',reasons:reasons.sort((a,b)=>b.points-a.points)};
 }
 
-  const HEALTH_SQL=`SELECT p.id,p.name,p.stage,p.manager,p.progress,p.contractor_progress,
+  const HEALTH_SQL=`SELECT p.id,p.name,p.stage,p.manager,p.project_category,p.project_category_custom,p.progress,p.contractor_progress,
   COALESCE(task_stats.overdue_tasks,0)::int overdue_tasks,COALESCE(task_stats.critical_open,0)::int critical_open,COALESCE(task_stats.gantt_late,0)::int gantt_late,task_stats.risk_task_id,
   COALESCE(payment_stats.overdue_payments,0)::int overdue_payments,COALESCE(equipment_stats.missing_equipment,0)::int missing_equipment,
   CASE WHEN COALESCE(p.installation_hours_target,0)+COALESCE(p.programming_hours_target,0)>0 THEN

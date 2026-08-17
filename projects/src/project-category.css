@@ -1,0 +1,6 @@
+.project-category-filter{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line,#e0e3ea);border-radius:12px;background:var(--surface,#fff)}
+.project-category-filter button{min-height:32px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--muted,#72798b);font-weight:750;white-space:nowrap}
+.project-category-filter button.active{color:#fff;background:#6957df;box-shadow:0 5px 13px #6957df28}
+.gantt-category-filter{width:max-content;margin:0 0 12px auto}
+.project-profile-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:12px;border:1px solid var(--line,#e2e4eb);border-radius:12px;background:var(--soft,#f8f8fb)}
+@media(max-width:620px){.project-category-filter{width:100%;overflow-x:auto}.project-category-filter button{flex:1}.project-profile-fields{grid-template-columns:1fr}.gantt-category-filter{margin-inline:0}}

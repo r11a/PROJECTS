@@ -285,7 +285,8 @@ export function ProjectWorkspace({
       nextMilestone: f.get("nextMilestone"),
       priority: f.get("priority"),
       flag: f.get("flag"),
-      projectClassification: f.get("projectClassification"),
+      projectClassification: f.get("projectClassification")||project.projectClassification,
+      projectCategory:f.get("projectCategory"),projectCategoryCustom:f.get("projectCategory")==='other'?f.get("projectCategoryCustom"):(project.projectCategoryCustom||""),projectProfile:f.get("projectCategory")==='other'?{workflowLabel:f.get("workflowLabel")||"",systemsLabel:f.get("systemsLabel")||"",areasLabel:f.get("areasLabel")||""}:(project.projectProfile||{}),
       projectIcon:f.get("projectIcon"),projectColor:f.get("projectColor"),installationLeadId:f.get("installationLeadId")||null,
       installationHoursTarget: Number(f.get("installationHoursTarget") || 0),
       programmingHoursTarget: Number(f.get("programmingHoursTarget") || 0),
@@ -1198,6 +1199,7 @@ function ProjectEditModal({
   onClose,
   canViewFinance,
 }) {
+  const [projectCategory,setProjectCategory]=useState(project.projectCategory||'smart_home');
   return (
     <Modal title="עריכת פרויקט ולקוח" onClose={onClose}>
       <form className="work-form project-edit-form" onSubmit={onSubmit}>
@@ -1293,14 +1295,16 @@ function ProjectEditModal({
             </label>
           </>
         )}
-        <label>
+        <label>תחום הפרויקט<select name="projectCategory" value={projectCategory} onChange={(event)=>setProjectCategory(event.target.value)}><option value="smart_home">בית חכם</option><option value="other">אחר</option></select></label>
+        {projectCategory==='other'&&<><label>סוג פרויקט חופשי<input name="projectCategoryCustom" required defaultValue={project.projectCategoryCustom||''}/></label><div className="wide project-profile-fields"><label>שם תהליך עבודה<input name="workflowLabel" defaultValue={project.projectProfile?.workflowLabel||''}/></label><label>שם אזור המערכות<input name="systemsLabel" defaultValue={project.projectProfile?.systemsLabel||''}/></label><label>שם אזורי העבודה<input name="areasLabel" defaultValue={project.projectProfile?.areasLabel||''}/></label></div></>}
+        {projectCategory==='smart_home'&&<label>
           סיווג הפרויקט
           <select name="projectClassification" defaultValue={project.projectClassification || "private_house"}>
             {projectClassificationOptions.map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
-        </label>
+        </label>}
         <label>אייקון הפרויקט<select name="projectIcon" defaultValue={project.projectIcon||project.projectClassification||"home"}>{projectIconOptions.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
         <label>צבע מוביל<input type="color" name="projectColor" defaultValue={project.projectColor||"#6957df"}/></label>
         <label>ראש צוות התקנה<select name="installationLeadId" defaultValue={project.installationLeadId||""}><option value="">ללא הקצאה</option>{professionals.filter(item=>item.active!==false).map(item=><option key={item.id} value={item.id}>{item.displayName}</option>)}</select></label>

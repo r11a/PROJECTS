@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Camera, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Download, ExternalLink, FileText, Film, FormInput, Minus, Pencil, Plus, RotateCcw, Save, Search, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
+import { Camera, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Download, ExternalLink, FileText, Film, FolderOpen, FormInput, Mic2, Minus, Pencil, Plus, RotateCcw, Save, Search, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
 import { AppModal, ModalPortal } from './AppModal';
 import { VoiceNotes } from './features/voice-notes/VoiceNotes';
 
@@ -21,11 +21,12 @@ export function FormsWorkspace({ api, apiRoot, user, setNotice }) {
   const [templateEditor, setTemplateEditor] = useState(null);
   const [recordEditor, setRecordEditor] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [voiceCount,setVoiceCount]=useState(0);
   const canManage = ['admin', 'manager'].includes(user.role);
   const canFill = ['admin', 'manager', 'technician'].includes(user.role);
 
   const load = async () => {
-    try { setLoading(true); setData(await api(`/forms?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}`)); }
+    try { setLoading(true); const [formsData,voiceData]=await Promise.all([api(`/forms?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}`),api('/voice-notes?all=1')]);setData(formsData);setVoiceCount((voiceData.notes||[]).length); }
     catch (error) { setNotice(error.message); }
     finally { setLoading(false); }
   };
@@ -59,7 +60,7 @@ export function FormsWorkspace({ api, apiRoot, user, setNotice }) {
   }, [data.templates, query]);
   return <div className="forms-workspace">
     <div className="page-intro forms-intro"><div><h2>מסמכים והקלטות</h2><p>טפסים, קבצים, תמונות והקלטות קוליות הנשמרים במערכת המשותפת</p></div><div>{canFill && <button className="secondary-button" disabled={!activeTemplates.length} onClick={() => setRecordEditor({ template: activeTemplates[0] })}><FormInput size={17} />מילוי טופס</button>}{canManage && <button className="primary-button" onClick={() => setTemplateEditor({})}><Plus size={17} />תבנית חדשה</button>}</div></div>
-    <div className="forms-summary"><Summary icon={ClipboardCheck} label="תבניות פעילות" value={activeTemplates.length} /><Summary icon={FileText} label="טפסים שנשמרו" value={data.records.length} /><Summary icon={CheckCircle2} label="הושלמו ואושרו" value={data.records.filter((record) => record.status !== 'draft').length} /></div>
+    <div className="forms-summary"><Summary tone="purple" icon={ClipboardCheck} label="תבניות פעילות" value={activeTemplates.length} /><Summary tone="blue" icon={FileText} label="טפסים שנשמרו" value={data.records.length} /><Summary tone="green" icon={CheckCircle2} label="הושלמו ואושרו" value={data.records.filter((record) => record.status !== 'draft').length} /><Summary tone="orange" icon={FolderOpen} label="קבצים ומדיה" value={data.files.length} /><Summary tone="rose" icon={Mic2} label="הקלטות קוליות" value={voiceCount} /></div>
     <div className="forms-command panel"><nav><button className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>תבניות</button><button className={tab === 'records' ? 'active' : ''} onClick={() => setTab('records')}>טפסים שמולאו</button><button className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>קבצים ותמונות</button><button className={tab === 'voice' ? 'active' : ''} onClick={() => setTab('voice')}>הקלטות קוליות</button></nav><label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש בטפסים, לקוחות ופרויקטים..." /></label>{tab === 'records' && <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">כל הסטטוסים</option><option value="draft">טיוטה</option><option value="completed">הושלם</option><option value="approved">אושר</option></select>}</div>
     {loading ? <div className="forms-loading panel">טוען נתונים...</div> : tab === 'templates' ? <TemplateGrid templates={visibleTemplates} canManage={canManage} canFill={canFill} onEdit={setTemplateEditor} onFill={(template) => setRecordEditor({ template })} onDelete={removeTemplate} api={api} reload={load} setNotice={setNotice} /> : tab === 'records' ? <RecordList records={data.records} onOpen={(record) => setRecordEditor({ record, template: data.templates.find((item) => item.id === record.templateId) })} /> : tab === 'files' ? <FilesHub files={data.files} clients={data.clients} projects={data.projects} apiRoot={apiRoot} canUpload={canFill} uploading={uploading} onUpload={uploadFile} /> : <section className="panel forms-voice-library"><VoiceNotes api={api} apiRoot={apiRoot} entityType="media_library" entityId={user.id} allNotes setNotice={setNotice} canDelete={user.role==='admin'}/></section>}
     {templateEditor && <ModalPortal><TemplateEditor initial={templateEditor.id ? templateEditor : null} api={api} onClose={() => setTemplateEditor(null)} onSaved={() => { setTemplateEditor(null); load(); }} setNotice={setNotice} user={user} onDelete={removeTemplate} /></ModalPortal>}
@@ -67,7 +68,7 @@ export function FormsWorkspace({ api, apiRoot, user, setNotice }) {
   </div>;
 }
 
-function Summary({ icon: Icon, label, value }) { return <div className="panel"><span><Icon size={20} /></span><div><small>{label}</small><strong>{value}</strong></div></div>; }
+function Summary({ icon: Icon, label, value, tone }) { return <div className={`panel forms-summary-${tone}`}><span><Icon size={20} /></span><div><small>{label}</small><strong>{value}</strong></div></div>; }
 
 function TemplateGrid({ templates, canManage, canFill, onEdit, onFill, onDelete, api, reload, setNotice }) {
   const toggle = async (template) => { try { await api(`/form-templates/${template.id}`, { method: 'PATCH', body: JSON.stringify({ ...template, active: !template.active }) }); setNotice(template.active ? 'התבנית הושבתה' : 'התבנית הופעלה'); reload(); } catch (error) { setNotice(error.message); } };

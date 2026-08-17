@@ -100,7 +100,7 @@ const projectColumns = [
   'owner_initials', 'value', 'paid', 'due', 'priority', 'flag', 'systems', 'next_milestone',
   'installation_hours_target', 'programming_hours_target',
   'phone', 'email', 'health', 'tasks_done', 'tasks_total', 'manager_professional_id', 'client_id',
-  'project_size', 'contractor_progress', 'document_folder', 'project_classification',
+  'project_size', 'contractor_progress', 'document_folder', 'project_classification', 'project_category', 'project_category_custom', 'project_profile',
   'project_icon', 'project_color', 'installation_lead_professional_id',
   'finance_mode', 'payment_terms', 'deposit_amount', 'deposit_paid', 'finance_breakdown',
 ];
@@ -115,6 +115,7 @@ const inputToColumn = {
   clientId: 'client_id',
   projectSize: 'project_size', contractorProgress: 'contractor_progress', documentFolder:'document_folder',
   projectClassification: 'project_classification',
+  projectCategory: 'project_category', projectCategoryCustom: 'project_category_custom', projectProfile: 'project_profile',
   projectIcon: 'project_icon', projectColor: 'project_color', installationLeadId: 'installation_lead_professional_id',
   financeMode: 'finance_mode', paymentTerms: 'payment_terms', depositAmount: 'deposit_amount', depositPaid: 'deposit_paid', financeBreakdown: 'finance_breakdown',
 };
@@ -135,6 +136,7 @@ function projectFromRow(row) {
     archived: Boolean(row.archived_at), archivedAt: row.archived_at, archivedBy: row.archived_by,
     projectSize: row.project_size || 'medium', contractorProgress: row.contractor_progress || 'waiting', documentFolder:row.document_folder || '',
     projectClassification: row.project_classification || 'private_house',
+    projectCategory: row.project_category || 'smart_home', projectCategoryCustom: row.project_category_custom || '', projectProfile: row.project_profile && typeof row.project_profile==='object' ? row.project_profile : {},
     projectIcon: row.project_icon || '', projectColor: row.project_color || '#6957df', installationLeadId: row.installation_lead_professional_id,
     completed: Boolean(row.completed_at), completedAt: row.completed_at, completedBy: row.completed_by,
     financeMode: row.finance_mode || 'total', paymentTerms: row.payment_terms || '', depositAmount:Number(row.deposit_amount||0), depositPaid:Boolean(row.deposit_paid), financeBreakdown:Array.isArray(row.finance_breakdown) ? row.finance_breakdown : [],
@@ -567,13 +569,13 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
     systems: request.body.systems || [], nextMilestone: request.body.nextMilestone || 'אפיון ראשוני', phone: request.body.phone || selectedClient.phone || '',
     email: request.body.email || selectedClient.email || '', health: request.body.health ?? 100, tasksDone: request.body.tasksDone ?? 0, tasksTotal: request.body.tasksTotal ?? 0,
     managerId: request.body.managerId || null, clientId: selectedClient.id, projectSize: request.body.projectSize || 'medium', contractorProgress: request.body.contractorProgress || 'waiting', documentFolder: request.body.documentFolder || '',
-    projectClassification: request.body.projectClassification || 'private_house',
+    projectClassification: request.body.projectClassification || 'private_house', projectCategory:['smart_home','other'].includes(request.body.projectCategory)?request.body.projectCategory:'smart_home', projectCategoryCustom:String(request.body.projectCategoryCustom||'').trim().slice(0,120), projectProfile:request.body.projectCategory==='other'&&request.body.projectProfile&&typeof request.body.projectProfile==='object'?request.body.projectProfile:{},
     projectIcon:request.body.projectIcon||'',projectColor:request.body.projectColor||'#6957df',installationLeadId:request.body.installationLeadId||null,
     financeMode:request.user.financeAccess===false?'total':request.body.financeMode||'total',paymentTerms:request.user.financeAccess===false?'':request.body.paymentTerms||'',depositAmount:request.user.financeAccess===false?0:Math.max(0,Number(request.body.depositAmount)||0),depositPaid:request.user.financeAccess===false?false:Boolean(request.body.depositPaid),financeBreakdown:request.user.financeAccess===false?[]:Array.isArray(request.body.financeBreakdown)?request.body.financeBreakdown:[],
     installationHoursTarget: Math.max(0, Number(request.body.installationHoursTarget) || 0),
     programmingHoursTarget: Math.max(0, Number(request.body.programmingHoursTarget) || 0),
     };
-    const values = Object.keys(inputToColumn).map((key) => ['systems','financeBreakdown'].includes(key) ? JSON.stringify(project[key]) : project[key]);
+    const values = Object.keys(inputToColumn).map((key) => ['systems','financeBreakdown','projectProfile'].includes(key) ? JSON.stringify(project[key]) : project[key]);
     const columns = Object.values(inputToColumn);
     const result = await db.query(
     `INSERT INTO projects(${columns.join(', ')}) VALUES(${values.map((_, index) => `$${index + 1}`).join(', ')}) RETURNING *`,
@@ -613,6 +615,7 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
 });
 
 app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async (request, response) => {
+  if(Object.prototype.hasOwnProperty.call(request.body||{},'projectCategory')&&!['smart_home','other'].includes(request.body.projectCategory))return response.status(400).json({error:'סיווג הפרויקט אינו תקין'});
   const managerFields = Object.keys(inputToColumn).filter((key) => key !== 'id');
   const allowedByRole = {
     admin: managerFields,
@@ -677,7 +680,7 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
     const entries = Object.entries(request.body || {}).filter(([key]) => permittedFields.includes(key));
     if (!entries.length) { await db.query('ROLLBACK'); return response.status(400).json({ error: 'No editable fields supplied' }); }
     const sets = entries.map(([key], index) => `${inputToColumn[key]} = $${index + 1}`);
-    const values = entries.map(([key, value]) => ['systems','financeBreakdown'].includes(key) ? JSON.stringify(value) : value);
+    const values = entries.map(([key, value]) => ['systems','financeBreakdown','projectProfile'].includes(key) ? JSON.stringify(value) : value);
     values.push(request.params.id);
     const result = await db.query(`UPDATE projects SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`, values);
     await db.query('COMMIT');

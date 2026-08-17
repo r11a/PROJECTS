@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.27.0
+
+- Added a generic project domain classification: Smart Home or Other, with a required free-text type for Other projects.
+- Added optional generic workflow, systems and areas labels for Other projects without introducing industry-specific hardcoding or a template engine.
+- Preserved all existing project data when changing the classification and exposed it in project creation and editing.
+- Added All / Smart Home / Other filtering to projects, Portfolio Gantt and Risk Center, plus classification context in the dashboard and reports.
+- Added document and voice-recording summary cards with distinct content-aware icons and colors.
+
 ## 0.26.2
 
 - Renamed the primary sidebar workspace to “מסמכים והקלטות” and added a dedicated voice-recordings view containing recordings from across the system.
