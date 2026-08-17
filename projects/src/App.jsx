@@ -1,4 +1,4 @@
-﻿import { Component, useEffect, useMemo, useRef, useState } from "react";
+import { Component, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -100,25 +100,25 @@ import { RiskCenter } from "./features/risk-center/RiskCenter";
 import "./project-category.css";
 
 const projectClassificationOptions = [
-  ["private_house", "×‘×™×ª ×¤×¨×˜×™"],
-  ["villa", "×•×™×œ×”"],
-  ["cottage", "×§×•×˜×’×³"],
-  ["penthouse", "×¤× ×˜×”××•×–"],
-  ["apartment_building", "×‘× ×™×™×Ÿ ×ž×©×•×ª×£"],
-  ["studio", "×¡×˜×•×“×™×•"],
-  ["duplex", "×“×•×¤×œ×§×¡"],
+  ["private_house", "בית פרטי"],
+  ["villa", "וילה"],
+  ["cottage", "קוטג׳"],
+  ["penthouse", "פנטהאוז"],
+  ["apartment_building", "בניין משותף"],
+  ["studio", "סטודיו"],
+  ["duplex", "דופלקס"],
 ];
 const projectClassificationLabels = Object.fromEntries(projectClassificationOptions);
-const projectCategoryText=(project)=>project.projectCategory==='other'?(project.projectCategoryCustom||'××—×¨'):'×‘×™×ª ×—×›×';
+const projectCategoryText=(project)=>project.projectCategory==='other'?(project.projectCategoryCustom||'אחר'):'בית חכם';
 const contractorProgressLabels = {
-  finishing: "×¢×‘×•×“×•×ª ×’×ž×¨", carpentry: "×”×¨×›×‘×•×ª × ×’×¨×•×ª", waiting: "×‘×”×ž×ª× ×”",
-  infrastructure: "×¡×œ×™×œ×ª ×ª×©×ª×™×•×ª", infrastructure_paving: "×¡×œ×™×œ×ª ×ª×©×ª×™×•×ª", drywall_paint: "×¢×‘×•×“×•×ª ×’×‘×¡ ×•×¦×‘×¢", stopped: "×‘×¢×¦×™×¨×”",
+  finishing: "עבודות גמר", carpentry: "הרכבות נגרות", waiting: "בהמתנה",
+  infrastructure: "סלילת תשתיות", infrastructure_paving: "סלילת תשתיות", drywall_paint: "עבודות גבס וצבע", stopped: "בעצירה",
 };
 
 const PROJECT_NAVIGATION_PROVIDER_KEY = "projects_navigation_provider_v1";
 const NAVIGATION_OPTIONS = [
   { key: "google", label: "Google Maps", icon: "G", color: "#1A73E8" },
-  { key: "apple", label: "Apple Maps", icon: "ï£¿", color: "#111111" },
+  { key: "apple", label: "Apple Maps", icon: "", color: "#111111" },
   { key: "waze", label: "Waze", icon: "W", color: "#33CCFF" },
 ];
 const getNavigationProviderLabel = (key) =>
@@ -212,19 +212,19 @@ const money = new Intl.NumberFormat("he-IL", {
 });
 const compactMoney = (value) =>
   value >= 1000000
-    ? `â‚ª${(value / 1000000).toFixed(2)}M`
-    : `â‚ª${Math.round(value / 1000)}K`;
+    ? `₪${(value / 1000000).toFixed(2)}M`
+    : `₪${Math.round(value / 1000)}K`;
 const actionNamesForDashboard = {
-  create: "×™×¦×¨ ×¨×©×•×ž×”",
-  update: "×¢×“×›×Ÿ ×¨×©×•×ž×”",
-  delete: "×ž×—×§ ×¨×©×•×ž×”",
-  archive: "×”×¢×‘×™×¨ ×œ××¨×›×™×•×Ÿ",
-  restore: "×©×—×–×¨ ×ž×”××¨×›×™×•×Ÿ",
-  upload: "×”×¢×œ×” ×§×•×‘×¥",
-  login: "× ×›× ×¡ ×œ×ž×¢×¨×›×ª",
-  logout: "×™×¦× ×ž×”×ž×¢×¨×›×ª",
-  snooze: "×“×—×” ×”×ª×¨××”",
-  backup: "×™×¦×¨ ×’×™×‘×•×™",
+  create: "יצר רשומה",
+  update: "עדכן רשומה",
+  delete: "מחק רשומה",
+  archive: "העביר לארכיון",
+  restore: "שחזר מהארכיון",
+  upload: "העלה קובץ",
+  login: "נכנס למערכת",
+  logout: "יצא מהמערכת",
+  snooze: "דחה התראה",
+  backup: "יצר גיבוי",
 };
 
 class WorkspaceErrorBoundary extends Component {
@@ -254,10 +254,10 @@ class WorkspaceErrorBoundary extends Component {
     return (
       <section className="workspace-error" dir="rtl">
         <AlertTriangle size={34} />
-        <h2>×”×ž×¡×š × ×ª×§×œ ×‘×ª×§×œ×” × ×§×•×“×ª×™×ª</h2>
-        <p>×©××¨ ×”×ž×¢×¨×›×ª ×ž×ž×©×™×›×” ×œ×¤×¢×•×œ. ××¤×©×¨ ×œ× ×¡×•×ª ×œ×¤×ª×•×— ×ž×—×“×© ××ª ×”×ž×¡×š ×‘×œ×™ ×œ×¨×¢× ×Ÿ ××ª ×›×œ ×”××¤×œ×™×§×¦×™×”.</p>
-        <button type="button" className="primary-button" onClick={() => this.setState({ error: null })}>×¤×ª×™×—×” ×ž×—×“×©</button>
-        <details><summary>×¤×¨×˜×™ ×ª×§×œ×”</summary><code>{String(this.state.error?.message || "Unknown UI error")}</code></details>
+        <h2>המסך נתקל בתקלה נקודתית</h2>
+        <p>שאר המערכת ממשיכה לפעול. אפשר לנסות לפתוח מחדש את המסך בלי לרענן את כל האפליקציה.</p>
+        <button type="button" className="primary-button" onClick={() => this.setState({ error: null })}>פתיחה מחדש</button>
+        <details><summary>פרטי תקלה</summary><code>{String(this.state.error?.message || "Unknown UI error")}</code></details>
       </section>
     );
   }
@@ -289,7 +289,7 @@ export async function api(path, options = {}) {
   }
   if (!response.ok) {
     const error = new Error(
-      body?.error || `×”×‘×§×©×” × ×›×©×œ×” (HTTP ${response.status})`,
+      body?.error || `הבקשה נכשלה (HTTP ${response.status})`,
     );
     error.status = response.status;
     error.body = body;
@@ -306,15 +306,15 @@ export async function api(path, options = {}) {
 }
 
 const nav = [
-  { id: "dashboard", label: "×ª×ž×•× ×ª ×ž×¦×‘", icon: LayoutDashboard },
-  { id: "my-work", label: "×”×¢×‘×•×“×” ×©×œ×™", icon: CheckCircle2 },
-  { id: "calendar", label: "×œ×•×— ×©× ×”", icon: CalendarDays },
-  { id: "projects", label: "×¤×¨×•×™×§×˜×™×", icon: FolderKanban },
-  { id: "clients", label: "×œ×§×•×—×•×ª", icon: Users },
-  { id: "professionals", label: "×× ×©×™ ×ž×§×¦×•×¢", icon: Users },
-  { id: "catalog", label: "×ž×¢×¨×›×•×ª ×•×¨×›×™×‘×™×", icon: Database },
-  { id: "forms", label: "×ž×¡×ž×›×™× ×•×”×§×œ×˜×•×ª", icon: FormInput },
-  { id: "finance", label: "×ª×©×œ×•×ž×™× ×•×’×‘×™×™×”", icon: WalletCards },
+  { id: "dashboard", label: "תמונת מצב", icon: LayoutDashboard },
+  { id: "my-work", label: "העבודה שלי", icon: CheckCircle2 },
+  { id: "calendar", label: "לוח שנה", icon: CalendarDays },
+  { id: "projects", label: "פרויקטים", icon: FolderKanban },
+  { id: "clients", label: "לקוחות", icon: Users },
+  { id: "professionals", label: "אנשי מקצוע", icon: Users },
+  { id: "catalog", label: "מערכות ורכיבים", icon: Database },
+  { id: "forms", label: "מסמכים והקלטות", icon: FormInput },
+  { id: "finance", label: "תשלומים וגבייה", icon: WalletCards },
 ];
 
 function StatusBadge({ stage, compact = false }) {
@@ -356,7 +356,7 @@ function ProjectMarker({ project, onOpen }) {
             />
           </div>
           <button onClick={() => onOpen(project)}>
-            ×¤×ª×— ×¤×¨×•×™×§×˜ <ArrowLeft size={14} />
+            פתח פרויקט <ArrowLeft size={14} />
           </button>
         </div>
       </Popup>
@@ -533,7 +533,7 @@ function App() {
       const result = await api("/auth/avatar", { method: "POST", body });
       setUser(result.user);
       await loadReferenceData();
-      setNotice("×ª×ž×•× ×ª ×”×ž×©×ª×ž×© ×¢×•×“×›× ×” ×‘×¡×¨×’×œ");
+      setNotice("תמונת המשתמש עודכנה בסרגל");
     } catch (error) {
       setNotice(error.message);
     }
@@ -562,7 +562,7 @@ function App() {
       })
       .catch((error) => {
         if (error.status === 401) setUser(null);
-        else setStartupError(error.message || "×©×¨×ª ×”× ×ª×•× ×™× ××™× ×• ×–×ž×™×Ÿ");
+        else setStartupError(error.message || "שרת הנתונים אינו זמין");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -722,12 +722,12 @@ function App() {
     const projectId = params.get("project");
     const taskId = params.get("task") || "";
     if (!projectId) {
-      setNotice("×”×ª×™×•×’ ××™× ×• ×›×•×œ×œ ×§×™×©×•×¨ ×œ×¤×¨×•×™×§×˜ ××• ×œ×ž×©×™×ž×”");
+      setNotice("התיוג אינו כולל קישור לפרויקט או למשימה");
       return;
     }
     const target = projects.find((item) => String(item.id) === String(projectId));
     if (!target) {
-      setNotice("×”×¤×¨×•×™×§×˜ ×©×ž×ž× ×• × ×©×œ×— ×”×ª×™×•×’ ××™× ×• ×–×ž×™×Ÿ ×™×•×ª×¨");
+      setNotice("הפרויקט שממנו נשלח התיוג אינו זמין יותר");
       return;
     }
     setLinkedTaskId(taskId);
@@ -752,10 +752,10 @@ function App() {
       setSelectedProject((current) => (current?.id === id ? project : current));
       if (patch.clientId || patch.newClient || patch.clientName !== undefined)
         await loadReferenceData();
-      setNotice("×”×©×™× ×•×™ × ×©×ž×¨ ×‘×”×¦×œ×—×”");
+      setNotice("השינוי נשמר בהצלחה");
       return project;
     } catch (error) {
-      if (error.code === "COLLECTION_STAGE_WARNING" && window.confirm(`${error.message}\n\n×”×× ×œ×¢×‘×•×¨ ×©×œ×‘ ×‘×›×œ ×–××ª?`)) {
+      if (error.code === "COLLECTION_STAGE_WARNING" && window.confirm(`${error.message}\n\nהאם לעבור שלב בכל זאת?`)) {
         return updateProject(id, { ...patch, overrideCollectionWarning: true });
       }
       setNotice(error.message);
@@ -775,8 +775,8 @@ function App() {
       setPage("projects");
       setNotice(
         archived
-          ? "×”×¤×¨×•×™×§×˜ ×”×•×¢×‘×¨ ×œ××¨×›×™×•×Ÿ"
-          : "×”×¤×¨×•×™×§×˜ ×©×•×—×–×¨ ×œ×¨×©×™×ž×ª ×”×¤×¨×•×™×§×˜×™× ×”×¤×¢×™×œ×™×",
+          ? "הפרויקט הועבר לארכיון"
+          : "הפרויקט שוחזר לרשימת הפרויקטים הפעילים",
       );
       return true;
     } catch (error) {
@@ -807,7 +807,7 @@ function App() {
       await loadReferenceData();
       setProjects((current) => [result.project, ...current]);
       setNewProjectOpen(false);
-      setNotice("×”×¤×¨×•×™×§×˜ ×”×—×“×© × ×•×¦×¨");
+      setNotice("הפרויקט החדש נוצר");
       openProject(result.project);
     } catch (error) {
       setNotice(error.message);
@@ -843,7 +843,7 @@ function App() {
         <strong>
           <b>PRO</b>JECTS
         </strong>
-        <span>×˜×•×¢×Ÿ ×ž×¢×¨×›×ª...</span>
+        <span>טוען מערכת...</span>
       </div>
     );
   if (!user && startupError) return <StartupError message={startupError} />;
@@ -870,9 +870,9 @@ function App() {
           .slice(0, 5)
           .map((project) => ({
             id: `project-${project.id}`,
-            type: "×¤×¨×•×™×§×˜",
+            type: "פרויקט",
             title: project.name,
-            subtitle: `${project.id} Â· ${project.client || project.location || ""}`,
+            subtitle: `${project.id} · ${project.client || project.location || ""}`,
             icon: FolderKanban,
             project,
           })),
@@ -885,9 +885,9 @@ function App() {
           .slice(0, 3)
           .map((client) => ({
             id: `client-${client.id}`,
-            type: "×œ×§×•×—",
+            type: "לקוח",
             title: client.name || `${client.firstName || ""} ${client.lastName || ""}`.trim(),
-            subtitle: client.mobile || client.phone || client.address || "×¤×ª×™×—×ª ×ž××’×¨ ×”×œ×§×•×—×•×ª",
+            subtitle: client.mobile || client.phone || client.address || "פתיחת מאגר הלקוחות",
             icon: Users,
             page: "clients",
           })),
@@ -900,9 +900,9 @@ function App() {
           .slice(0, 3)
           .map((professional) => ({
             id: `professional-${professional.id}`,
-            type: "××™×© ×ž×§×¦×•×¢",
+            type: "איש מקצוע",
             title: professional.name,
-            subtitle: professional.role || professional.company || professional.phone || "×¤×ª×™×—×ª ×ž××’×¨ ×× ×©×™ ×”×ž×§×¦×•×¢",
+            subtitle: professional.role || professional.company || professional.phone || "פתיחת מאגר אנשי המקצוע",
             icon: UserRound,
             page: "professionals",
           })),
@@ -916,19 +916,19 @@ function App() {
   };
 
   const secondaryTitles = {
-    "my-work": "×”×¢×‘×•×“×” ×©×œ×™",
-    control: "×‘×§×¨×ª ×‘×™×¦×•×¢",
-    tasks: "×ž×©×™×ž×•×ª ×•××‘× ×™ ×“×¨×š",
-    reports: "×“×•×—×•×ª ×•× ×™×ª×•×—×™×",
-    users: "×ž×©×ª×ž×©×™× ×•×”×¨×©××•×ª",
-    settings: "×”×’×“×¨×•×ª ×•×ž×¢×¨×›×ª",
+    "my-work": "העבודה שלי",
+    control: "בקרת ביצוע",
+    tasks: "משימות ואבני דרך",
+    reports: "דוחות וניתוחים",
+    users: "משתמשים והרשאות",
+    settings: "הגדרות ומערכת",
   };
   const pageTitle =
     selectedProject && page === "project"
       ? selectedProject.name
       : secondaryTitles[page] ||
         nav.find((item) => item.id === page)?.label ||
-        "×ª×ž×•× ×ª ×ž×¦×‘";
+        "תמונת מצב";
   const todayLabel = new Date().toLocaleDateString("he-IL", {
     weekday: "long",
     day: "numeric",
@@ -952,7 +952,7 @@ function App() {
           className="brand"
           role="button"
           tabIndex="0"
-          aria-label="×¡×’×™×¨×ª ×ª×¤×¨×™×˜ ×”× ×™×•×•×˜"
+          aria-label="סגירת תפריט הניווט"
           onClick={() => setSidebarOpen(false)}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
@@ -982,13 +982,13 @@ function App() {
             )}
           </div>
           <div>
-            <strong>{company.name || "×”×—×‘×¨×” ×©×œ×™"}</strong>
-            <span>×¡×‘×™×‘×ª ×¢×‘×•×“×” ×¨××©×™×ª</span>
+            <strong>{company.name || "החברה שלי"}</strong>
+            <span>סביבת עבודה ראשית</span>
           </div>
           <ChevronDown size={16} />
         </div>
         <nav className="main-nav">
-          <span className="nav-label">×¡×‘×™×‘×ª ×¢×‘×•×“×”</span>
+          <span className="nav-label">סביבת עבודה</span>
             {nav.filter(item=>userCanAccess(user,item.id)).map(({ id, label, icon: Icon }) => {
             const badge =
               id === "projects"
@@ -1016,7 +1016,7 @@ function App() {
               </button>
             );
           })}
-          <span className="nav-label nav-second">× ×™×”×•×œ</span>
+          <span className="nav-label nav-second">ניהול</span>
           {userCanAccess(user,"tasks")&&<button
             className={page === "tasks" ? "active" : ""}
             onClick={() => {
@@ -1025,11 +1025,11 @@ function App() {
             }}
           >
             <ClipboardCheck size={19} />
-            <span>×ž×©×™×ž×•×ª ×•××‘× ×™ ×“×¨×š</span>
+            <span>משימות ואבני דרך</span>
             {insights?.stats?.overdue > 0 && <em>{insights.stats.overdue}</em>}
           </button>}
-          {userCanAccess(user,"gantt")&&<button className={page === "gantt" ? "active" : ""} onClick={()=>{setPage('gantt');setSidebarOpen(false)}}><Activity size={19}/><span>×œ×•×— ×’×× ×˜</span></button>}
-          {userCanAccess(user,"control")&&<button className={page === "control" ? "active" : ""} onClick={()=>{setPage('control');setSidebarOpen(false)}}><Gauge size={19}/><span>×‘×§×¨×ª ×‘×™×¦×•×¢</span></button>}
+          {userCanAccess(user,"gantt")&&<button className={page === "gantt" ? "active" : ""} onClick={()=>{setPage('gantt');setSidebarOpen(false)}}><Activity size={19}/><span>לוח גאנט</span></button>}
+          {userCanAccess(user,"control")&&<button className={page === "control" ? "active" : ""} onClick={()=>{setPage('control');setSidebarOpen(false)}}><Gauge size={19}/><span>בקרת ביצוע</span></button>}
           {userCanAccess(user,"reports")&&<button
             className={page === "reports" ? "active" : ""}
             onClick={() => {
@@ -1038,7 +1038,7 @@ function App() {
             }}
           >
             <Activity size={19} />
-            <span>×“×•×—×•×ª ×•× ×™×ª×•×—×™×</span>
+            <span>דוחות וניתוחים</span>
           </button>}
         </nav>
         <div className="sidebar-footer">
@@ -1051,7 +1051,7 @@ function App() {
           >
             <Settings size={19} />
             <span>
-              {user.role === "admin" ? "×”×’×“×¨×•×ª ×•×ž×¢×¨×›×ª" : "×ž×¨××” ×•×”×¢×“×¤×•×ª"}
+              {user.role === "admin" ? "הגדרות ומערכת" : "מראה והעדפות"}
             </span>
           </button>
           <div className="sidebar-version">
@@ -1062,7 +1062,7 @@ function App() {
             <label
               className={`avatar user-photo-avatar ${user.avatarImage ? "has-photo" : ""}`}
               style={{ background: user.avatarColor, color: "#fff", "--avatar-color": user.avatarColor }}
-              title="×”×¢×œ××” ××• ×”×—×œ×¤×” ×©×œ ×ª×ž×•× ×ª ×”×ž×©×ª×ž×©"
+              title="העלאה או החלפה של תמונת המשתמש"
             >
               {avatarGlyph(user, true)}
               <span />
@@ -1072,7 +1072,7 @@ function App() {
               <strong>{user.displayName}</strong>
               <span>{roleLabels[user.role]}</span>
             </div>
-            <button className="logout-button" onClick={logout} title="×™×¦×™××”">
+            <button className="logout-button" onClick={logout} title="יציאה">
               <LogOut size={17} />
             </button>
           </div>
@@ -1099,7 +1099,7 @@ function App() {
             <div>
               <span>
                 {page === "project"
-                  ? `${selectedProject?.id}  /  ×¤×¨×•×™×§×˜×™×`
+                  ? `${selectedProject?.id}  /  פרויקטים`
                   : todayLabel}
               </span>
               <h1>{pageTitle}</h1>
@@ -1127,9 +1127,9 @@ function App() {
                       openGlobalSearchResult(globalSearchResults[0]);
                     if (event.key === "Escape") setGlobalSearchOpen(false);
                   }}
-                  placeholder="×—×™×¤×•×© ×‘×›×œ ×”×ž×¢×¨×›×ª..."
+                  placeholder="חיפוש בכל המערכת..."
                 />
-                <kbd>âŒ˜ K</kbd>
+                <kbd>⌘ K</kbd>
               </label>
               {globalSearchOpen && globalQuery && (
                 <div className="global-search-results" role="listbox">
@@ -1143,14 +1143,14 @@ function App() {
                       </button>
                     );
                   })}
-                  {!globalSearchResults.length && <p>×œ× × ×ž×¦××• ×ª×•×¦××•×ª ×ž×ª××™×ž×•×ª</p>}
+                  {!globalSearchResults.length && <p>לא נמצאו תוצאות מתאימות</p>}
                 </div>
               )}
             </div>
             <button
               className="icon-button"
               onClick={() => setAlertsOpen(true)}
-              title="×”×ª×¨××•×ª"
+              title="התראות"
             >
               <Bell size={20} />
               {insights?.alerts?.length > 0 && <i />}
@@ -1158,19 +1158,19 @@ function App() {
             <button
               className="icon-button task-shortcut-button"
               onClick={() => { setSelectedProject(null); setPage("tasks"); }}
-              title="×ž×©×™×ž×•×ª ×¤×ª×•×—×•×ª"
-              aria-label={`${openTasksCount} ×ž×©×™×ž×•×ª ×¤×ª×•×—×•×ª`}
+              title="משימות פתוחות"
+              aria-label={`${openTasksCount} משימות פתוחות`}
             >
               <ClipboardCheck size={20} />
               <em>{openTasksCount > 99 ? "99+" : openTasksCount}</em>
             </button>
-            <button className="icon-button ai-chat-button" onClick={() => setAiChatOpen(true)} title="×”×¡×•×›×Ÿ ×”×—×›×">
+            <button className="icon-button ai-chat-button" onClick={() => setAiChatOpen(true)} title="הסוכן החכם">
               <Sparkles size={20} />
             </button>
             <button
               className="icon-button message-button"
               onClick={() => setMessagesOpen(true)}
-              title="×”×•×“×¢×•×ª ×¦×•×•×ª"
+              title="הודעות צוות"
             >
               <MessageSquare size={20} />
               {unreadMessages > 0 && <em>{unreadMessages}</em>}
@@ -1181,7 +1181,7 @@ function App() {
                 onClick={() => setNewProjectOpen(true)}
               >
                 <Plus size={18} />
-                ×¤×¨×•×™×§×˜ ×—×“×©
+                פרויקט חדש
               </button>
             )}
           </div>
@@ -1213,7 +1213,7 @@ function App() {
                   event.sourceId || String(event.id || "").replace(/^[^-]+-/, "") || "",
                 );
                 const isScheduledEvent = ["task", "milestone"].includes(event.type);
-                if (!linkedProject) return setNotice("×”×¤×¨×•×™×§×˜ ×”×ž×§×•×©×¨ ×œ× × ×ž×¦×");
+                if (!linkedProject) return setNotice("הפרויקט המקושר לא נמצא");
                 setLinkedTaskId(isScheduledEvent ? eventId : "");
                 openProject(linkedProject);
                 if (isScheduledEvent && eventId) window.setTimeout(() => window.dispatchEvent(new CustomEvent("projects:open-schedule-item", { detail: { id: eventId, type: event.type } })), 0);
@@ -1389,20 +1389,20 @@ function App() {
 }
 
 const roleLabels = {
-  admin: "×ž× ×”×œ ×ž×¢×¨×›×ª",
-  manager: "×ž× ×”×œ ×¤×¨×•×™×§×˜",
-  supervisor: "×ž×¤×§×—",
-  technician: "×˜×›× ××™",
-  finance: "×›×¡×¤×™×",
-  viewer: "×¦×•×¤×”",
-  custom: "×”×¨×©××” ×ž×•×ª××ž×ª ××™×©×™×ª",
+  admin: "מנהל מערכת",
+  manager: "מנהל פרויקט",
+  supervisor: "מפקח",
+  technician: "טכנאי",
+  finance: "כספים",
+  viewer: "צופה",
+  custom: "הרשאה מותאמת אישית",
 };
 const permissionSections=[
-  ["projects","×¤×¨×•×™×§×˜×™×"],["clients","×œ×§×•×—×•×ª"],["professionals","×× ×©×™ ×ž×§×¦×•×¢"],["tasks","×ž×©×™×ž×•×ª ×•×’×× ×˜"],
-  ["calendar","×œ×•×— ×©× ×”"],["forms","×ž×¡×ž×›×™× ×•×”×§×œ×˜×•×ª"],["catalog","×ž×¢×¨×›×•×ª ×•×¨×›×™×‘×™×"],["finance","×›×¡×¤×™× ×•×’×‘×™×™×”"],
-  ["reports","×“×•×—×•×ª ×•× ×™×ª×•×—×™×"],["messages","×”×•×“×¢×•×ª"],["settings","×”×’×“×¨×•×ª ×ž×¢×¨×›×ª"],
+  ["projects","פרויקטים"],["clients","לקוחות"],["professionals","אנשי מקצוע"],["tasks","משימות וגאנט"],
+  ["calendar","לוח שנה"],["forms","מסמכים והקלטות"],["catalog","מערכות ורכיבים"],["finance","כספים וגבייה"],
+  ["reports","דוחות וניתוחים"],["messages","הודעות"],["settings","הגדרות מערכת"],
 ];
-function PermissionMatrix({value={},onChange}){return <div className="permission-matrix"><header><b>×ž×¡×š / ×ª×—×•×</b><span>×œ×œ×</span><span>×§×¨×™××”</span><span>×§×¨×™××” ×•×›×ª×™×‘×”</span></header>{permissionSections.map(([key,label])=><div key={key}><b>{label}</b>{["none","read","write"].map(level=><label key={level}><input type="radio" name={`permission-${key}`} checked={(value[key]||"none")===level} onChange={()=>onChange({...value,[key]:level})}/><span/></label>)}</div>)}</div>}
+function PermissionMatrix({value={},onChange}){return <div className="permission-matrix"><header><b>מסך / תחום</b><span>ללא</span><span>קריאה</span><span>קריאה וכתיבה</span></header>{permissionSections.map(([key,label])=><div key={key}><b>{label}</b>{["none","read","write"].map(level=><label key={level}><input type="radio" name={`permission-${key}`} checked={(value[key]||"none")===level} onChange={()=>onChange({...value,[key]:level})}/><span/></label>)}</div>)}</div>}
 const pageResources={dashboard:"projects","my-work":"tasks",calendar:"calendar",projects:"projects",clients:"clients",professionals:"professionals",catalog:"catalog",forms:"forms",finance:"finance",tasks:"tasks",gantt:"tasks",control:"projects",reports:"reports",settings:"settings"};
 const uiRoleResources={
   manager:["projects","clients","professionals","tasks","calendar","forms","catalog","finance","reports","messages"],
@@ -1413,26 +1413,26 @@ const uiRoleResources={
 };
 function userCanAccess(user,page){const resource=pageResources[page]||page;if(resource==="finance"&&user.financeAccess===false)return false;if(user.role==="admin")return true;if(user.role==="custom")return ["read","write"].includes(user.permissions?.[resource]);return (uiRoleResources[user.role]||[]).includes(resource);}
 const avatarIcons = {
-  user: "××“×",
-  wrench: "×›×œ×™ ×¢×‘×•×“×”",
-  hardhat: "×§×¡×“×”",
-  lightning: "×—×©×ž×œ",
-  shield: "×ž×’×Ÿ",
-  star: "×›×•×›×‘",
+  user: "אדם",
+  wrench: "כלי עבודה",
+  hardhat: "קסדה",
+  lightning: "חשמל",
+  shield: "מגן",
+  star: "כוכב",
 };
 function avatarGlyph(user, currentUser = false) {
   if (currentUser) {
-    const names = String(user.displayName || "×ž×©×ª×ž×©").trim().split(/\s+/);
-    const initials = `${names[0]?.[0] || "×ž"}${names.length > 1 ? names.at(-1)?.[0] || "" : names[0]?.[1] || ""}`;
+    const names = String(user.displayName || "משתמש").trim().split(/\s+/);
+    const initials = `${names[0]?.[0] || "מ"}${names.length > 1 ? names.at(-1)?.[0] || "" : names[0]?.[1] || ""}`;
     return <><b className="avatar-initials">{initials}</b><img className="current-user-avatar-image" src={`${apiRoot}/auth/avatar?v=${encodeURIComponent(user.avatarImage || user.id || "current")}`} alt="" onLoad={(event)=>event.currentTarget.classList.add("loaded")} onError={(event)=>event.currentTarget.classList.remove("loaded")}/></>;
   }
   if (user.avatarImage) return <img src={`${apiRoot}/users/${user.id}/avatar?v=${encodeURIComponent(user.avatarImage)}`} alt="" />;
   if (!user.avatarIcon || user.avatarIcon === "user") {
-    const names = String(user.displayName || "×ž×©×ª×ž×©").trim().split(/\s+/);
-    return `${names[0]?.[0] || "×ž"}${names.length > 1 ? names.at(-1)?.[0] || "" : names[0]?.[1] || ""}`;
+    const names = String(user.displayName || "משתמש").trim().split(/\s+/);
+    return `${names[0]?.[0] || "מ"}${names.length > 1 ? names.at(-1)?.[0] || "" : names[0]?.[1] || ""}`;
   }
   return (
-    { wrench: "ðŸ”§", hardhat: "â›‘", lightning: "ÏŸ", shield: "â—†", star: "â˜…" }[
+    { wrench: "🔧", hardhat: "⛑", lightning: "ϟ", shield: "◆", star: "★" }[
       user.avatarIcon
     ] || user.displayName.slice(0, 2)
   );
@@ -1467,13 +1467,13 @@ function LoginPage({ onLogin }) {
           <small>Manage Smarter. Deliver Better.</small>
         </div>
         <div className="login-copy">
-          <span>×›× ×™×¡×” ×ž××•×‘×˜×—×ª</span>
-          <h1>×‘×¨×•×›×™× ×”×‘××™×</h1>
-          <p>×”×ª×—×‘×¨×• ×œ×ž×¨×—×‘ × ×™×”×•×œ ×”×¤×¨×•×™×§×˜×™× ×©×œ×›×</p>
+          <span>כניסה מאובטחת</span>
+          <h1>ברוכים הבאים</h1>
+          <p>התחברו למרחב ניהול הפרויקטים שלכם</p>
         </div>
         <form onSubmit={submit}>
           <label>
-            ×©× ×ž×©×ª×ž×©
+            שם משתמש
             <input
               autoFocus
               autoComplete="username"
@@ -1483,7 +1483,7 @@ function LoginPage({ onLogin }) {
             />
           </label>
           <label>
-            ×¡×™×¡×ž×”
+            סיסמה
             <input
               type="password"
               autoComplete="current-password"
@@ -1494,11 +1494,11 @@ function LoginPage({ onLogin }) {
           </label>
           {error && <div className="login-error">{error}</div>}
           <button className="primary-button" disabled={submitting}>
-            {submitting ? "×ž×ª×—×‘×¨..." : "×›× ×™×¡×” ×œ×ž×¢×¨×›×ª"} <ArrowLeft size={17} />
+            {submitting ? "מתחבר..." : "כניסה למערכת"} <ArrowLeft size={17} />
           </button>
         </form>
         <small className="login-hint">
-          ×‘×›× ×™×¡×” ×“×¨×š Home Assistant ×”×–×™×”×•×™ ×ž×ª×‘×¦×¢ ××•×˜×•×ž×˜×™×ª.
+          בכניסה דרך Home Assistant הזיהוי מתבצע אוטומטית.
         </small>
       </div>
     </div>
@@ -1508,8 +1508,8 @@ function LoginPage({ onLogin }) {
 function InitialPasswordPage({onChanged}) {
   const [form,setForm]=useState({currentPassword:'',newPassword:'',confirmPassword:''});
   const [error,setError]=useState(''); const [submitting,setSubmitting]=useState(false);
-  const submit=async(event)=>{event.preventDefault();setError('');if(!passwordsMatch(form.newPassword,form.confirmPassword))return setError('×”×¡×™×¡×ž××•×ª ××™× ×Ÿ ×ª×•××ž×•×ª');setSubmitting(true);try{const result=await api('/auth/password',{method:'POST',body:JSON.stringify(form)});if(typeof onChanged==='function')onChanged(result.user)}catch(changeError){setError(changeError.message)}finally{setSubmitting(false)}};
-  return <div className="login-shell" dir="rtl"><div className="login-card"><div className="login-brand"><div className="brand-mark"><img src={projectsMark} alt=""/></div><strong><b>PRO</b>JECTS</strong></div><div className="login-copy"><span>××‘×˜×—×ª ×”×—×©×‘×•×Ÿ</span><h1>×”×—×œ×¤×ª ×¡×™×¡×ž×” ×¨××©×•× ×™×ª</h1><p>×œ×¤× ×™ ×ª×—×™×œ×ª ×”×¢×‘×•×“×” ×™×© ×œ×‘×—×•×¨ ×¡×™×¡×ž×” ××™×©×™×ª ×•×—×–×§×”.</p></div><form onSubmit={submit}><label>×¡×™×¡×ž×” × ×•×›×—×™×ª<input type="password" autoComplete="current-password" required value={form.currentPassword} onChange={event=>setForm({...form,currentPassword:event.target.value})}/></label><label>×¡×™×¡×ž×” ×—×“×©×”<input type="password" autoComplete="new-password" minLength="12" required value={form.newPassword} onChange={event=>setForm({...form,newPassword:event.target.value})}/></label><label>××™×ž×•×ª ×¡×™×¡×ž×”<input type="password" autoComplete="new-password" minLength="12" required value={form.confirmPassword} onChange={event=>setForm({...form,confirmPassword:event.target.value})}/></label><small>×œ×¤×—×•×ª 12 ×ª×•×•×™×, ××•×ª ×’×“×•×œ×”, ××•×ª ×§×˜× ×” ×•×ž×¡×¤×¨.</small>{error&&<div className="login-error">{error}</div>}<button className="primary-button" disabled={submitting}>{submitting?'×©×•×ž×¨...':'×©×ž×™×¨×ª ×¡×™×¡×ž×”'} <ArrowLeft size={17}/></button></form></div></div>;
+  const submit=async(event)=>{event.preventDefault();setError('');if(!passwordsMatch(form.newPassword,form.confirmPassword))return setError('הסיסמאות אינן תואמות');setSubmitting(true);try{const result=await api('/auth/password',{method:'POST',body:JSON.stringify(form)});if(typeof onChanged==='function')onChanged(result.user)}catch(changeError){setError(changeError.message)}finally{setSubmitting(false)}};
+  return <div className="login-shell" dir="rtl"><div className="login-card"><div className="login-brand"><div className="brand-mark"><img src={projectsMark} alt=""/></div><strong><b>PRO</b>JECTS</strong></div><div className="login-copy"><span>אבטחת החשבון</span><h1>החלפת סיסמה ראשונית</h1><p>לפני תחילת העבודה יש לבחור סיסמה אישית וחזקה.</p></div><form onSubmit={submit}><label>סיסמה נוכחית<input type="password" autoComplete="current-password" required value={form.currentPassword} onChange={event=>setForm({...form,currentPassword:event.target.value})}/></label><label>סיסמה חדשה<input type="password" autoComplete="new-password" minLength="12" required value={form.newPassword} onChange={event=>setForm({...form,newPassword:event.target.value})}/></label><label>אימות סיסמה<input type="password" autoComplete="new-password" minLength="12" required value={form.confirmPassword} onChange={event=>setForm({...form,confirmPassword:event.target.value})}/></label><small>לפחות 12 תווים, אות גדולה, אות קטנה ומספר.</small>{error&&<div className="login-error">{error}</div>}<button className="primary-button" disabled={submitting}>{submitting?'שומר...':'שמירת סיסמה'} <ArrowLeft size={17}/></button></form></div></div>;
 }
 
 function UsersPage({ setNotice, currentUser, onChanged }) {
@@ -1552,7 +1552,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
         financeAccess:true,
         permissions:{},
       });
-      setNotice("×”×ž×©×ª×ž×© × ×•×¦×¨");
+      setNotice("המשתמש נוצר");
       loadUsers();
       if (typeof onChanged === "function") onChanged();
     } catch (error) {
@@ -1567,7 +1567,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       });
       loadUsers();
       if (typeof onChanged === "function") onChanged(result.user);
-      setNotice("×”×”×¨×©××” ×¢×•×“×›× ×”");
+      setNotice("ההרשאה עודכנה");
     } catch (error) {
       setNotice(error.message);
     }
@@ -1580,7 +1580,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       const result = await api(`/users/${id}/avatar`, { method: "POST", body });
       loadUsers();
       if (typeof onChanged === "function") onChanged(result.user);
-      setNotice("×ª×ž×•× ×ª ×”×ž×©×ª×ž×© ×¢×•×“×›× ×”");
+      setNotice("תמונת המשתמש עודכנה");
     } catch (error) {
       setNotice(error.message);
     }
@@ -1590,35 +1590,35 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       await api(`/users/${id}/avatar`, { method: "DELETE" });
       loadUsers();
       if (typeof onChanged === "function") onChanged();
-      setNotice("×ª×ž×•× ×ª ×”×ž×©×ª×ž×© ×”×•×¡×¨×”");
+      setNotice("תמונת המשתמש הוסרה");
     } catch (error) {
       setNotice(error.message);
     }
   };
   const deleteUser = async (item) => {
-    if (!window.confirm(`×œ×ž×—×•×§ ××ª ×”×ž×©×ª×ž×© â€ž${item.displayName}â€?`)) return;
+    if (!window.confirm(`למחוק את המשתמש "${item.displayName}"?`)) return;
     try {
       await api(`/users/${item.id}`, { method: "DELETE" });
       loadUsers();
       if (typeof onChanged === "function") onChanged();
-      setNotice("×”×ž×©×ª×ž×© × ×ž×—×§");
+      setNotice("המשתמש נמחק");
     } catch (error) {
       setNotice(error.message);
     }
   };
   const mergeIdentities = async (event) => {
     event.preventDefault();
-    if (!identityLink.primaryUserId || !identityLink.secondaryUserId || identityLink.primaryUserId === identityLink.secondaryUserId) return setNotice("×™×© ×œ×‘×—×•×¨ ×©×ª×™ ×–×”×•×™×•×ª ×©×•× ×•×ª");
+    if (!identityLink.primaryUserId || !identityLink.secondaryUserId || identityLink.primaryUserId === identityLink.secondaryUserId) return setNotice("יש לבחור שתי זהויות שונות");
     const primary = users.find((item)=>String(item.id)===String(identityLink.primaryUserId));
     const secondary = users.find((item)=>String(item.id)===String(identityLink.secondaryUserId));
-    if (!window.confirm(`×œ××—×“ ××ª â€œ${secondary?.displayName}â€ ××œ ×”×–×”×•×ª ×”×¨××©×™×ª â€œ${primary?.displayName}â€? ×ž×¢×›×©×™×• ×ª×•×¦×’ ×–×”×•×ª ××—×ª ×•× ×™×ª×Ÿ ×™×”×™×” ×œ×”×™×›× ×¡ ××œ×™×” ×’× ×“×¨×š Web ×•×’× ×“×¨×š Home Assistant.`)) return;
+    if (!window.confirm(`לאחד את "${secondary?.displayName}" אל הזהות הראשית "${primary?.displayName}"? מעכשיו תוצג זהות אחת וניתן יהיה להיכנס אליה גם דרך Web וגם דרך Home Assistant.`)) return;
     setLinkingIdentity(true);
     try {
       await api('/users/merge-identities',{ method:'POST',body:JSON.stringify(identityLink) });
       setIdentityLink({ primaryUserId:"",secondaryUserId:"" });
       await loadUsers();
       if (typeof onChanged === "function") onChanged();
-      setNotice("×”×–×”×•×™×•×ª ××•×—×“×• ×‘×”×¦×œ×—×” ×œ×—×©×‘×•×Ÿ ××—×“");
+      setNotice("הזהויות אוחדו בהצלחה לחשבון אחד");
     } catch (error) { setNotice(error.message); } finally { setLinkingIdentity(false); }
   };
   const openPasswordReset = (itemId) => setPasswordActions((state)=>({
@@ -1666,7 +1666,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       }));
       loadUsers();
       if (typeof onChanged === "function") onChanged(result.user);
-      setNotice("×¡×™×¡×ž×ª ×ž×©×ª×ž×© ×¢×•×“×›× ×” ×‘×”×¦×œ×—×”");
+      setNotice("סיסמת משתמש עודכנה בהצלחה");
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -1674,13 +1674,13 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
     }
   };
   const unlockUser = async (item) => {
-    if (!window.confirm(`×œ×©×—×¨×¨ × ×¢×™×œ×” ×©×œ \"${item.displayName}\"?`)) return;
+    if (!window.confirm(`לשחרר נעילה של \"${item.displayName}\"?`)) return;
     setSavingAction(`unlock:${item.id}`);
     try {
       const result = await api(`/users/${item.id}/unlock`, { method: "POST" });
       loadUsers();
       if (typeof onChanged === "function") onChanged(result.user);
-      setNotice("× ×¢×™×œ×ª ×”×ž×©×ª×ž×© ×©×•×—×¨×¨×”");
+      setNotice("נעילת המשתמש שוחררה");
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -1691,29 +1691,29 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
     <div className="section-page users-page">
       <div className="page-intro">
         <div>
-          <h2>×ž×©×ª×ž×©×™× ×•×”×¨×©××•×ª ×›× ×™×¡×”</h2>
+          <h2>משתמשים והרשאות כניסה</h2>
           <p>
-            ×›××Ÿ ×ž× ×”×œ×™× ×’×™×©×” ×œ×ª×•×›× ×” ×‘×œ×‘×“. ×ª×¤×§×™×“ ×ž×§×¦×•×¢×™ ×•×©×™×•×š ×œ×¤×¨×•×™×§×˜ ×ž× ×•×”×œ×™×
-            ×‘×ž××’×¨ ×× ×©×™ ×”×ž×§×¦×•×¢.
+            כאן מנהלים גישה לתוכנה בלבד. תפקיד מקצועי ושיוך לפרויקט מנוהלים
+            במאגר אנשי המקצוע.
           </p>
         </div>
         <span className="security-pill">
           <ShieldCheck size={17} />
-          {users.length} ×ž×©×ª×ž×©×™×
+          {users.length} משתמשים
         </span>
       </div>
-      <nav className="users-tabs" aria-label="× ×™×”×•×œ ×ž×©×ª×ž×©×™×">
-        <button type="button" className={activeTab === "accounts" ? "active" : ""} onClick={() => setActiveTab("accounts")}>×ž×©×ª×ž×©×™×</button>
-        <button type="button" className={activeTab === "create" ? "active" : ""} onClick={() => setActiveTab("create")}><Plus size={16} /> ×™×¦×™×¨×ª ×ž×©×ª×ž×©</button>
-        <button type="button" className={activeTab === "identities" ? "active" : ""} onClick={() => setActiveTab("identities")}>××™×—×•×“ ×–×”×•×™×•×ª</button>
+      <nav className="users-tabs" aria-label="ניהול משתמשים">
+        <button type="button" className={activeTab === "accounts" ? "active" : ""} onClick={() => setActiveTab("accounts")}>משתמשים</button>
+        <button type="button" className={activeTab === "create" ? "active" : ""} onClick={() => setActiveTab("create")}><Plus size={16} /> יצירת משתמש</button>
+        <button type="button" className={activeTab === "identities" ? "active" : ""} onClick={() => setActiveTab("identities")}>איחוד זהויות</button>
       </nav>
       {activeTab === "accounts" && <div className="users-layout">
         <div className="panel users-list">
           <div className="panel-head">
             <div>
-              <h3>×—×©×‘×•× ×•×ª ×ž×¢×¨×›×ª</h3>
+              <h3>חשבונות מערכת</h3>
               <span>
-                ××¤×©×¨ ×œ×¢×¨×•×š, ×œ×”×©×‘×™×ª ××• ×œ×ž×—×•×§; ×œ× × ×™×ª×Ÿ ×œ×ž×—×•×§ ××ª ×”×ž×©×ª×ž×© ×”×ž×—×•×‘×¨.
+                אפשר לערוך, להשבית או למחוק; לא ניתן למחוק את המשתמש המחובר.
               </span>
             </div>
           </div>
@@ -1729,27 +1729,27 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                 <div className="admin-user-details">
                   <strong>{item.displayName}</strong>
                   <span>
-                    {item.identityTypes?.includes('web') ? `Web: ${item.username}` : "×œ×œ× ×›× ×™×¡×ª Web"}{" "}
-                    {item.identityTypes?.includes('ingress') && "Â· Home Assistant Ingress"}
+                    {item.identityTypes?.includes('web') ? `Web: ${item.username}` : "ללא כניסת Web"}{" "}
+                    {item.identityTypes?.includes('ingress') && "· Home Assistant Ingress"}
                   </span>
-                  <small className={item.online ? "user-online" : "user-offline"}>{item.online ? "×ž×—×•×‘×¨ ×›×¢×ª" : item.lastSeenAt ? `× ×¨××” ×œ××—×¨×•× ×” ${new Date(item.lastSeenAt).toLocaleString("he-IL")}` : "×˜×¨× ×”×ª×—×‘×¨"}</small>
-                  <small className="user-last-login">×”×ª×—×‘×¨×•×ª ××—×¨×•× ×”: {item.lastLoginAt ? new Date(item.lastLoginAt).toLocaleString("he-IL") : "×˜×¨× ×”×ª×—×‘×¨"}</small>
+                  <small className={item.online ? "user-online" : "user-offline"}>{item.online ? "מחובר כעת" : item.lastSeenAt ? `נראה לאחרונה ${new Date(item.lastSeenAt).toLocaleString("he-IL")}` : "טרם התחבר"}</small>
+                  <small className="user-last-login">התחברות אחרונה: {item.lastLoginAt ? new Date(item.lastLoginAt).toLocaleString("he-IL") : "טרם התחבר"}</small>
                 </div>
                 <div className="admin-user-glance">
                   <span className="admin-role-badge">{roleLabels[item.role]}</span>
                   <span className={item.financeAccess !== false ? "admin-finance-badge allowed" : "admin-finance-badge blocked"}>
-                    {item.financeAccess !== false ? "×›×¡×¤×™× ×’×œ×•×™×™×" : "×›×¡×¤×™× ×ž×•×¡×ª×¨×™×"}
+                    {item.financeAccess !== false ? "כספים גלויים" : "כספים מוסתרים"}
                   </span>
-                  {item.isLocked ? <span className="admin-lock-badge">× × ×¢×œ</span> : null}
-                  <label className="admin-switch" title={item.active ? "×”×—×©×‘×•×Ÿ ×¤×¢×™×œ" : "×”×—×©×‘×•×Ÿ ×ž×•×©×‘×ª"}>
+                  {item.isLocked ? <span className="admin-lock-badge">ננעל</span> : null}
+                  <label className="admin-switch" title={item.active ? "החשבון פעיל" : "החשבון מושבת"}>
                     <input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} />
                     <span aria-hidden="true" />
-                    <b>{item.active ? "×¤×¢×™×œ" : "×ž×•×©×‘×ª"}</b>
+                    <b>{item.active ? "פעיל" : "מושבת"}</b>
                   </label>
                 </div>
               </div>
               <details className="admin-user-settings">
-                <summary><span>×¢×¨×™×›×ª ×ž×©×ª×ž×© ×•×”×¨×©××•×ª</span><ChevronDown size={16} /></summary>
+                <summary><span>עריכת משתמש והרשאות</span><ChevronDown size={16} /></summary>
                 <div className="admin-user-controls">
                   <div className="admin-password-action">
                     <button
@@ -1758,7 +1758,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                       onClick={() => openPasswordReset(item.id)}
                     >
                       <KeyRound size={15} />
-                      <span>××™×¤×•×¡ ×¡×™×¡×ž×”</span>
+                      <span>איפוס סיסמה</span>
                     </button>
                     {item.isLocked ? (
                       <button
@@ -1768,47 +1768,47 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                         disabled={savingAction === `unlock:${item.id}`}
                       >
                         <Unlock size={15} />
-                        <span>{savingAction === `unlock:${item.id}` ? "×¤×•×¢×œ..." : "×©×—×¨×•×¨ × ×¢×™×œ×”"}</span>
+                        <span>{savingAction === `unlock:${item.id}` ? "פועל..." : "שחרור נעילה"}</span>
                       </button>
                     ) : null}
                   </div>
                   <label className="user-control-field admin-icon-field">
-                    <span>×ª×¤×§×™×“ ×•×”×¨×©××”</span>
+                    <span>תפקיד והרשאה</span>
                     <select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>
                       {Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </label>
-                  <label className="admin-checkbox-option" title="×©×œ×™×˜×” × ×¤×¨×“×ª ×‘×—×©×™×¤×ª × ×ª×•× ×™× ×›×¡×¤×™×™×">
+                  <label className="admin-checkbox-option" title="שליטה נפרדת בחשיפת נתונים כספיים">
                     <input type="checkbox" checked={item.financeAccess !== false} onChange={(event) => updateUser(item.id, { financeAccess: event.target.checked })} />
-                    <span><b>×’×™×©×” ×œ× ×ª×•× ×™× ×›×¡×¤×™×™×</b><small>{item.financeAccess !== false ? "×ž×•×¦×’×™× ×œ×ž×©×ª×ž×©" : "×ž×•×¡×ª×¨×™× ×ž×”×ž×©×ª×ž×©"}</small></span>
+                    <span><b>גישה לנתונים כספיים</b><small>{item.financeAccess !== false ? "מוצגים למשתמש" : "מוסתרים מהמשתמש"}</small></span>
                   </label>
                   <label className="user-control-field user-color-field">
-                    <span>×¦×‘×¢ ×ž×©×ª×ž×©</span>
-                    <input aria-label="×¦×‘×¢ ×ž×©×ª×ž×©" type="color" value={item.avatarColor} onChange={(e) => updateUser(item.id, { avatarColor: e.target.value })} />
+                    <span>צבע משתמש</span>
+                    <input aria-label="צבע משתמש" type="color" value={item.avatarColor} onChange={(e) => updateUser(item.id, { avatarColor: e.target.value })} />
                   </label>
                   <label className="user-control-field">
-                    <span>××™×™×§×•×Ÿ</span>
-                    <select aria-label="××™×™×§×•×Ÿ ×ž×©×ª×ž×©" value={item.avatarIcon} onChange={(e) => updateUser(item.id, { avatarIcon: e.target.value })}>
+                    <span>אייקון</span>
+                    <select aria-label="אייקון משתמש" value={item.avatarIcon} onChange={(e) => updateUser(item.id, { avatarIcon: e.target.value })}>
                       {Object.entries(avatarIcons).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </label>
-                  <label className="admin-photo-upload" title="×”×¢×œ××ª ×ª×ž×•× ×ª ×ž×©×ª×ž×©">
-                    <Upload size={15} /><span>{item.avatarImage ? "×”×—×œ×¤×ª ×ª×ž×•× ×”" : "×”×¢×œ××ª ×ª×ž×•× ×”"}</span>
+                  <label className="admin-photo-upload" title="העלאת תמונת משתמש">
+                    <Upload size={15} /><span>{item.avatarImage ? "החלפת תמונה" : "העלאת תמונה"}</span>
                     <input type="file" accept="image/*" onChange={(event) => { uploadAvatar(item.id, event.target.files?.[0]); event.target.value = ""; }} />
                   </label>
-                  {item.avatarImage && <button type="button" className="admin-secondary-action" onClick={() => removeAvatar(item.id)}>×”×¡×¨×ª ×ª×ž×•× ×”</button>}
-                  <button type="button" className="admin-delete-action" disabled={String(item.id) === String(currentUser.id)} onClick={() => deleteUser(item)} title="×ž×—×™×§×ª ×ž×©×ª×ž×©"><Trash2 size={15} /><span>×ž×—×™×§×”</span></button>
+                  {item.avatarImage && <button type="button" className="admin-secondary-action" onClick={() => removeAvatar(item.id)}>הסרת תמונה</button>}
+                  <button type="button" className="admin-delete-action" disabled={String(item.id) === String(currentUser.id)} onClick={() => deleteUser(item)} title="מחיקת משתמש"><Trash2 size={15} /><span>מחיקה</span></button>
                   {passwordActions[item.id]?.open ? (
                     <div className="admin-password-editor">
-                      <h5>××™×¤×•×¡ ×¡×™×¡×ž×” ×œ×ž×©×ª×ž×©</h5>
+                      <h5>איפוס סיסמה למשתמש</h5>
                       <label className="user-control-field admin-icon-field">
-                        <span>×¡×™×¡×ž×” ×—×“×©×”</span>
+                        <span>סיסמה חדשה</span>
                         <input
                           type="password"
                           dir="ltr"
                           value={passwordActions[item.id]?.newPassword || ""}
                           onChange={(event) => updatePasswordAction(item.id, { newPassword: event.target.value })}
-                          placeholder="×”×©××¨ ×¨×™×§ ×œ×™×¦×™×¨×ª ×¡×™×¡×ž×” ××§×¨××™×ª"
+                          placeholder="השאר ריק ליצירת סיסמה אקראית"
                         />
                       </label>
                       <div className="admin-password-inline">
@@ -1818,14 +1818,14 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                             checked={passwordActions[item.id]?.requirePasswordChange !== false}
                             onChange={(event) => updatePasswordAction(item.id, { requirePasswordChange: event.target.checked })}
                           />
-                          <span>×“×¨×•×© ×©×™× ×•×™ ×¡×™×¡×ž×” ×‘×›× ×™×¡×” ×”×‘××”</span>
+                          <span>דרוש שינוי סיסמה בכניסה הבאה</span>
                         </label>
                         <button
                           type="button"
                           className="admin-secondary-action"
                           onClick={() => updatePasswordAction(item.id, { newPassword: randomPassword() })}
                         >
-                          ×™×¦×™×¨×ª ×¡×™×¡×ž×”
+                          יצירת סיסמה
                         </button>
                       </div>
                       <div className="admin-password-actions">
@@ -1835,25 +1835,25 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                           onClick={() => resetUserPassword(item.id)}
                           disabled={savingAction === `reset:${item.id}`}
                         >
-                          {savingAction === `reset:${item.id}` ? "×©×•×ž×¨..." : "×©×ž×™×¨×ª ×¡×™×¡×ž×”"}
+                          {savingAction === `reset:${item.id}` ? "שומר..." : "שמירת סיסמה"}
                         </button>
                         <button
                           type="button"
                           className="admin-secondary-action"
                           onClick={() => closePasswordReset(item.id)}
                         >
-                          ×‘×™×˜×•×œ
+                          ביטול
                         </button>
                       </div>
                       {passwordActions[item.id]?.generatedPassword ? (
                         <p className="admin-generated-password">
-                          ×¡×™×¡×ž×” ×–×ž× ×™×ª: <strong>{passwordActions[item.id]?.generatedPassword}</strong> (×©×ž×•×¨ ×‘×ž×§×•× ×‘×˜×•×—)
+                          סיסמה זמנית: <strong>{passwordActions[item.id]?.generatedPassword}</strong> (שמור במקום בטוח)
                         </p>
                       ) : null}
                     </div>
                   ) : null}
                 </div>
-                {item.role === "custom" && <details className="user-permissions"><summary>×”×¨×©××•×ª ×ž×¤×•×¨×˜×•×ª</summary><PermissionMatrix value={item.permissions} onChange={(permissions) => updateUser(item.id, { permissions })} /></details>}
+                {item.role === "custom" && <details className="user-permissions"><summary>הרשאות מפורטות</summary><PermissionMatrix value={item.permissions} onChange={(permissions) => updateUser(item.id, { permissions })} /></details>}
               </details>
             </article>
           ))}
@@ -1863,12 +1863,12 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
         <form className="panel create-user" onSubmit={createUser}>
           <div className="panel-head">
             <div>
-              <h3>×—×©×‘×•×Ÿ ×›× ×™×¡×” ×—×“×©</h3>
-              <span>×œ××—×¨ ×”×™×¦×™×¨×” ××¤×©×¨ ×œ×§×©×¨ ××•×ª×• ×œ××“× ×‘×ž××’×¨ ×× ×©×™ ×”×ž×§×¦×•×¢</span>
+              <h3>חשבון כניסה חדש</h3>
+              <span>לאחר היצירה אפשר לקשר אותו לאדם במאגר אנשי המקצוע</span>
             </div>
           </div>
           <label>
-            ×©× ×ª×¦×•×’×”
+            שם תצוגה
             <input
               required
               value={form.displayName}
@@ -1878,7 +1878,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
             />
           </label>
           <label>
-            ×©× ×ž×©×ª×ž×©
+            שם משתמש
             <input
               required
               value={form.username}
@@ -1886,7 +1886,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
             />
           </label>
           <label>
-            ×¡×™×¡×ž×”
+            סיסמה
             <input
               type="password"
               minLength="12"
@@ -1896,7 +1896,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
             />
           </label>
           <label>
-            ×”×¨×©××ª ×ž×¢×¨×›×ª
+            הרשאת מערכת
             <select
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}
@@ -1908,11 +1908,11 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
               ))}
             </select>
           </label>
-          <label className="finance-access-toggle"><input type="checkbox" checked={form.financeAccess} onChange={(event)=>setForm({...form,financeAccess:event.target.checked})}/>××¤×©×¨ ×¦×¤×™×™×” ×‘×›×¡×¤×™×</label>
+          <label className="finance-access-toggle"><input type="checkbox" checked={form.financeAccess} onChange={(event)=>setForm({...form,financeAccess:event.target.checked})}/>אפשר צפייה בכספים</label>
           {form.role==="custom"&&<PermissionMatrix value={form.permissions} onChange={(permissions)=>setForm({...form,permissions})}/>}
           <div className="new-user-appearance">
             <label>
-              ×¦×‘×¢
+              צבע
               <input
                 type="color"
                 value={form.avatarColor}
@@ -1922,7 +1922,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
               />
             </label>
             <label>
-              ××™×™×§×•×Ÿ
+              אייקון
               <select
                 value={form.avatarIcon}
                 onChange={(e) =>
@@ -1939,16 +1939,16 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
           </div>
           <button className="primary-button">
             <Plus size={17} />
-            ×™×¦×™×¨×ª ×—×©×‘×•×Ÿ
+            יצירת חשבון
           </button>
         </form>
       }
       {activeTab === "identities" && users.length > 1 && <form className="panel identity-linker" onSubmit={mergeIdentities}>
-        <div className="identity-linker-copy"><span><Link2 size={19}/></span><div><h3>××™×—×•×“ ×–×”×•×™×•×ª Web ×•Ö¾Home Assistant</h3><p>×‘×—×¨×• ××ª ×”×—×©×‘×•×Ÿ ×©×™×™×©××¨ ×ž×•×¦×’, ×•××ª ×”×—×©×‘×•×Ÿ ×”×›×¤×•×œ ×©×™×•×˜×ž×¢ ×‘×•. ×”×”×¨×©××•×ª, ×”×ž×¨××” ×•×”×©× ×©×œ ×”×–×”×•×ª ×”×¨××©×™×ª × ×©×ž×¨×™×.</p></div></div>
-        <label>×”×–×”×•×ª ×”×¨××©×™×ª ×©×ª×•×¦×’<select value={identityLink.primaryUserId} onChange={(event)=>setIdentityLink({...identityLink,primaryUserId:event.target.value})}><option value="">×‘×—×™×¨×ª ×—×©×‘×•×Ÿ ×¨××©×™</option>{users.map((item)=><option key={item.id} value={item.id}>{item.displayName} Â· {item.identityTypes?.join(' + ')||'×—×©×‘×•×Ÿ'}</option>)}</select></label>
-        <span className="identity-link-arrow">â†</span>
-        <label>×”×–×”×•×ª ×”×›×¤×•×œ×” ×œ××™×—×•×“<select value={identityLink.secondaryUserId} onChange={(event)=>setIdentityLink({...identityLink,secondaryUserId:event.target.value})}><option value="">×‘×—×™×¨×ª ×—×©×‘×•×Ÿ ×›×¤×•×œ</option>{users.filter((item)=>String(item.id)!==String(identityLink.primaryUserId)&&String(item.id)!==String(currentUser.id)).map((item)=><option key={item.id} value={item.id}>{item.displayName} Â· {item.identityTypes?.join(' + ')||'×—×©×‘×•×Ÿ'}</option>)}</select></label>
-        <button className="primary-button" disabled={linkingIdentity||!identityLink.primaryUserId||!identityLink.secondaryUserId}>{linkingIdentity?'×ž××—×“ ×–×”×•×™×•×ª...':'××™×—×•×“ ×œ×—×©×‘×•×Ÿ ××—×“'}</button>
+        <div className="identity-linker-copy"><span><Link2 size={19}/></span><div><h3>איחוד זהויות Web ו־Home Assistant</h3><p>בחרו את החשבון שיישאר מוצג, ואת החשבון הכפול שיוטמע בו. ההרשאות, המראה והשם של הזהות הראשית נשמרים.</p></div></div>
+        <label>הזהות הראשית שתוצג<select value={identityLink.primaryUserId} onChange={(event)=>setIdentityLink({...identityLink,primaryUserId:event.target.value})}><option value="">בחירת חשבון ראשי</option>{users.map((item)=><option key={item.id} value={item.id}>{item.displayName} · {item.identityTypes?.join(' + ')||'חשבון'}</option>)}</select></label>
+        <span className="identity-link-arrow">←</span>
+        <label>הזהות הכפולה לאיחוד<select value={identityLink.secondaryUserId} onChange={(event)=>setIdentityLink({...identityLink,secondaryUserId:event.target.value})}><option value="">בחירת חשבון כפול</option>{users.filter((item)=>String(item.id)!==String(identityLink.primaryUserId)&&String(item.id)!==String(currentUser.id)).map((item)=><option key={item.id} value={item.id}>{item.displayName} · {item.identityTypes?.join(' + ')||'חשבון'}</option>)}</select></label>
+        <button className="primary-button" disabled={linkingIdentity||!identityLink.primaryUserId||!identityLink.secondaryUserId}>{linkingIdentity?'מאחד זהויות...':'איחוד לחשבון אחד'}</button>
       </form>}
     </div>
   );
@@ -1963,20 +1963,20 @@ function StartupError({ message }) {
       <span>
         <AlertTriangle size={25} />
       </span>
-      <h1>×œ× × ×™×ª×Ÿ ×œ×˜×¢×•×Ÿ ××ª ×©×¨×ª ×”× ×ª×•× ×™×</h1>
-      <p>××™×Ÿ ×¦×•×¨×š ×‘×©× ×ž×©×ª×ž×© ××• ×‘×¡×™×¡×ž×” ×›××©×¨ × ×›× ×¡×™× ×“×¨×š Home Assistant.</p>
+      <h1>לא ניתן לטעון את שרת הנתונים</h1>
+      <p>אין צורך בשם משתמש או בסיסמה כאשר נכנסים דרך Home Assistant.</p>
       <code>
-        {message} Â· API: {apiRoot}
+        {message} · API: {apiRoot}
       </code>
       <button
         className="primary-button"
         onClick={() => window.location.reload()}
       >
         <RotateCcw size={17} />
-        × ×™×¡×™×•×Ÿ ×—×•×–×¨
+        ניסיון חוזר
       </button>
       <small>
-        ×× ×”×ª×§×œ×” ×—×•×–×¨×ª, ×”×¢×ª×™×§×• ××ª ×™×•×ž×Ÿ ×”Ö¾App ×ž×ž×¡×š PROJECTS ×‘Ö¾Home Assistant.
+        אם התקלה חוזרת, העתיקו את יומן ה־App ממסך PROJECTS ב־Home Assistant.
       </small>
     </div>
   );
@@ -1994,7 +1994,7 @@ function SystemPage({ setNotice }) {
     setBusy(true);
     try {
       await api("/system/backups", { method: "POST" });
-      setNotice("×”×’×™×‘×•×™ ×”×•×©×œ×");
+      setNotice("הגיבוי הושלם");
       loadBackups();
     } catch (error) {
       setNotice(error.message);
@@ -2005,7 +2005,7 @@ function SystemPage({ setNotice }) {
   const restore = async (name) => {
     if (
       !window.confirm(
-        `×œ×©×—×–×¨ ××ª ${name}? ×”×ž×¢×¨×›×ª ×ª×•×¤×¢×œ ×ž×—×“×© ×•×›×œ ×”× ×ª×•× ×™× ×”× ×•×›×—×™×™× ×™×•×—×œ×¤×•.`,
+        `לשחזר את ${name}? המערכת תופעל מחדש וכל הנתונים הנוכחיים יוחלפו.`,
       )
     )
       return;
@@ -2015,7 +2015,7 @@ function SystemPage({ setNotice }) {
         method: "POST",
         body: JSON.stringify({ name }),
       });
-      setNotice("×”×©×—×–×•×¨ ×”×—×œ; ×”×ž×¢×¨×›×ª ×ª×¢×œ×” ×ž×—×“×© ×‘×¢×•×“ ×¨×’×¢");
+      setNotice("השחזור החל; המערכת תעלה מחדש בעוד רגע");
     } catch (error) {
       setNotice(error.message);
       setBusy(false);
@@ -2025,9 +2025,9 @@ function SystemPage({ setNotice }) {
     <div className="section-page system-page">
       <div className="page-intro">
         <div>
-          <h2>×’×™×‘×•×™, ×©×—×–×•×¨ ×•×‘×¨×™××•×ª ×ž×¢×¨×›×ª</h2>
+          <h2>גיבוי, שחזור ובריאות מערכת</h2>
           <p>
-            ×’×™×‘×•×™×™ PostgreSQL × ×©×ž×¨×™× ×‘×ª×•×š × ×ª×•× ×™ ×”Ö¾Add-on ×•× ×›×œ×œ×™× ×’× ×‘×’×™×‘×•×™ Home
+            גיבויי PostgreSQL נשמרים בתוך נתוני ה־Add-on ונכללים גם בגיבוי Home
             Assistant
           </p>
         </div>
@@ -2037,22 +2037,22 @@ function SystemPage({ setNotice }) {
           onClick={createBackup}
         >
           <Database size={17} />
-          {busy ? "×ž×‘×¦×¢..." : "×™×¦×™×¨×ª ×’×™×‘×•×™"}
+          {busy ? "מבצע..." : "יצירת גיבוי"}
         </button>
       </div>
       <div className="panel backup-list">
         <div className="panel-head">
           <div>
-            <h3>×’×™×‘×•×™×™× ×–×ž×™× ×™×</h3>
-            <span>×©×—×–×•×¨ ×ž×¤×¢×™×œ ×ž×—×“×© ××ª ×©×™×¨×•×ª ×”Ö¾API ×‘××•×¤×Ÿ ×ž×‘×•×§×¨</span>
+            <h3>גיבויים זמינים</h3>
+            <span>שחזור מפעיל מחדש את שירות ה־API באופן מבוקר</span>
           </div>
           <span className="health-online">
             <i />
-            PostgreSQL ×ž×—×•×‘×¨
+            PostgreSQL מחובר
           </span>
         </div>
         {backups.length === 0 && (
-          <div className="empty-backups">×¢×“×™×™×Ÿ ×œ× × ×•×¦×¨×• ×’×™×‘×•×™×™× ×™×“× ×™×™×.</div>
+          <div className="empty-backups">עדיין לא נוצרו גיבויים ידניים.</div>
         )}
         {backups.map((backup) => (
           <div className="backup-row" key={backup.name}>
@@ -2062,7 +2062,7 @@ function SystemPage({ setNotice }) {
             <div>
               <strong>{backup.name}</strong>
               <span>
-                {new Date(backup.createdAt).toLocaleString("he-IL")} Â·{" "}
+                {new Date(backup.createdAt).toLocaleString("he-IL")} ·{" "}
                 {(backup.size / 1024 / 1024).toFixed(1)} MB
               </span>
             </div>
@@ -2072,7 +2072,7 @@ function SystemPage({ setNotice }) {
               onClick={() => restore(backup.name)}
             >
               <RotateCcw size={15} />
-              ×©×—×–×•×¨
+              שחזור
             </button>
           </div>
         ))}
@@ -2113,9 +2113,9 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
       <section className="welcome-row">
         <div>
           <h2>
-            ×©×œ×•×, {user.displayName} <span>ðŸ‘‹</span>
+            שלום, {user.displayName} <span>👋</span>
           </h2>
-          <p>×”× ×” ×ª×ž×•× ×ª ×”×ž×¦×‘ ×”×ª×¤×¢×•×œ×™×ª ×”×ž×¢×•×“×›× ×ª.</p>
+          <p>הנה תמונת המצב התפעולית המעודכנת.</p>
         </div>
         <div className="welcome-actions">
           <button
@@ -2123,12 +2123,12 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
             onClick={() => setPage("tasks")}
           >
             <ClipboardCheck size={18} />
-            <span>×ž×©×™×ž×•×ª</span>
+            <span>משימות</span>
             <b>{insights?.stats?.open || 0}</b>
           </button>
           <div className="live-pill">
             <i />
-            ×”× ×ª×•× ×™× ×ž×¢×•×“×›× ×™× ×¢×›×©×™×•
+            הנתונים מעודכנים עכשיו
           </div>
         </div>
       </section>
@@ -2136,33 +2136,33 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
         <KpiCard
           icon={FolderKanban}
           tone="purple"
-          label="×¤×¨×•×™×§×˜×™× ×¤×¢×™×œ×™×"
+          label="פרויקטים פעילים"
           value={active.length}
-          change={`${smartHomeCount} ×‘×™×ª ×—×›× Â· ${otherCount} ××—×¨×™×`}
+          change={`${smartHomeCount} בית חכם · ${otherCount} אחרים`}
           onClick={() => setPage("projects")}
         />
         {canViewFinance && <KpiCard
           icon={TrendingUp}
           tone="blue"
-          label="×”×™×§×£ ×¤×¨×•×™×§×˜×™× ×¤×¢×™×œ×™×"
+          label="היקף פרויקטים פעילים"
           value={compactMoney(value)}
-          change="×œ×¤×™ ×©×•×•×™ ×”×—×•×–×™× ×”×ž×¢×•×“×›×Ÿ"
+          change="לפי שווי החוזים המעודכן"
           onClick={() => setPage("projects")}
         />}
         <KpiCard
           icon={Gauge}
           tone="green"
-          label="×”×ª×§×“×ž×•×ª ×ž×ž×•×¦×¢×ª"
+          label="התקדמות ממוצעת"
           value={`${avg}%`}
-          change={`×ž×ž×•×¦×¢ ×©×œ ${active.length} ×¤×¨×•×™×§×˜×™× ×¤×¢×™×œ×™×`}
+          change={`ממוצע של ${active.length} פרויקטים פעילים`}
           onClick={() => setPage("projects")}
         />
         {canViewFinance && <KpiCard
           icon={CircleDollarSign}
           tone="orange"
-          label="×™×ª×¨×” ×¤×ª×•×—×” ×œ×’×‘×™×™×”"
+          label="יתרה פתוחה לגבייה"
           value={compactMoney(unpaid)}
-          change={`${active.filter((p) => Number(p.paid) < Number(p.value)).length} ×¤×¨×•×™×§×˜×™× ×¢× ×™×ª×¨×”`}
+          change={`${active.filter((p) => Number(p.paid) < Number(p.value)).length} פרויקטים עם יתרה`}
           alert
           onClick={() => setPage("finance")}
         />}
@@ -2172,9 +2172,9 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
       <section className="dashboard-grid top">
         <div className="panel portfolio-panel">
           <PanelHead
-            title="×¤×¨×•×™×§×˜×™× ×©×“×•×¨×©×™× ×ª×©×•×ž×ª ×œ×‘"
-            subtitle={canViewFinance ? "×œ×¤×™ ×¡×™×›×•×Ÿ, ×—×¨×™×’×” ×•×ª×©×œ×•×ž×™×" : "×œ×¤×™ ×¡×™×›×•×Ÿ ×•×—×¨×™×’×” ×ª×¤×¢×•×œ×™×ª"}
-            action="×œ×›×œ ×”×¤×¨×•×™×§×˜×™×"
+            title="פרויקטים שדורשים תשומת לב"
+            subtitle={canViewFinance ? "לפי סיכון, חריגה ותשלומים" : "לפי סיכון וחריגה תפעולית"}
+            action="לכל הפרויקטים"
             onAction={() => setPage("projects")}
           />
           <div className="attention-list">
@@ -2196,7 +2196,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
                     <div>
                       <strong>{project.name}</strong>
                       <span>
-                        {project.id} Â· {project.location}
+                        {project.id} · {project.location}
                       </span>
                     </div>
                     <span className="flag-label">
@@ -2221,13 +2221,13 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
               ))}
             {!projects.some((p) => p.flag) && (
               <div className="inline-empty">
-                ××™×Ÿ ×›×¨×’×¢ ×¤×¨×•×™×§×˜×™× ×ž×¡×•×ž× ×™× ×œ×˜×™×¤×•×œ.
+                אין כרגע פרויקטים מסומנים לטיפול.
               </div>
             )}
           </div>
         </div>
         <div className="panel stage-panel">
-          <PanelHead title="×”×ª×¤×œ×’×•×ª ×œ×¤×™ ×©×œ×‘" subtitle="×›×œ×œ ×”×¤×¨×•×™×§×˜×™×" />
+          <PanelHead title="התפלגות לפי שלב" subtitle="כלל הפרויקטים" />
           <div className="stage-chart-wrap">
             <ResponsiveContainer width="54%" height={210}>
               <PieChart>
@@ -2248,7 +2248,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
             </ResponsiveContainer>
             <div className="donut-center">
               <strong>{projects.length}</strong>
-              <span>×¤×¨×•×™×§×˜×™×</span>
+              <span>פרויקטים</span>
             </div>
             <div className="chart-legend">
               {stageData.map((item) => (
@@ -2265,19 +2265,19 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
       <section className="dashboard-grid bottom">
         {canViewFinance && <div className="panel cash-panel">
           <PanelHead
-            title="×’×‘×™×™×” ×œ×¤×™ ×¤×¨×•×™×§×˜"
-            subtitle="×—×•×–×” ×ž×•×œ ×ª×©×œ×•×ž×™× ×©×”×ª×§×‘×œ×• Â· ×‘××œ×¤×™ â‚ª"
-            action={`${cashData.length} ×¤×¨×•×™×§×˜×™×`}
+            title="גבייה לפי פרויקט"
+            subtitle="חוזה מול תשלומים שהתקבלו · באלפי ₪"
+            action={`${cashData.length} פרויקטים`}
             onAction={() => setPage("finance")}
           />
-          <div className="cash-legend" aria-label="×ž×§×¨× ×’×¨×£ ×”×’×‘×™×™×”">
+          <div className="cash-legend" aria-label="מקרא גרף הגבייה">
             <span>
               <i className="paid" />
-              ×”×ª×§×‘×œ
+              התקבל
             </span>
             <span>
               <i className="expected" />
-              ×¦×¤×™
+              צפי
             </span>
           </div>
           <ResponsiveContainer width="100%" height={235}>
@@ -2301,10 +2301,10 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
               <Tooltip
                 cursor={{ fill: "#f7f8fb" }}
                 formatter={(chartValue, name) => [
-                  `${chartValue} ××œ×¤×™ â‚ª`,
-                  name === "paid" ? "×”×ª×§×‘×œ" : "×”×™×§×£ ×—×•×–×”",
+                  `${chartValue} אלפי ₪`,
+                  name === "paid" ? "התקבל" : "היקף חוזה",
                 ]}
-                labelFormatter={(label) => `×¤×¨×•×™×§×˜ ${label}`}
+                labelFormatter={(label) => `פרויקט ${label}`}
                 contentStyle={{ direction: "rtl", textAlign: "right" }}
               />
               <Bar dataKey="expected" fill="#e8ebf3" radius={[5, 5, 0, 0]} />
@@ -2314,9 +2314,9 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
         </div>}
         <div className="panel milestones-panel">
           <PanelHead
-            title="××‘× ×™ ×“×¨×š ×§×¨×•×‘×•×ª"
-            subtitle="×”×™×¢×“×™× ×”×‘××™× ×‘×¤×¨×•×™×§×˜×™× ×”×¤×¢×™×œ×™×"
-            action="×œ×œ×•×— ×”×©× ×”"
+            title="אבני דרך קרובות"
+            subtitle="היעדים הבאים בפרויקטים הפעילים"
+            action="ללוח השנה"
             onAction={() => setPage("calendar")}
           />
           <div className="milestone-list">
@@ -2327,16 +2327,16 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
                   <div
                     className={`date-tile ${item.health < 70 ? "risk" : index === 0 ? "today" : "soon"}`}
                   >
-                    <b>{dueParts[0] || "â€”"}</b>
+                    <b>{dueParts[0] || "—"}</b>
                     <span>{dueParts[1] || ""}</span>
                   </div>
                   <div>
                     <strong>
-                      {item.nextMilestone || "×˜×¨× ×”×•×’×“×¨×” ××‘×Ÿ ×“×¨×š"}
+                      {item.nextMilestone || "טרם הוגדרה אבן דרך"}
                     </strong>
                     <span>{item.name}</span>
                   </div>
-                  {item.health < 70 && <em>×‘×¡×™×›×•×Ÿ</em>}
+                  {item.health < 70 && <em>בסיכון</em>}
                   <MoreHorizontal size={18} />
                 </div>
               );
@@ -2345,7 +2345,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
         </div>
         <div className="panel activity-panel">
           <PanelHead
-            title="×¤×¢×™×œ×•×ª ××—×¨×•× ×”"
+            title="פעילות אחרונה"
             action="Audit Log"
             onAction={() =>
               setPage(user.role === "admin" ? "settings" : "tasks")
@@ -2355,11 +2355,11 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
             {(insights?.recentActivities || []).map((item) => (
               <div className="activity-item" key={item.id}>
                 <div className="mini-avatar">
-                  {(item.userName || "×ž×¢×¨×›×ª").slice(0, 2)}
+                  {(item.userName || "מערכת").slice(0, 2)}
                 </div>
                 <div>
                   <p>
-                    {item.userName || "×ž×¢×¨×›×ª"} Â·{" "}
+                    {item.userName || "מערכת"} ·{" "}
                     {actionNamesForDashboard[item.action] || item.action}
                   </p>
                   <strong>
@@ -2372,7 +2372,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
               </div>
             ))}
             {!(insights?.recentActivities || []).length && (
-              <div className="inline-empty">××™×Ÿ ×¤×¢×™×œ×•×ª ×—×“×©×” ×œ×”×¦×’×”.</div>
+              <div className="inline-empty">אין פעילות חדשה להצגה.</div>
             )}
           </div>
         </div>
@@ -2461,7 +2461,7 @@ function ProjectsPage({
     }
   };
   const beginPermanentDelete = (project) => {
-    if (!window.confirm(`×–×”×• ××™×©×•×¨ ×¨××©×•×Ÿ ×œ×ž×—×™×§×” ×œ×¦×ž×™×ª×•×ª ×©×œ "${project.name}". ×œ×”×ž×©×™×š?`)) return;
+    if (!window.confirm(`זהו אישור ראשון למחיקה לצמיתות של "${project.name}". להמשיך?`)) return;
     setDeleteForm({ confirmation: "", password: "" });
     setDeleteTarget(project);
   };
@@ -2476,7 +2476,7 @@ function ProjectsPage({
       });
       setArchivedProjects((items) => items.filter((item) => item.id !== deleteTarget.id));
       setDeleteTarget(null);
-      setNotice("×”×¤×¨×•×™×§×˜ ×•×›×œ ×”× ×ª×•× ×™× ×”×ž×©×•×™×›×™× ××œ×™×• × ×ž×—×§×• ×œ×¦×ž×™×ª×•×ª");
+      setNotice("הפרויקט וכל הנתונים המשויכים אליו נמחקו לצמיתות");
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -2515,11 +2515,11 @@ function ProjectsPage({
     <div className="section-page">
       <div className="page-intro">
         <div>
-          <h2>{projectScope==="archived" ? "××¨×›×™×•×Ÿ ×¤×¨×•×™×§×˜×™×" : projectScope==="completed" ? "×¤×¨×•×™×§×˜×™× ×©×”×¡×ª×™×™×ž×•" : "×›×œ ×”×¤×¨×•×™×§×˜×™×"}</h2>
+          <h2>{projectScope==="archived" ? "ארכיון פרויקטים" : projectScope==="completed" ? "פרויקטים שהסתיימו" : "כל הפרויקטים"}</h2>
           <p>
             {showArchived
-              ? "×¤×¨×•×™×§×˜×™× ×©×”×¡×ª×™×™×ž×• × ×©×ž×¨×™× ×›××Ÿ ×•× ×™×ª× ×™× ×œ×©×—×–×•×¨ ×ž×œ×"
-              : `× ×™×”×•×œ, ×ž×¢×§×‘ ×•×‘×§×¨×” ×©×œ ${visibleProjects.length} ×¤×¨×•×™×§×˜×™× ×‘×ª×¦×•×’×” ×”× ×•×›×—×™×ª`}
+              ? "פרויקטים שהסתיימו נשמרים כאן וניתנים לשחזור מלא"
+              : `ניהול, מעקב ובקרה של ${visibleProjects.length} פרויקטים בתצוגה הנוכחית`}
           </p>
         </div>
         <div className="project-page-actions">
@@ -2528,15 +2528,15 @@ function ProjectsPage({
               className={projectScope==="active" ? "active" : ""}
               onClick={() => switchArchive("active")}
             >
-              ×¤×¢×™×œ×™×
+              פעילים
             </button>
-            <button className={projectScope==="completed"?"active":""} onClick={()=>switchArchive("completed")}><CheckCircle2 size={16}/>×”×¡×ª×™×™×ž×•</button>
+            <button className={projectScope==="completed"?"active":""} onClick={()=>switchArchive("completed")}><CheckCircle2 size={16}/>הסתיימו</button>
             <button
               className={projectScope==="archived" ? "active" : ""}
               onClick={() => switchArchive("archived")}
             >
               <Archive size={16} />
-              ××¨×›×™×•×Ÿ
+              ארכיון
             </button>
           </div>
           <div className="view-switch">
@@ -2545,30 +2545,30 @@ function ProjectsPage({
               onClick={() => setView("table")}
             >
               <ListFilter size={17} />
-              ×˜×‘×œ×”
+              טבלה
             </button>
             <button
               className={view === "board" ? "active" : ""}
               onClick={() => setView("board")}
             >
               <FolderKanban size={17} />
-              ×œ×•×—
+              לוח
             </button>
             <button className={view === "map" ? "active" : ""} onClick={() => setView("map")}>
               <Map size={17} />
-              ×ž×¤×”
+              מפה
             </button>
           </div>
         </div>
       </div>
       <div className="toolbar panel projects-filter-toolbar">
-        <div className="project-category-filter"><button className={category==='all'?'active':''} onClick={()=>setCategory('all')}>×”×›×œ</button><button className={category==='smart_home'?'active':''} onClick={()=>setCategory('smart_home')}>×‘×™×ª ×—×›×</button><button className={category==='other'?'active':''} onClick={()=>setCategory('other')}>××—×¨×™×</button></div>
+        <div className="project-category-filter"><button className={category==='all'?'active':''} onClick={()=>setCategory('all')}>הכל</button><button className={category==='smart_home'?'active':''} onClick={()=>setCategory('smart_home')}>בית חכם</button><button className={category==='other'?'active':''} onClick={()=>setCategory('other')}>אחרים</button></div>
         <label className="table-search">
           <Search size={18} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="×—×™×¤×•×© ×¤×¨×•×™×§×˜, ×œ×§×•×— ××• ×ž×–×”×”..."
+            placeholder="חיפוש פרויקט, לקוח או מזהה..."
           />
         </label>
         <label
@@ -2582,16 +2582,16 @@ function ProjectsPage({
         >
           <span>
             <i />
-            ×©×œ×‘
+            שלב
           </span>
           <select
             value={stageFilter}
             onChange={(event) => setStageFilter(event.target.value)}
           >
-            <option value="all">×›×œ ×”×©×œ×‘×™× Â· {sourceProjects.length}</option>
+            <option value="all">כל השלבים · {sourceProjects.length}</option>
             {Object.entries(stageMeta).map(([key, meta]) => (
               <option key={key} value={key}>
-                {meta.label} Â·{" "}
+                {meta.label} ·{" "}
                 {
                   sourceProjects.filter((project) => project.stage === key)
                     .length
@@ -2606,34 +2606,34 @@ function ProjectsPage({
           onClick={() => setFiltersOpen(!filtersOpen)}
         >
           <SlidersHorizontal size={17} />
-          ×ž×¡× × ×™×
+          מסננים
         </button>
       </div>
       {filtersOpen && (
         <div className="advanced-project-filters panel">
           <label>
-            ×ž× ×”×œ ×¤×¨×•×™×§×˜
+            מנהל פרויקט
             <select
               value={manager}
               onChange={(e) => setManager(e.target.value)}
             >
-              <option value="">×›×•×œ×</option>
+              <option value="">כולם</option>
               {managers.map((x) => (
                 <option key={x}>{x}</option>
               ))}
             </select>
           </label>
           <label>
-            ×¢×“×™×¤×•×ª
+            עדיפות
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
             >
-              <option value="">×”×›×•×œ</option>
-              <option value="low">× ×ž×•×›×”</option>
-              <option value="normal">×¨×’×™×œ×”</option>
-              <option value="high">×’×‘×•×”×”</option>
-              <option value="urgent">×“×—×•×¤×”</option>
+              <option value="">הכול</option>
+              <option value="low">נמוכה</option>
+              <option value="normal">רגילה</option>
+              <option value="high">גבוהה</option>
+              <option value="urgent">דחופה</option>
             </select>
           </label>
           <label className="filter-checkbox">
@@ -2642,7 +2642,7 @@ function ProjectsPage({
               checked={flagged}
               onChange={(e) => setFlagged(e.target.checked)}
             />
-            ×¤×¨×•×™×§×˜×™× ×ž×¡×•×ž× ×™× ×‘×œ×‘×“
+            פרויקטים מסומנים בלבד
           </label>
           <button
             onClick={() => {
@@ -2652,12 +2652,12 @@ function ProjectsPage({
               setFlagged(false);
             }}
           >
-            × ×™×§×•×™ ×ž×¡× × ×™×
+            ניקוי מסננים
           </button>
         </div>
       )}
       {archiveLoading ? (
-        <div className="panel inline-empty">×˜×•×¢×Ÿ ××¨×›×™×•×Ÿ...</div>
+        <div className="panel inline-empty">טוען ארכיון...</div>
       ) : view === "map" ? (
         <MapPage projects={visibleProjects} openProject={openProject} stageFilter={stageFilter} setStageFilter={setStageFilter}/>
       ) : view === "table" ? (
@@ -2665,13 +2665,13 @@ function ProjectsPage({
           <table className="projects-table">
             <thead>
               <tr>
-                <th><button className={projectSort.key==="name"?"active":""} onClick={()=>toggleProjectSort("name")}>×¤×¨×•×™×§×˜<ArrowUpDown size={13}/></button></th>
-                <th><button className={projectSort.key==="stage"?"active":""} onClick={()=>toggleProjectSort("stage")}>×©×œ×‘ × ×•×›×—×™<ArrowUpDown size={13}/></button></th>
-                <th>×”×ª×§×“×ž×•×ª ×§×‘×œ×Ÿ</th>
-                <th><button className={projectSort.key==="progress"?"active":""} onClick={()=>toggleProjectSort("progress")}>×”×ª×§×“×ž×•×ª<ArrowUpDown size={13}/></button></th>
-                <th><button className={projectSort.key==="manager"?"active":""} onClick={()=>toggleProjectSort("manager")}>×ž× ×”×œ ×¤×¨×•×™×§×˜<ArrowUpDown size={13}/></button></th>
-                <th><button className={projectSort.key==="milestone"?"active":""} onClick={()=>toggleProjectSort("milestone")}>××‘×Ÿ ×“×¨×š ×”×‘××”<ArrowUpDown size={13}/></button></th>
-                {canViewFinance&&<th><button className={projectSort.key==="balance"?"active":""} onClick={()=>toggleProjectSort("balance")}>×™×ª×¨×” ×œ×’×‘×™×™×”<ArrowUpDown size={13}/></button></th>}
+                <th><button className={projectSort.key==="name"?"active":""} onClick={()=>toggleProjectSort("name")}>פרויקט<ArrowUpDown size={13}/></button></th>
+                <th><button className={projectSort.key==="stage"?"active":""} onClick={()=>toggleProjectSort("stage")}>שלב נוכחי<ArrowUpDown size={13}/></button></th>
+                <th>התקדמות קבלן</th>
+                <th><button className={projectSort.key==="progress"?"active":""} onClick={()=>toggleProjectSort("progress")}>התקדמות<ArrowUpDown size={13}/></button></th>
+                <th><button className={projectSort.key==="manager"?"active":""} onClick={()=>toggleProjectSort("manager")}>מנהל פרויקט<ArrowUpDown size={13}/></button></th>
+                <th><button className={projectSort.key==="milestone"?"active":""} onClick={()=>toggleProjectSort("milestone")}>אבן דרך הבאה<ArrowUpDown size={13}/></button></th>
+                {canViewFinance&&<th><button className={projectSort.key==="balance"?"active":""} onClick={()=>toggleProjectSort("balance")}>יתרה לגבייה<ArrowUpDown size={13}/></button></th>}
                 <th />
               </tr>
             </thead>
@@ -2686,11 +2686,11 @@ function ProjectsPage({
                       <div>
                         <strong>{project.name}</strong>
                         <span>
-                          {project.location} Â· {projectCategoryText(project)} Â· {projectClassificationLabels[project.projectClassification] || "×‘×™×ª ×¤×¨×˜×™"}
+                          {project.location} · {projectCategoryText(project)} · {projectClassificationLabels[project.projectClassification] || "בית פרטי"}
                         </span>
                         {showArchived && (
                           <small className="archived-date">
-                            ×‘××¨×›×™×•×Ÿ ×žÖ¾
+                            בארכיון מ־
                             {new Date(project.archivedAt).toLocaleDateString(
                               "he-IL",
                             )}
@@ -2703,7 +2703,7 @@ function ProjectsPage({
                   <td>
                     <StatusBadge stage={project.stage} />
                   </td>
-                  <td><span className={`contractor-progress-chip contractor-${project.contractorProgress || "waiting"}`}>{contractorProgressLabels[project.contractorProgress] || "×‘×”×ž×ª× ×”"}</span></td>
+                  <td><span className={`contractor-progress-chip contractor-${project.contractorProgress || "waiting"}`}>{contractorProgressLabels[project.contractorProgress] || "בהמתנה"}</span></td>
                   <td>
                     <div className="table-progress">
                       <div>
@@ -2720,15 +2720,15 @@ function ProjectsPage({
                   <td>
                     <div className="manager-cell">
                       <span>{project.ownerInitials}</span>
-                      {project.manager || "×œ× ×”×•×§×¦×”"}
+                      {project.manager || "לא הוקצה"}
                     </div>
                   </td>
                   <td>
                     <div className="milestone-cell">
-                      <strong>{project.nextMilestone || "×œ× ×”×•×’×“×¨"}</strong>
+                      <strong>{project.nextMilestone || "לא הוגדר"}</strong>
                       <span>
                         <CalendarDays size={13} />
-                        {project.due || "×œ×œ× ×ª××¨×™×š"}
+                        {project.due || "ללא תאריך"}
                       </span>
                     </div>
                   </td>
@@ -2739,8 +2739,8 @@ function ProjectsPage({
                   </td>}
                   <td>
                     <div className="archive-row-actions">
-                      {showArchived && user.role === "admin" && <button className="archive-delete" onClick={(event) => { event.stopPropagation(); beginPermanentDelete(project); }} title="×ž×—×™×§×” ×œ×¦×ž×™×ª×•×ª"><Trash2 size={17} /></button>}
-                      <button className="round-more" onClick={(e) => { e.stopPropagation(); openProject(project); }} title="×¤×ª×™×—×ª ×¤×¨×•×™×§×˜"><MoreHorizontal size={18} /></button>
+                      {showArchived && user.role === "admin" && <button className="archive-delete" onClick={(event) => { event.stopPropagation(); beginPermanentDelete(project); }} title="מחיקה לצמיתות"><Trash2 size={17} /></button>}
+                      <button className="round-more" onClick={(e) => { e.stopPropagation(); openProject(project); }} title="פתיחת פרויקט"><MoreHorizontal size={18} /></button>
                     </div>
                   </td>
                 </tr>
@@ -2750,8 +2750,8 @@ function ProjectsPage({
           {!visibleProjects.length && (
             <div className="inline-empty">
               {showArchived
-                ? "×”××¨×›×™×•×Ÿ ×¨×™×§."
-                : "×œ× × ×ž×¦××• ×¤×¨×•×™×§×˜×™× ×”×ª×•××ž×™× ×œ×ž×¡× × ×™×."}
+                ? "הארכיון ריק."
+                : "לא נמצאו פרויקטים התואמים למסננים."}
             </div>
           )}
         </div>
@@ -2763,16 +2763,16 @@ function ProjectsPage({
         <div className="ops-modal-backdrop" onMouseDown={() => !deleting && setDeleteTarget(null)}>
           <div className="ops-modal compact permanent-delete-modal" onMouseDown={(event) => event.stopPropagation()}>
             <div className="ops-modal-title">
-              <div><span>××™×©×•×¨ ×©× ×™ Â· Administrator ×‘×œ×‘×“</span><h2>×ž×—×™×§×” ×œ×¦×ž×™×ª×•×ª</h2><p>×œ× × ×™×ª×Ÿ ×œ×©×—×–×¨ ×¤×¢×•×œ×” ×–×• ×ž×’×™×‘×•×™ ×©×˜×¨× × ×•×¦×¨.</p></div>
+              <div><span>אישור שני · Administrator בלבד</span><h2>מחיקה לצמיתות</h2><p>לא ניתן לשחזר פעולה זו מגיבוי שטרם נוצר.</p></div>
               <button onClick={() => setDeleteTarget(null)} disabled={deleting}><X size={18} /></button>
             </div>
             <form onSubmit={permanentDelete}>
-              <div className="permanent-delete-warning"><AlertTriangle size={22} /><div><strong>{deleteTarget.name}</strong><p>×”×¤×¨×•×™×§×˜, ×”×ž×©×™×ž×•×ª, ×”×ª×©×œ×•×ž×™×, ×”×ž×¡×ž×›×™×, ×”×˜×¤×¡×™× ×•×”×™×¡×˜×•×¨×™×™×ª ×œ×•×— ×”×©× ×” ×©×œ×• ×™×™×ž×—×§×•.</p></div></div>
+              <div className="permanent-delete-warning"><AlertTriangle size={22} /><div><strong>{deleteTarget.name}</strong><p>הפרויקט, המשימות, התשלומים, המסמכים, הטפסים והיסטוריית לוח השנה שלו יימחקו.</p></div></div>
               <div className="ops-form-grid">
-                <label className="wide">×”×§×œ×™×“×• ××ª ×”×ž×¡×¤×¨ ×”×¡×™×“×•×¨×™: <b>{deleteTarget.serialCode}</b><input className="permanent-delete-code" autoFocus required value={deleteForm.confirmation} onChange={(event) => setDeleteForm({ ...deleteForm, confirmation: event.target.value })} placeholder={deleteTarget.serialCode} /></label>
-                <label className="wide">×¡×™×¡×ž×ª Administrator ×©×œ PROJECTS<input type="password" required autoComplete="current-password" value={deleteForm.password} onChange={(event) => setDeleteForm({ ...deleteForm, password: event.target.value })} /></label>
+                <label className="wide">הקלידו את המספר הסידורי: <b>{deleteTarget.serialCode}</b><input className="permanent-delete-code" autoFocus required value={deleteForm.confirmation} onChange={(event) => setDeleteForm({ ...deleteForm, confirmation: event.target.value })} placeholder={deleteTarget.serialCode} /></label>
+                <label className="wide">סיסמת Administrator של PROJECTS<input type="password" required autoComplete="current-password" value={deleteForm.password} onChange={(event) => setDeleteForm({ ...deleteForm, password: event.target.value })} /></label>
               </div>
-              <div className="ops-modal-actions"><button type="button" className="ops-secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>×‘×™×˜×•×œ</button><button className="danger permanent-delete-confirm" disabled={deleting || deleteForm.confirmation.trim().toUpperCase() !== deleteTarget.serialCode.toUpperCase() || !deleteForm.password}>{deleting ? "×ž×•×—×§..." : "×ž×—×™×§×” ×¡×•×¤×™×ª"}</button></div>
+              <div className="ops-modal-actions"><button type="button" className="ops-secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>ביטול</button><button className="danger permanent-delete-confirm" disabled={deleting || deleteForm.confirmation.trim().toUpperCase() !== deleteTarget.serialCode.toUpperCase() || !deleteForm.password}>{deleting ? "מוחק..." : "מחיקה סופית"}</button></div>
             </form>
           </div>
         </div>
@@ -2814,7 +2814,7 @@ function BoardView({ projects, openProject }) {
                     {project.location}
                   </small>
                   <div className="systems-mini">
-                    <em>{projectCategoryText(project)} Â· {projectClassificationLabels[project.projectClassification] || "×‘×™×ª ×¤×¨×˜×™"}</em>
+                    <em>{projectCategoryText(project)} · {projectClassificationLabels[project.projectClassification] || "בית פרטי"}</em>
                     {project.systems.slice(0, 2).map((s) => (
                       <em key={s}>{s}</em>
                     ))}
@@ -2853,12 +2853,12 @@ function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
     <div className="map-page section-page">
       <div className="page-intro">
         <div>
-          <h2>×ž×¤×ª ×¤×¨×•×™×§×˜×™× ×—×™×”</h2>
-          <p>×ª×ž×•× ×ª ×ž×¦×‘ ×’××•×’×¨×¤×™×ª ×©×œ ×”×¤×¨×•×™×§×˜×™× ×”×¤×¢×™×œ×™×</p>
+          <h2>מפת פרויקטים חיה</h2>
+          <p>תמונת מצב גאוגרפית של הפרויקטים הפעילים</p>
         </div>
         <div className="map-stat">
           <MapPin size={18} />
-          <strong>{projects.length}</strong> ×ž×™×§×•×ž×™× ×ž×•×¦×’×™×
+          <strong>{projects.length}</strong> מיקומים מוצגים
         </div>
       </div>
       <div className="map-workspace panel">
@@ -2868,12 +2868,12 @@ function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="×—×™×¤×•×© ×›×ª×•×‘×ª, ×œ×§×•×— ××• ×¤×¨×•×™×§×˜..."
+              placeholder="חיפוש כתובת, לקוח או פרויקט..."
             />
           </label>
           <div className="map-filter-title">
-            <span>{visible.length} ×¤×¨×•×™×§×˜×™×</span>
-            <small>×¡×™× ×•×Ÿ ×œ×¤×™ ×©×œ×‘ ×‘×ž×§×¨×</small>
+            <span>{visible.length} פרויקטים</span>
+            <small>סינון לפי שלב במקרא</small>
           </div>
           <div className="map-project-list">
             {visible.map((p) => (
@@ -2886,7 +2886,7 @@ function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
                 <div>
                   <strong>{p.name}</strong>
                   <span>
-                    {p.location} Â· {p.progress}%
+                    {p.location} · {p.progress}%
                   </span>
                 </div>
                 <ChevronLeft size={17} />
@@ -2894,7 +2894,7 @@ function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
             ))}
           </div>
           <div className="map-legend">
-            <span>×ž×§×¨× ×©×œ×‘×™×</span>
+            <span>מקרא שלבים</span>
             {Object.entries(stageMeta)
               .slice(0, 5)
               .map(([key, meta]) => (
@@ -2940,7 +2940,7 @@ function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
               </p>
               <StatusBadge stage={selected.stage} />
               <div className="floating-progress">
-                <span>×”×ª×§×“×ž×•×ª</span>
+                <span>התקדמות</span>
                 <b>{selected.progress}%</b>
                 <div>
                   <i
@@ -2955,7 +2955,7 @@ function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
                 className="open-project"
                 onClick={() => openProject(selected)}
               >
-                ×¤×ª×— ×ª×™×§ ×¤×¨×•×™×§×˜ <ArrowLeft size={15} />
+                פתח תיק פרויקט <ArrowLeft size={15} />
               </button>
             </div>
           )}
@@ -2970,37 +2970,37 @@ function ClientsPage() {
     <div className="section-page">
       <div className="page-intro">
         <div>
-          <h2>×œ×§×•×—×•×ª ×•×× ×©×™ ×§×©×¨</h2>
-          <p>×ž×¨×›×– ×ž×™×“×¢ ×ž××•×—×“ ×œ×›×œ ×”×œ×§×•×—×•×ª ×•×”×©×•×ª×¤×™× ×‘×¤×¨×•×™×§×˜×™×</p>
+          <h2>לקוחות ואנשי קשר</h2>
+          <p>מרכז מידע מאוחד לכל הלקוחות והשותפים בפרויקטים</p>
         </div>
         <button className="secondary-button">
           <Upload size={17} />
-          ×™×™×‘×•× ×œ×§×•×—×•×ª
+          ייבוא לקוחות
         </button>
       </div>
       <div className="client-stats">
         <div>
           <Users />
           <span>
-            ×¡×”×´×› ×œ×§×•×—×•×ª<strong>48</strong>
+            סה״כ לקוחות<strong>48</strong>
           </span>
         </div>
         <div>
           <Building2 />
           <span>
-            ×œ×§×•×—×•×ª ×¢×¡×§×™×™×<strong>11</strong>
+            לקוחות עסקיים<strong>11</strong>
           </span>
         </div>
         <div>
           <FolderKanban />
           <span>
-            ×¤×¨×•×™×§×˜×™× ×ž×©×•×™×›×™×<strong>64</strong>
+            פרויקטים משויכים<strong>64</strong>
           </span>
         </div>
         <div>
           <TrendingUp />
           <span>
-            ×©×•×•×™ ×œ×§×•×— ×ž×ž×•×¦×¢<strong>â‚ª286K</strong>
+            שווי לקוח ממוצע<strong>₪286K</strong>
           </span>
         </div>
       </div>
@@ -3008,11 +3008,11 @@ function ClientsPage() {
         <div className="toolbar">
           <label className="table-search">
             <Search size={18} />
-            <input placeholder="×—×™×¤×•×© ×œ×§×•×—, ××™×© ×§×©×¨ ××• ×˜×œ×¤×•×Ÿ..." />
+            <input placeholder="חיפוש לקוח, איש קשר או טלפון..." />
           </label>
           <button className="filter-button">
             <Filter size={17} />
-            ×¡×™× ×•×Ÿ
+            סינון
           </button>
         </div>
         <div className="client-grid">
@@ -3042,16 +3042,16 @@ function ClientsPage() {
               </div>
               <div className="client-metrics">
                 <div>
-                  <span>×¤×¨×•×™×§×˜×™×</span>
+                  <span>פרויקטים</span>
                   <strong>{client.projects}</strong>
                 </div>
                 <div>
-                  <span>×”×™×§×£ ×¤×¢×™×œ×•×ª</span>
+                  <span>היקף פעילות</span>
                   <strong>{money.format(client.total)}</strong>
                 </div>
               </div>
               <span className="client-open">
-                ×¤×ª×™×—×ª ×›×¨×˜×™×¡ ×œ×§×•×— <ChevronLeft size={15} />
+                פתיחת כרטיס לקוח <ChevronLeft size={15} />
               </span>
             </button>
           ))}
@@ -3064,32 +3064,32 @@ function ClientsPage() {
 function FormsPage({ setNotice }) {
   const forms = [
     {
-      title: "×¡×§×¨ ××ª×¨ ×•××¤×™×•×Ÿ ×¨××©×•× ×™",
-      desc: "×¤×¨×˜×™ × ×›×¡, ×¦×¨×›×™×, ×ž×¢×¨×›×•×ª ×•×ª×©×ª×™×•×ª ×§×™×™×ž×•×ª",
+      title: "סקר אתר ואפיון ראשוני",
+      desc: "פרטי נכס, צרכים, מערכות ותשתיות קיימות",
       fields: 28,
       uses: 14,
       icon: ClipboardCheck,
       tone: "purple",
     },
     {
-      title: "×‘×“×™×§×ª ×ª×©×ª×™×•×ª ×œ×¤× ×™ ×”×ª×§× ×”",
-      desc: "×œ×•×—×•×ª, ×¦× ×¨×ª, × ×§×•×“×•×ª ×—×©×ž×œ ×•×ª×§×©×•×¨×ª",
+      title: "בדיקת תשתיות לפני התקנה",
+      desc: "לוחות, צנרת, נקודות חשמל ותקשורת",
       fields: 36,
       uses: 9,
       icon: CheckCircle2,
       tone: "blue",
     },
     {
-      title: "×¤×¨×•×˜×•×§×•×œ ×ž×¡×™×¨×ª ×ž×¢×¨×›×ª",
-      desc: "×‘×“×™×§×•×ª ×¡×•×¤×™×•×ª, ×”×“×¨×›×”, ×§×•×“×™× ×•×—×ª×™×ž×ª ×œ×§×•×—",
+      title: "פרוטוקול מסירת מערכת",
+      desc: "בדיקות סופיות, הדרכה, קודים וחתימת לקוח",
       fields: 42,
       uses: 21,
       icon: FileText,
       tone: "green",
     },
     {
-      title: "×“×•×— ×‘×™×§×•×¨ ×˜×›× ××™",
-      desc: "×ª×§×œ×•×ª, ×¤×¢×•×œ×•×ª ×©×‘×•×¦×¢×•, ×—×œ×§×™× ×•×ª×ž×•× ×•×ª",
+      title: "דוח ביקור טכנאי",
+      desc: "תקלות, פעולות שבוצעו, חלקים ותמונות",
       fields: 18,
       uses: 37,
       icon: Settings,
@@ -3100,15 +3100,15 @@ function FormsPage({ setNotice }) {
     <div className="section-page">
       <div className="page-intro">
         <div>
-          <h2>×ž×¡×ž×›×™× ×•×”×§×œ×˜×•×ª</h2>
-          <p>×ª×‘× ×™×•×ª ×—×›×ž×•×ª ×œ×ª×™×¢×•×“ ××—×™×“ ×‘×›×œ ×©×œ×‘×™ ×”×¤×¨×•×™×§×˜</p>
+          <h2>מסמכים והקלטות</h2>
+          <p>תבניות חכמות לתיעוד אחיד בכל שלבי הפרויקט</p>
         </div>
         <button
           className="primary-button"
-          onClick={() => setNotice("×‘×•× ×” ×”×˜×¤×¡×™× ×™×ª×•×•×¡×£ ×‘×’×¨×¡×” ×”×‘××”")}
+          onClick={() => setNotice("בונה הטפסים יתווסף בגרסה הבאה")}
         >
           <Plus size={17} />
-          ×ª×‘× ×™×ª ×—×“×©×”
+          תבנית חדשה
         </button>
       </div>
       <div className="forms-grid">
@@ -3120,25 +3120,25 @@ function FormsPage({ setNotice }) {
             <button>
               <MoreHorizontal />
             </button>
-            <span>×ª×‘× ×™×ª ×¤×¢×™×œ×”</span>
+            <span>תבנית פעילה</span>
             <h3>{title}</h3>
             <p>{desc}</p>
             <div className="form-meta">
               <span>
                 <FormInput size={15} />
-                {fields} ×©×“×•×ª
+                {fields} שדות
               </span>
               <span>
                 <FileText size={15} />
-                {uses} ×ž×™×œ×•×™×™×
+                {uses} מילויים
               </span>
             </div>
             <div className="form-actions">
-              <button onClick={() => setNotice("×”×ª×¦×•×’×” ×”×ž×§×“×™×ž×” ×ž×•×›× ×” ×œ×‘×“×™×§×”")}>
-                ×ª×¦×•×’×” ×ž×§×“×™×ž×”
+              <button onClick={() => setNotice("התצוגה המקדימה מוכנה לבדיקה")}>
+                תצוגה מקדימה
               </button>
-              <button onClick={() => setNotice("×ž×¦×‘ ×”×¢×¨×™×›×” ×™×ª×•×•×¡×£ ×‘×’×¨×¡×” ×”×‘××”")}>
-                ×¢×¨×™×›×”
+              <button onClick={() => setNotice("מצב העריכה יתווסף בגרסה הבאה")}>
+                עריכה
               </button>
             </div>
           </div>
@@ -3146,16 +3146,16 @@ function FormsPage({ setNotice }) {
       </div>
       <div className="panel files-overview">
         <PanelHead
-          title="×ž×¡×ž×›×™× ××—×¨×•× ×™×"
-          subtitle="×§×‘×¦×™× ×©×”×•×¢×œ×• ×œ××—×¨×•× ×” ×œ×¤×¨×•×™×§×˜×™×"
-          action="×›×œ ×”×ž×¡×ž×›×™×"
+          title="מסמכים אחרונים"
+          subtitle="קבצים שהועלו לאחרונה לפרויקטים"
+          action="כל המסמכים"
         />
         <div className="documents-list">
           {[
-            "×ª×•×›× ×™×ª ×—×©×ž×œ - ×§×•×ž×” ××³.pdf",
-            "×›×ª×‘ ×›×ž×•×™×•×ª KNX.xlsx",
-            "×ª×ž×•× ×•×ª ×œ×•×— ×ª×§×©×•×¨×ª.zip",
-            "×¤×¨×•×˜×•×§×•×œ ×ž×¡×™×¨×” ×—×ª×•×.pdf",
+            "תוכנית חשמל - קומה א׳.pdf",
+            "כתב כמויות KNX.xlsx",
+            "תמונות לוח תקשורת.zip",
+            "פרוטוקול מסירה חתום.pdf",
           ].map((name, i) => (
             <div key={name}>
               <div className="doc-icon">
@@ -3166,10 +3166,10 @@ function FormsPage({ setNotice }) {
                 <span>
                   {
                     [
-                      "×•×™×œ×” ×ž×©×¤×—×ª ×›×”×Ÿ",
-                      "×‘×™×ª ×ž×©×¤×—×ª ××œ×•×Ÿ",
-                      "×¤× ×˜×”××•×– ×ž×©×¤×—×ª ×‘×¨×§",
-                      "×“×™×¨×ª ×ž×©×¤×—×ª ×œ×‘×™×",
+                      "וילה משפחת כהן",
+                      "בית משפחת אלון",
+                      "פנטהאוז משפחת ברק",
+                      "דירת משפחת לביא",
                     ][i]
                   }
                 </span>
@@ -3191,21 +3191,21 @@ function FinancePage({ projects, openProject }) {
     <div className="section-page">
       <div className="page-intro">
         <div>
-          <h2>×ª×©×œ×•×ž×™× ×•×’×‘×™×™×”</h2>
-          <p>×‘×§×¨×ª ×ª×–×¨×™×, ××‘× ×™ ×“×¨×š ×œ×ª×©×œ×•× ×•×™×ª×¨×•×ª ×¤×ª×•×—×•×ª</p>
+          <h2>תשלומים וגבייה</h2>
+          <p>בקרת תזרים, אבני דרך לתשלום ויתרות פתוחות</p>
         </div>
         <button className="secondary-button">
           <FileText size={17} />
-          ×”×¤×§×ª ×“×•×—
+          הפקת דוח
         </button>
       </div>
       <div className="finance-hero">
         <div>
-          <span>×”×™×§×£ ×—×•×–×™× ×›×•×œ×œ</span>
+          <span>היקף חוזים כולל</span>
           <strong>{money.format(total)}</strong>
           <small>
             <TrendingUp size={14} />
-            8.2% ×ž×”×¨×‘×¢×•×Ÿ ×”×§×•×“×
+            8.2% מהרבעון הקודם
           </small>
         </div>
         <div
@@ -3215,44 +3215,44 @@ function FinancePage({ projects, openProject }) {
           }}
         >
           <span>
-            <strong>{Math.round((paid / total) * 100)}%</strong>× ×’×‘×”
+            <strong>{Math.round((paid / total) * 100)}%</strong>נגבה
           </span>
         </div>
         <div className="finance-split">
           <div>
             <i className="green" />
             <span>
-              ×”×ª×§×‘×œ<strong>{money.format(paid)}</strong>
+              התקבל<strong>{money.format(paid)}</strong>
             </span>
           </div>
           <div>
             <i className="orange" />
             <span>
-              ×™×ª×¨×” ×¤×ª×•×—×”<strong>{money.format(total - paid)}</strong>
+              יתרה פתוחה<strong>{money.format(total - paid)}</strong>
             </span>
           </div>
         </div>
       </div>
       <div className="panel finance-table-wrap">
         <PanelHead
-          title="×ž×¦×‘ ×’×‘×™×™×” ×œ×¤×™ ×¤×¨×•×™×§×˜"
-          subtitle="×œ×—×™×¦×” ×¢×œ ×©×•×¨×” ×ª×¤×ª×— ××ª ×ª×™×§ ×”×¤×¨×•×™×§×˜"
+          title="מצב גבייה לפי פרויקט"
+          subtitle="לחיצה על שורה תפתח את תיק הפרויקט"
         />
         <table className="projects-table finance-table">
           <thead>
             <tr>
-              <th>×¤×¨×•×™×§×˜ ×•×œ×§×•×—</th>
-              <th>×©×•×•×™ ×—×•×–×”</th>
-              <th>×©×•×œ×</th>
-              <th>×™×ª×¨×”</th>
-              <th>××—×•×– ×’×‘×™×™×”</th>
-              <th>×¡×˜×˜×•×¡</th>
+              <th>פרויקט ולקוח</th>
+              <th>שווי חוזה</th>
+              <th>שולם</th>
+              <th>יתרה</th>
+              <th>אחוז גבייה</th>
+              <th>סטטוס</th>
             </tr>
           </thead>
           <tbody>
             {projects.map((p) => {
               const percent = Math.round((p.paid / p.value) * 100);
-              const overdue = p.flag.includes("×ª×©×œ×•×");
+              const overdue = p.flag.includes("תשלום");
               return (
                 <tr key={p.id} onClick={() => openProject(p)}>
                   <td>
@@ -3283,7 +3283,7 @@ function FinancePage({ projects, openProject }) {
                     <span
                       className={`payment-state ${overdue ? "overdue" : percent === 100 ? "paid" : ""}`}
                     >
-                      {overdue ? "×‘××™×—×•×¨" : percent === 100 ? "×©×•×œ×" : "×ª×§×™×Ÿ"}
+                      {overdue ? "באיחור" : percent === 100 ? "שולם" : "תקין"}
                     </span>
                   </td>
                 </tr>
@@ -3311,11 +3311,11 @@ function ProjectDetail({
   );
   const [rememberNavigation, setRememberNavigation] = useState(false);
   const projectMilestones = [
-    { title: "××¤×™×•×Ÿ ×•×—×ª×™×ž×ª ×—×•×–×”", status: "done", date: "12.03.2026" },
-    { title: "××™×©×•×¨ ×ª×•×›× ×™×•×ª ×‘×™×¦×•×¢", status: "done", date: "28.05.2026" },
+    { title: "אפיון וחתימת חוזה", status: "done", date: "12.03.2026" },
+    { title: "אישור תוכניות ביצוע", status: "done", date: "28.05.2026" },
     { title: project.nextMilestone, status: "current", date: project.due },
-    { title: "×ª×›× ×•×ª, ×‘×“×™×§×•×ª ×•×ª×¨×—×™×©×™×", status: "future", date: "08.09.2026" },
-    { title: "×ž×¡×™×¨×” ×•×”×“×¨×›×ª ×œ×§×•×—", status: "future", date: "22.09.2026" },
+    { title: "תכנות, בדיקות ותרחישים", status: "future", date: "08.09.2026" },
+    { title: "מסירה והדרכת לקוח", status: "future", date: "22.09.2026" },
   ];
   const requestNavigation = (nextProject = project) => {
     if (!nextProject?.address && !nextProject?.location && !nextProject?.name) {
@@ -3354,7 +3354,7 @@ function ProjectDetail({
             <p>
               <UserRound size={15} />
               {project.client}
-              <span>Â·</span>
+              <span>·</span>
               <MapPin size={15} />
               {project.address}
             </p>
@@ -3363,7 +3363,7 @@ function ProjectDetail({
         <div className="project-hero-actions">
           <button className="secondary-button" disabled={!canEdit}>
             <MessageSquare size={16} />
-            ×”×•×¡×¤×ª ×¢×“×›×•×Ÿ
+            הוספת עדכון
           </button>
           <button className="icon-button" disabled={!canEdit}>
             <MoreHorizontal />
@@ -3371,7 +3371,7 @@ function ProjectDetail({
         </div>
         <div className="hero-metrics">
           <div>
-            <span>×©×œ×‘ × ×•×›×—×™</span>
+            <span>שלב נוכחי</span>
             <select
               disabled={!canEdit}
               value={project.stage}
@@ -3396,7 +3396,7 @@ function ProjectDetail({
             </select>
           </div>
           <div>
-            <span>×”×ª×§×“×ž×•×ª</span>
+            <span>התקדמות</span>
             <strong>{project.progress}%</strong>
             <input
               disabled={!canEdit}
@@ -3411,18 +3411,18 @@ function ProjectDetail({
             />
           </div>
           <div>
-            <span>×‘×¨×™××•×ª ×”×¤×¨×•×™×§×˜</span>
+            <span>בריאות הפרויקט</span>
             <strong
               className={project.health < 70 ? "health-risk" : "health-good"}
             >
               {project.health}/100
             </strong>
             <small>
-              {project.health < 70 ? "×“×•×¨×© ×ª×©×•×ž×ª ×œ×‘" : "×ž×ª× ×”×œ ×›×©×•×¨×”"}
+              {project.health < 70 ? "דורש תשומת לב" : "מתנהל כשורה"}
             </small>
           </div>
           <div>
-            <span>×ž× ×”×œ ×¤×¨×•×™×§×˜</span>
+            <span>מנהל פרויקט</span>
             <select
               className="project-manager-select"
               disabled={!canEdit}
@@ -3438,7 +3438,7 @@ function ProjectDetail({
                 });
               }}
             >
-              <option value="">×œ×œ× ×ž× ×”×œ</option>
+              <option value="">ללא מנהל</option>
               {professionals
                 .filter(
                   (item) =>
@@ -3449,13 +3449,13 @@ function ProjectDetail({
                 .map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.displayName}
-                    {item.linkedUserId ? " Â· ×ž×©×ª×ž×© ×ž×¢×¨×›×ª" : ""}
+                    {item.linkedUserId ? " · משתמש מערכת" : ""}
                   </option>
                 ))}
             </select>
           </div>
           <div>
-            <span>×™×¢×“ ×œ××‘×Ÿ ×“×¨×š</span>
+            <span>יעד לאבן דרך</span>
             <strong>{project.due}</strong>
             <small>{project.nextMilestone}</small>
           </div>
@@ -3463,12 +3463,12 @@ function ProjectDetail({
       </div>
       <div className="detail-tabs">
         {[
-          ["overview", "×¡×§×™×¨×”"],
-          ["tasks", "×ž×©×™×ž×•×ª ×•××‘× ×™ ×“×¨×š"],
-          ["systems", "×ž×¢×¨×›×•×ª"],
-          ["forms", "×˜×¤×¡×™× ×•×§×‘×¦×™×"],
-          ["finance", "×›×¡×¤×™×"],
-          ["activity", "×¤×¢×™×œ×•×ª"],
+          ["overview", "סקירה"],
+          ["tasks", "משימות ואבני דרך"],
+          ["systems", "מערכות"],
+          ["forms", "טפסים וקבצים"],
+          ["finance", "כספים"],
+          ["activity", "פעילות"],
         ].map(([id, label]) => (
           <button
             className={tab === id ? "active" : ""}
@@ -3485,8 +3485,8 @@ function ProjectDetail({
           <div className="detail-main">
             <div className="panel overview-card">
               <PanelHead
-                title="×”×ª×§×“×ž×•×ª ×”×¤×¨×•×™×§×˜"
-                subtitle={`${project.tasksDone} ×ž×ª×•×š ${project.tasksTotal} ×ž×©×™×ž×•×ª ×”×•×©×œ×ž×•`}
+                title="התקדמות הפרויקט"
+                subtitle={`${project.tasksDone} מתוך ${project.tasksTotal} משימות הושלמו`}
               />
               <div className="large-progress">
                 <div>
@@ -3514,7 +3514,7 @@ function ProjectDetail({
               </div>
             </div>
             <div className="panel systems-card">
-              <PanelHead title="×ž×¢×¨×›×•×ª ×‘×¤×¨×•×™×§×˜" action="× ×™×”×•×œ ×ž×¢×¨×›×•×ª" />
+              <PanelHead title="מערכות בפרויקט" action="ניהול מערכות" />
               <div className="system-tiles">
                 {project.systems.map((system, index) => (
                   <div key={system}>
@@ -3522,7 +3522,7 @@ function ProjectDetail({
                       <Command size={18} />
                     </span>
                     <strong>{system}</strong>
-                    <small>{index < 2 ? "×”×ª×§× ×” ×‘×ª×”×œ×™×š" : "×˜×¨× ×”×ª×—×™×œ"}</small>
+                    <small>{index < 2 ? "התקנה בתהליך" : "טרם התחיל"}</small>
                     <CheckCircle2 size={17} />
                   </div>
                 ))}
@@ -3531,14 +3531,14 @@ function ProjectDetail({
           </div>
           <div className="detail-side">
             <div className="panel contact-card">
-              <PanelHead title="×¤×¨×˜×™ ×œ×§×•×—" />
+              <PanelHead title="פרטי לקוח" />
               <div className="contact-person">
                 <div className="client-avatar">
                   {project.client.slice(0, 2)}
                 </div>
                 <div>
                   <strong>{project.client}</strong>
-                  <span>×œ×§×•×— ×¨××©×™</span>
+                  <span>לקוח ראשי</span>
                 </div>
               </div>
               <a href={`tel:${project.phone}`}>
@@ -3564,19 +3564,19 @@ function ProjectDetail({
               </button>
             </div>
             <div className="panel money-summary">
-              <PanelHead title="×¡×™×›×•× ×›×¡×¤×™" />
+              <PanelHead title="סיכום כספי" />
               <div>
-                <span>×©×•×•×™ ×”×¤×¨×•×™×§×˜</span>
+                <span>שווי הפרויקט</span>
                 <strong>{money.format(project.value)}</strong>
               </div>
               <div>
-                <span>×©×•×œ× ×¢×“ ×›×”</span>
+                <span>שולם עד כה</span>
                 <strong className="green-text">
                   {money.format(project.paid)}
                 </strong>
               </div>
               <div className="due-row">
-                <span>×™×ª×¨×” ×œ×’×‘×™×™×”</span>
+                <span>יתרה לגבייה</span>
                 <strong>{money.format(dueAmount)}</strong>
               </div>
               <div className="money-progress">
@@ -3585,16 +3585,16 @@ function ProjectDetail({
                 />
               </div>
               <small>
-                {Math.round((project.paid / project.value) * 100)}% × ×’×‘×”
+                {Math.round((project.paid / project.value) * 100)}% נגבה
               </small>
               <button onClick={() => setTab("finance")}>
-                ×œ×¤×™×¨×•×˜ ×ª×©×œ×•×ž×™× <ChevronLeft size={15} />
+                לפירוט תשלומים <ChevronLeft size={15} />
               </button>
             </div>
             <div className="panel quick-notes">
-              <PanelHead title="×”×¢×¨×” ×ž×”×™×¨×”" />
-              <textarea placeholder="×›×ª×‘×• ×¢×“×›×•×Ÿ ×œ×¦×•×•×ª..." />
-              <button>×¤×¨×¡×•× ×¢×“×›×•×Ÿ</button>
+              <PanelHead title="הערה מהירה" />
+              <textarea placeholder="כתבו עדכון לצוות..." />
+              <button>פרסום עדכון</button>
             </div>
           </div>
         </div>
@@ -3646,28 +3646,28 @@ function ProjectDetail({
 function ProjectTabPlaceholder({ tab, project }) {
   const content = {
     tasks: [
-      "×ž×©×™×ž×•×ª ×•××‘× ×™ ×“×¨×š",
-      "× ×™×”×•×œ ×”×ž×©×™×ž×•×ª ×”×ž×œ× ×™×›×œ×•×œ ××—×¨××™×, ×ª××¨×™×›×™ ×™×¢×“ ×•×ª×œ×•×™×•×ª ×‘×™×Ÿ ×©×œ×‘×™×.",
+      "משימות ואבני דרך",
+      "ניהול המשימות המלא יכלול אחראים, תאריכי יעד ותלויות בין שלבים.",
       ClipboardCheck,
     ],
     systems: [
-      "×ž×¢×¨×›×•×ª ×‘×¤×¨×•×™×§×˜",
-      `${project.systems.length} ×ž×¢×¨×›×•×ª ×ž×©×•×™×›×•×ª ×œ×¤×¨×•×™×§×˜. ×‘×ž×¡×š ×”×ž×œ× ×™×•×¤×™×¢×• ×¦×™×•×“, ×“×’×ž×™× ×•×ª×•×¦××•×ª ×‘×“×™×§×”.`,
+      "מערכות בפרויקט",
+      `${project.systems.length} מערכות משויכות לפרויקט. במסך המלא יופיעו ציוד, דגמים ותוצאות בדיקה.`,
       Command,
     ],
     forms: [
-      "×˜×¤×¡×™× ×•×§×‘×¦×™×",
-      "×›××Ÿ ×™×¨×•×›×–×• ×¡×§×¨×™ ×”××ª×¨, ×ª×•×›× ×™×•×ª, ×ª×ž×•× ×•×ª, ×¤×¨×•×˜×•×§×•×œ×™× ×•×—×ª×™×ž×•×ª.",
+      "טפסים וקבצים",
+      "כאן ירוכזו סקרי האתר, תוכניות, תמונות, פרוטוקולים וחתימות.",
       FileText,
     ],
     finance: [
-      "×›×¡×¤×™× ×•×ª×©×œ×•×ž×™×",
-      `× ×•×ª×¨×” ×™×ª×¨×” ×©×œ ${money.format(project.value - project.paid)} ×œ×’×‘×™×™×” ×‘×¤×¨×•×™×§×˜.`,
+      "כספים ותשלומים",
+      `נותרה יתרה של ${money.format(project.value - project.paid)} לגבייה בפרויקט.`,
       CreditCard,
     ],
     activity: [
-      "×™×•×ž×Ÿ ×¤×¢×™×œ×•×ª",
-      "×›×œ ×©×™× ×•×™, ×¢×“×›×•×Ÿ, ×§×•×‘×¥ ×•×ª×©×œ×•× ×™×ª×•×¢×“×• ×›××Ÿ ×œ×¤×™ ×–×ž×Ÿ ×•×ž×©×ª×ž×©.",
+      "יומן פעילות",
+      "כל שינוי, עדכון, קובץ ותשלום יתועדו כאן לפי זמן ומשתמש.",
       Activity,
     ],
   }[tab];
@@ -3681,7 +3681,7 @@ function ProjectTabPlaceholder({ tab, project }) {
       <p>{content[1]}</p>
       <button className="secondary-button">
         <Plus size={17} />
-        ×”×•×¡×¤×ª ×¤×¨×™×˜
+        הוספת פריט
       </button>
     </div>
   );
@@ -3801,7 +3801,7 @@ function NewProjectModal({
       equipmentItems,
       templateId: form.templateId || null,
       startDate: form.startDate,
-      nextMilestone: "×¤×’×™×©×ª ××¤×™×•×Ÿ ×¨××©×•× ×™×ª",
+      nextMilestone: "פגישת אפיון ראשונית",
       phone: client?.phone || form.clientPhone || "",
       email: client?.email || form.clientEmail || "",
       health: 100,
@@ -3822,8 +3822,8 @@ function NewProjectModal({
         >
           <div className="modal-head">
             <div>
-              <span>××©×£ ×¤×¨×•×™×§×˜ ×—×“×© Â· ×©×œ×‘ 1 ×ž×ª×•×š 3</span>
-              <h2>×œ×§×•×— ×•×–×”×•×ª ×”×¤×¨×•×™×§×˜</h2>
+              <span>אשף פרויקט חדש · שלב 1 מתוך 3</span>
+              <h2>לקוח וזהות הפרויקט</h2>
             </div>
             <button onClick={onClose}>
               <X />
@@ -3834,7 +3834,7 @@ function NewProjectModal({
           </div>
           <form onSubmit={submit}>
             <label>
-              ×©× ×”×¤×¨×•×™×§×˜
+              שם הפרויקט
               <input
                 autoFocus
                 required
@@ -3842,13 +3842,13 @@ function NewProjectModal({
                 onChange={(event) =>
                   setForm({ ...form, name: event.target.value })
                 }
-                placeholder="×œ×“×•×’×ž×”: ×•×™×œ×” ×ž×©×¤×—×ª ×™×©×¨××œ×™"
+                placeholder="לדוגמה: וילה משפחת ישראלי"
               />
             </label>
-            <label>×ª×—×•× ×”×¤×¨×•×™×§×˜<select value={form.projectCategory} onChange={(event)=>setForm({...form,projectCategory:event.target.value})}><option value="smart_home">×‘×™×ª ×—×›×</option><option value="other">××—×¨</option></select></label>
-            {form.projectCategory==='other'&&<><label>×¡×•×’ ×¤×¨×•×™×§×˜ ×—×•×¤×©×™<input required value={form.projectCategoryCustom} onChange={(event)=>setForm({...form,projectCategoryCustom:event.target.value})} placeholder="×œ×“×•×’×ž×”: ×ž×¨×›×– ×”×“×¨×›×”"/></label><div className="wide project-profile-fields"><label>×©× ×ª×”×œ×™×š ×¢×‘×•×“×”<input value={form.projectProfile.workflowLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,workflowLabel:event.target.value}})} placeholder="××•×¤×¦×™×•× ×œ×™"/></label><label>×©× ××–×•×¨ ×”×ž×¢×¨×›×•×ª<input value={form.projectProfile.systemsLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,systemsLabel:event.target.value}})} placeholder="××•×¤×¦×™×•× ×œ×™"/></label><label>×©× ××–×•×¨×™ ×”×¢×‘×•×“×”<input value={form.projectProfile.areasLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,areasLabel:event.target.value}})} placeholder="××•×¤×¦×™×•× ×œ×™"/></label></div></>}
+            <label>תחום הפרויקט<select value={form.projectCategory} onChange={(event)=>setForm({...form,projectCategory:event.target.value})}><option value="smart_home">בית חכם</option><option value="other">אחר</option></select></label>
+            {form.projectCategory==='other'&&<><label>סוג פרויקט חופשי<input required value={form.projectCategoryCustom} onChange={(event)=>setForm({...form,projectCategoryCustom:event.target.value})} placeholder="לדוגמה: מרכז הדרכה"/></label><div className="wide project-profile-fields"><label>שם תהליך עבודה<input value={form.projectProfile.workflowLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,workflowLabel:event.target.value}})} placeholder="אופציונלי"/></label><label>שם אזור המערכות<input value={form.projectProfile.systemsLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,systemsLabel:event.target.value}})} placeholder="אופציונלי"/></label><label>שם אזורי העבודה<input value={form.projectProfile.areasLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,areasLabel:event.target.value}})} placeholder="אופציונלי"/></label></div></>}
             {form.projectCategory==='smart_home'&&<label>
-              ×¡×™×•×•×’ ×”×¤×¨×•×™×§×˜
+              סיווג הפרויקט
               <select
                 value={form.projectClassification}
                 onChange={(event) =>
@@ -3866,7 +3866,7 @@ function NewProjectModal({
                 className={form.clientMode === "existing" ? "active" : ""}
                 onClick={() => setForm({ ...form, clientMode: "existing" })}
               >
-                ×œ×§×•×— ×§×™×™×
+                לקוח קיים
               </button>
               <button
                 type="button"
@@ -3875,13 +3875,13 @@ function NewProjectModal({
                   setForm({ ...form, clientMode: "new", clientId: "" })
                 }
               >
-                ×œ×§×•×— ×—×“×©
+                לקוח חדש
               </button>
             </div>
             {form.clientMode === "existing" ? (
               <div className="form-row">
                 <label>
-                  ×œ×§×•×—
+                  לקוח
                   <select
                     required
                     value={form.clientId}
@@ -3889,31 +3889,31 @@ function NewProjectModal({
                       setForm({ ...form, clientId: event.target.value })
                     }
                   >
-                    <option value="">×‘×—×™×¨×ª ×œ×§×•×— ×ž×”×ž××’×¨</option>
+                    <option value="">בחירת לקוח מהמאגר</option>
                     {clients.map((client) => (
                       <option key={client.id} value={client.id}>
-                        {client.name} Â· {client.address}
+                        {client.name} · {client.address}
                       </option>
                     ))}
                   </select>
                 </label>
                 <label>
-                  ×¢×™×¨ / ×ž×™×§×•×
+                  עיר / מיקום
                   <input
                     value={form.location}
                     onChange={(event) =>
                       setForm({ ...form, location: event.target.value })
                     }
-                    placeholder="× ×œ×§×— ×ž×›×ª×•×‘×ª ×”×œ×§×•×— ×× ×¨×™×§"
+                    placeholder="נלקח מכתובת הלקוח אם ריק"
                   />
                 </label>
               </div>
             ) : (
               <div className="new-client-fields">
-                <p>×”×œ×§×•×— ×™×™×•×•×¦×¨ ××•×˜×•×ž×˜×™×ª ×‘×ž××’×¨ ×•×™×§×•×©×¨ ×œ×¤×¨×•×™×§×˜.</p>
+                <p>הלקוח ייווצר אוטומטית במאגר ויקושר לפרויקט.</p>
                 <div className="form-row">
                   <label>
-                    ×©× ×¤×¨×˜×™
+                    שם פרטי
                     <input
                       required
                       value={form.clientFirstName}
@@ -3923,11 +3923,11 @@ function NewProjectModal({
                     />
                   </label>
                   <label>
-                    ×©× ×ž×©×¤×—×”
+                    שם משפחה
                     <input required value={form.clientLastName} onChange={(event) => setForm({ ...form, clientLastName: event.target.value })}/>
                   </label>
                   <label>
-                    ×˜×œ×¤×•×Ÿ
+                    טלפון
                     <input
                       required
                       value={form.clientPhone}
@@ -3956,7 +3956,7 @@ function NewProjectModal({
                   }
                 />
                 <label>
-                  ×¢×™×¨
+                  עיר
                   <input
                     value={form.clientCity}
                     onChange={(event) =>
@@ -3965,7 +3965,7 @@ function NewProjectModal({
                   />
                 </label>
                 <label>
-                  ×“×•××´×œ
+                  דוא״ל
                   <input
                     type="email"
                     value={form.clientEmail}
@@ -3978,10 +3978,10 @@ function NewProjectModal({
             )}
             <div className="modal-actions">
               <button type="button" onClick={onClose}>
-                ×‘×™×˜×•×œ
+                ביטול
               </button>
               <button className="primary-button" type="submit">
-                ×”×ž×©×š <ArrowLeft size={16} />
+                המשך <ArrowLeft size={16} />
               </button>
             </div>
           </form>
@@ -3998,13 +3998,13 @@ function NewProjectModal({
       >
         <div className="modal-head">
           <div>
-            <span>××©×£ ×¤×¨×•×™×§×˜ ×—×“×© Â· ×©×œ×‘ {step} ×ž×ª×•×š 3</span>
+            <span>אשף פרויקט חדש · שלב {step} מתוך 3</span>
             <h2>
               {step === 1
-                ? "×œ×§×•×— ×•×–×”×•×ª ×”×¤×¨×•×™×§×˜"
+                ? "לקוח וזהות הפרויקט"
                 : step === 2
-                  ? "× ×™×”×•×œ ×•×œ×•×—×•×ª ×–×ž× ×™×"
-                  : "×ž×¢×¨×›×•×ª ×•×¡×§×™×¨×”"}
+                  ? "ניהול ולוחות זמנים"
+                  : "מערכות וסקירה"}
             </h2>
           </div>
           <button onClick={onClose}>
@@ -4018,19 +4018,19 @@ function NewProjectModal({
           {step === 1 && (
             <>
               <label>
-                ×©× ×”×¤×¨×•×™×§×˜
+                שם הפרויקט
                 <input
                   autoFocus
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="×œ×“×•×’×ž×”: ×•×™×œ×” ×ž×©×¤×—×ª ×™×©×¨××œ×™"
+                  placeholder="לדוגמה: וילה משפחת ישראלי"
                 />
               </label>
-              <label>×ª×—×•× ×”×¤×¨×•×™×§×˜<select value={form.projectCategory} onChange={(event)=>setForm({...form,projectCategory:event.target.value})}><option value="smart_home">×‘×™×ª ×—×›×</option><option value="other">××—×¨</option></select></label>
-              {form.projectCategory==='other'&&<><label>×¡×•×’ ×¤×¨×•×™×§×˜ ×—×•×¤×©×™<input required value={form.projectCategoryCustom} onChange={(event)=>setForm({...form,projectCategoryCustom:event.target.value})} placeholder="×œ×“×•×’×ž×”: ×ž×¨×›×– ×”×“×¨×›×”"/></label><div className="wide project-profile-fields"><label>×©× ×ª×”×œ×™×š ×¢×‘×•×“×”<input value={form.projectProfile.workflowLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,workflowLabel:event.target.value}})}/></label><label>×©× ××–×•×¨ ×”×ž×¢×¨×›×•×ª<input value={form.projectProfile.systemsLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,systemsLabel:event.target.value}})}/></label><label>×©× ××–×•×¨×™ ×”×¢×‘×•×“×”<input value={form.projectProfile.areasLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,areasLabel:event.target.value}})}/></label></div></>}
+              <label>תחום הפרויקט<select value={form.projectCategory} onChange={(event)=>setForm({...form,projectCategory:event.target.value})}><option value="smart_home">בית חכם</option><option value="other">אחר</option></select></label>
+              {form.projectCategory==='other'&&<><label>סוג פרויקט חופשי<input required value={form.projectCategoryCustom} onChange={(event)=>setForm({...form,projectCategoryCustom:event.target.value})} placeholder="לדוגמה: מרכז הדרכה"/></label><div className="wide project-profile-fields"><label>שם תהליך עבודה<input value={form.projectProfile.workflowLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,workflowLabel:event.target.value}})}/></label><label>שם אזור המערכות<input value={form.projectProfile.systemsLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,systemsLabel:event.target.value}})}/></label><label>שם אזורי העבודה<input value={form.projectProfile.areasLabel} onChange={(event)=>setForm({...form,projectProfile:{...form.projectProfile,areasLabel:event.target.value}})}/></label></div></>}
               {form.projectCategory==='smart_home'&&<label>
-                ×¡×™×•×•×’ ×”×¤×¨×•×™×§×˜
+                סיווג הפרויקט
                 <select
                   value={form.projectClassification}
                   onChange={(event) =>
@@ -4048,7 +4048,7 @@ function NewProjectModal({
                   className={form.clientMode === "existing" ? "active" : ""}
                   onClick={() => setForm({ ...form, clientMode: "existing" })}
                 >
-                  ×œ×§×•×— ×§×™×™×
+                  לקוח קיים
                 </button>
                 <button
                   type="button"
@@ -4057,13 +4057,13 @@ function NewProjectModal({
                     setForm({ ...form, clientMode: "new", clientId: "" })
                   }
                 >
-                  ×œ×§×•×— ×—×“×©
+                  לקוח חדש
                 </button>
               </div>
               {form.clientMode === "existing" ? (
                 <div className="form-row">
                   <label>
-                    ×œ×§×•×—
+                    לקוח
                     <select
                       required
                       value={form.clientId}
@@ -4071,31 +4071,31 @@ function NewProjectModal({
                         setForm({ ...form, clientId: e.target.value })
                       }
                     >
-                      <option value="">×‘×—×™×¨×ª ×œ×§×•×— ×ž×”×ž××’×¨</option>
+                      <option value="">בחירת לקוח מהמאגר</option>
                       {clients.map((client) => (
                         <option key={client.id} value={client.id}>
-                          {client.name} Â· {client.address}
+                          {client.name} · {client.address}
                         </option>
                       ))}
                     </select>
                   </label>
                   <label>
-                    ×¢×™×¨ / ×ž×™×§×•×
+                    עיר / מיקום
                     <input
                       value={form.location}
                       onChange={(e) =>
                         setForm({ ...form, location: e.target.value })
                       }
-                      placeholder="× ×œ×§×— ×ž×›×ª×•×‘×ª ×”×œ×§×•×— ×× ×¨×™×§"
+                      placeholder="נלקח מכתובת הלקוח אם ריק"
                     />
                   </label>
                 </div>
               ) : (
                 <div className="new-client-fields">
-                  <p>×”×œ×§×•×— ×™×™×•×•×¦×¨ ××•×˜×•×ž×˜×™×ª ×‘×ž××’×¨ ×•×™×§×•×©×¨ ×œ×¤×¨×•×™×§×˜.</p>
+                  <p>הלקוח ייווצר אוטומטית במאגר ויקושר לפרויקט.</p>
                   <div className="form-row">
                     <label>
-                      ×©× ×¤×¨×˜×™
+                      שם פרטי
                       <input
                         required
                         value={form.clientFirstName}
@@ -4105,11 +4105,11 @@ function NewProjectModal({
                       />
                     </label>
                     <label>
-                      ×©× ×ž×©×¤×—×”
+                      שם משפחה
                       <input required value={form.clientLastName} onChange={(e) => setForm({ ...form, clientLastName: e.target.value })}/>
                     </label>
                     <label>
-                      ×˜×œ×¤×•×Ÿ
+                      טלפון
                       <input
                         required
                         value={form.clientPhone}
@@ -4121,7 +4121,7 @@ function NewProjectModal({
                   </div>
                   <div className="form-row">
                     <label>
-                      ×›×ª×•×‘×ª
+                      כתובת
                       <input
                         required
                         value={form.clientAddress}
@@ -4131,7 +4131,7 @@ function NewProjectModal({
                       />
                     </label>
                     <label>
-                      ×¢×™×¨
+                      עיר
                       <input
                         value={form.clientCity}
                         onChange={(e) =>
@@ -4141,7 +4141,7 @@ function NewProjectModal({
                     </label>
                   </div>
                   <label>
-                    ×“×•××´×œ
+                    דוא״ל
                     <input
                       type="email"
                       value={form.clientEmail}
@@ -4157,23 +4157,23 @@ function NewProjectModal({
           {step === 2 && (
             <>
               <label>
-                ×ª×‘× ×™×ª ×¢×‘×•×“×”
+                תבנית עבודה
                 <select value={form.templateId} onChange={(e)=>setForm({...form,templateId:e.target.value})}>
-                  <option value="">×¤×¨×•×™×§×˜ ×¨×™×§ â€” ×œ×œ× ×ª×‘× ×™×ª</option>
-                  {templates.filter(item=>item.active).map(template=><option key={template.id} value={template.id}>{template.name} Â· {template.task_count} ×ž×©×™×ž×•×ª</option>)}
+                  <option value="">פרויקט ריק — ללא תבנית</option>
+                  {templates.filter(item=>item.active).map(template=><option key={template.id} value={template.id}>{template.name} · {template.task_count} משימות</option>)}
                 </select>
-                <small>×”×ª×‘× ×™×ª ×ª×™×¦×•×¨ ××•×˜×•×ž×˜×™×ª ×ž×©×™×ž×•×ª, ×ª×œ×•×ª ×•×™×¢×“×™ ×©×¢×•×ª ×”×—×œ ×ž×ª××¨×™×š ×”×”×ª×—×œ×”.</small>
+                <small>התבנית תיצור אוטומטית משימות, תלות ויעדי שעות החל מתאריך ההתחלה.</small>
               </label>
               <div className="form-row">
                 <label>
-                  ×ž× ×”×œ ×¤×¨×•×™×§×˜
+                  מנהל פרויקט
                   <select
                     value={form.managerId}
                     onChange={(e) =>
                       setForm({ ...form, managerId: e.target.value })
                     }
                   >
-                    <option value="">×œ×œ× ×ž× ×”×œ</option>
+                    <option value="">ללא מנהל</option>
                     {managers.map((manager) => (
                       <option key={manager.id} value={manager.id}>
                         {manager.displayName}
@@ -4182,7 +4182,7 @@ function NewProjectModal({
                   </select>
                 </label>
                 <label>
-                  ×©×œ×‘ ×”×ª×—×œ×ª×™
+                  שלב התחלתי
                   <select
                     value={form.stage}
                     onChange={(e) =>
@@ -4194,7 +4194,7 @@ function NewProjectModal({
                           item.metadata?.key || item.name,
                           item.name,
                         ])
-                      : [["planning", "×ª×›× ×•×Ÿ"]]
+                      : [["planning", "תכנון"]]
                     ).map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
@@ -4205,7 +4205,7 @@ function NewProjectModal({
               </div>
               <div className="form-row">
                 <label>
-                  ×ª××¨×™×š ×”×ª×—×œ×”
+                  תאריך התחלה
                   <input
                     type="date"
                     required
@@ -4216,7 +4216,7 @@ function NewProjectModal({
                   />
                 </label>
                 <label>
-                  ×™×¢×“ ×ž×¡×™×¨×”
+                  יעד מסירה
                   <input
                     type="date"
                     min={form.startDate}
@@ -4228,56 +4228,56 @@ function NewProjectModal({
                 </label>
               </div>
               <div className="form-row">
-                <label>××™×™×§×•×Ÿ ×ž×•×‘×™×œ<select value={form.projectIcon} onChange={(event)=>setForm({...form,projectIcon:event.target.value})}><option value="home">×‘×™×ª ×¤×¨×˜×™</option><option value="villa">×•×™×œ×”</option><option value="cottage">×§×•×˜×’×³</option><option value="building">×‘× ×™×™×Ÿ ×ž×©×•×ª×£</option><option value="penthouse">×¤× ×˜×”××•×–</option><option value="studio">×¡×˜×•×“×™×•</option></select></label>
-                <label>×¦×‘×¢ ×ž×•×‘×™×œ<input type="color" value={form.projectColor} onChange={(event)=>setForm({...form,projectColor:event.target.value})}/></label>
-                <label>×¨××© ×¦×•×•×ª ×”×ª×§× ×”<select value={form.installationLeadId} onChange={(event)=>setForm({...form,installationLeadId:event.target.value})}><option value="">×œ×œ× ×”×§×¦××”</option>{professionals.filter(item=>item.active!==false).map(item=><option key={item.id} value={item.id}>{item.displayName}</option>)}</select></label>
+                <label>אייקון מוביל<select value={form.projectIcon} onChange={(event)=>setForm({...form,projectIcon:event.target.value})}><option value="home">בית פרטי</option><option value="villa">וילה</option><option value="cottage">קוטג׳</option><option value="building">בניין משותף</option><option value="penthouse">פנטהאוז</option><option value="studio">סטודיו</option></select></label>
+                <label>צבע מוביל<input type="color" value={form.projectColor} onChange={(event)=>setForm({...form,projectColor:event.target.value})}/></label>
+                <label>ראש צוות התקנה<select value={form.installationLeadId} onChange={(event)=>setForm({...form,installationLeadId:event.target.value})}><option value="">ללא הקצאה</option>{professionals.filter(item=>item.active!==false).map(item=><option key={item.id} value={item.id}>{item.displayName}</option>)}</select></label>
               </div>
               {user.financeAccess!==false&&<label>
-                ×©×•×•×™ ×ž×©×•×¢×¨
+                שווי משוער
                 <input
                   type="number"
                   min="0"
                   value={form.value}
                   onChange={(e) => setForm({ ...form, value: e.target.value })}
-                  placeholder="â‚ª 0"
+                  placeholder="₪ 0"
                 />
               </label>}
               <div className="form-row project-hour-target-fields">
                 <label>
-                  ×™×¢×“ ×©×¢×•×ª ×”×ª×§× ×”
+                  יעד שעות התקנה
                   <input
                     type="number"
                     min="0"
                     step="0.5"
                     value={form.installationHoursTarget}
                     onChange={(e) => setForm({ ...form, installationHoursTarget: e.target.value })}
-                    placeholder="×œ×œ× ×™×¢×“"
+                    placeholder="ללא יעד"
                   />
                 </label>
                 <label>
-                  ×™×¢×“ ×©×¢×•×ª ×ª×›× ×•×ª
+                  יעד שעות תכנות
                   <input
                     type="number"
                     min="0"
                     step="0.5"
                     value={form.programmingHoursTarget}
                     onChange={(e) => setForm({ ...form, programmingHoursTarget: e.target.value })}
-                    placeholder="×œ×œ× ×™×¢×“"
+                    placeholder="ללא יעד"
                   />
                 </label>
               </div>
-              <p className="time-target-note">×”×™×¢×“×™× ×ž×™×•×¢×“×™× ×¨×§ ×œ×”×ª×§× ×” ×•×œ×ª×›× ×•×ª. ×™×ª×¨ ×”×¤×¢×™×œ×•×™×•×ª × ×ž×“×“×•×ª ×‘×¤×•×¢×œ ×œ×œ× ×™×¢×“.</p>
+              <p className="time-target-note">היעדים מיועדים רק להתקנה ולתכנות. יתר הפעילויות נמדדות בפועל ללא יעד.</p>
               {user.financeAccess!==false&&<fieldset className="project-finance-wizard">
-                <legend><label className="finance-paid-check"><input type="checkbox" checked={form.financeEnabled} onChange={(event)=>setForm({...form,financeEnabled:event.target.checked})}/>×”×¤×¢×œ×ª ××©×£ ×›×¡×¤×™× ××•×¤×¦×™×•× ×œ×™</label></legend>
-                {form.financeEnabled&&<><label>××•×¤×Ÿ ×ª×§×¦×•×‘<select value={form.financeMode} onChange={(event)=>setForm({...form,financeMode:event.target.value})}><option value="total">×¡×›×•× ×›×œ×œ×™</option><option value="systems">×¡×›×•× ×ž×¤×•×¦×œ ×œ×›×œ ×ž×¢×¨×›×ª</option></select></label><label>×ª× ××™ ×ª×©×œ×•×<input value={form.paymentTerms} onChange={(event)=>setForm({...form,paymentTerms:event.target.value})} placeholder="×œ×“×•×’×ž×”: 30% ×ž×§×“×ž×”, ×™×ª×¨×” ×œ×¤×™ ××‘× ×™ ×“×¨×š"/></label><label>×ž×§×“×ž×”<input type="number" min="0" step="0.01" value={form.depositAmount} onChange={(event)=>setForm({...form,depositAmount:event.target.value})}/></label><label className="finance-paid-check"><input type="checkbox" checked={form.depositPaid} onChange={(event)=>setForm({...form,depositPaid:event.target.checked})}/>×”×ž×§×“×ž×” ×©×•×œ×ž×”</label></>}
+                <legend><label className="finance-paid-check"><input type="checkbox" checked={form.financeEnabled} onChange={(event)=>setForm({...form,financeEnabled:event.target.checked})}/>הפעלת אשף כספים אופציונלי</label></legend>
+                {form.financeEnabled&&<><label>אופן תקצוב<select value={form.financeMode} onChange={(event)=>setForm({...form,financeMode:event.target.value})}><option value="total">סכום כללי</option><option value="systems">סכום מפוצל לכל מערכת</option></select></label><label>תנאי תשלום<input value={form.paymentTerms} onChange={(event)=>setForm({...form,paymentTerms:event.target.value})} placeholder="לדוגמה: 30% מקדמה, יתרה לפי אבני דרך"/></label><label>מקדמה<input type="number" min="0" step="0.01" value={form.depositAmount} onChange={(event)=>setForm({...form,depositAmount:event.target.value})}/></label><label className="finance-paid-check"><input type="checkbox" checked={form.depositPaid} onChange={(event)=>setForm({...form,depositPaid:event.target.checked})}/>המקדמה שולמה</label></>}
               </fieldset>}
             </>
           )}
           {step === 3 && (
             <>
               <p className="wizard-help">
-                ×‘×—×¨×• ×ž×¢×¨×›×•×ª ×¨××©×•× ×™×•×ª ×•×›×ž×•×ª. ××¤×©×¨ ×œ×”×•×¡×™×£, ×œ×©× ×•×ª ××• ×œ×”×¡×™×¨ ×‘×”×ž×©×š
-                ×ž×ª×•×š ×”×¤×¨×•×™×§×˜.
+                בחרו מערכות ראשוניות וכמות. אפשר להוסיף, לשנות או להסיר בהמשך
+                מתוך הפרויקט.
               </p>
               <div className="wizard-systems">
                 {categories.map((category) => (
@@ -4307,7 +4307,7 @@ function NewProjectModal({
                               })
                             }
                           />
-                          {form.financeEnabled&&form.financeMode==="systems"&&Number(form.selectedEquipment[item.id])>0&&<input type="number" min="0" step="0.01" placeholder="×¡×›×•× ×œ×ž×¢×¨×›×ª" value={form.systemBudgets[item.id]||""} onChange={(event)=>setForm({...form,systemBudgets:{...form.systemBudgets,[item.id]:event.target.value}})}/>}
+                          {form.financeEnabled&&form.financeMode==="systems"&&Number(form.selectedEquipment[item.id])>0&&<input type="number" min="0" step="0.01" placeholder="סכום למערכת" value={form.systemBudgets[item.id]||""} onChange={(event)=>setForm({...form,systemBudgets:{...form.systemBudgets,[item.id]:event.target.value}})}/>}
                         </label>
                       ))}
                   </section>
@@ -4320,10 +4320,10 @@ function NewProjectModal({
               type="button"
               onClick={() => (step === 1 ? onClose() : setStep(step - 1))}
             >
-              {step === 1 ? "×‘×™×˜×•×œ" : "×—×–×¨×”"}
+              {step === 1 ? "ביטול" : "חזרה"}
             </button>
             <button className="primary-button" type="submit">
-              {step === 3 ? "×™×¦×™×¨×ª ×¤×¨×•×™×§×˜" : "×”×ž×©×š"} <ArrowLeft size={16} />
+              {step === 3 ? "יצירת פרויקט" : "המשך"} <ArrowLeft size={16} />
             </button>
           </div>
         </form>
