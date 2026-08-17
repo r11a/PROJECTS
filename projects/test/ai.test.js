@@ -97,7 +97,7 @@ test('live system knowledge is rebuilt, permission-aware and strips secrets', as
 
 test('help guide documents every primary workspace and personal work purpose', () => {
   const areas=new Set(PRODUCT_HELP_GUIDE.map((item)=>item.area));
-  for(const area of ['תמונת מצב','העבודה שלי','לוח שנה','פרויקטים','לקוחות','אנשי מקצוע','מערכות ורכיבים','טפסים ומסמכים','תשלומים וגבייה','משימות ואבני דרך','לוח גאנט','בקרת ביצוע','דוחות וניתוחים','הודעות','הגדרות ומערכת']) assert.equal(areas.has(area),true,area);
+  for(const area of ['תמונת מצב','העבודה שלי','לוח שנה','פרויקטים','לקוחות','אנשי מקצוע','מערכות ורכיבים','מסמכים והקלטות','תשלומים וגבייה','משימות ואבני דרך','לוח גאנט','בקרת ביצוע','דוחות וניתוחים','הודעות','הגדרות ומערכת']) assert.equal(areas.has(area),true,area);
   const myWork=PRODUCT_HELP_GUIDE.find((item)=>item.area==='העבודה שלי');
   assert.match(myWork.purpose,/מרכז העבודה האישי/);
   assert.ok(myWork.actions.length>=4);

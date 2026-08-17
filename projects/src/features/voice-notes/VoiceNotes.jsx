@@ -3,9 +3,9 @@ import { FileText, ListPlus, Mic, Pause, Play, RotateCcw, RotateCw, Sparkles, Sq
 import "./voice-notes.css";
 const rates=[.5,1,1.25,1.5,1.75,2];
 
-export function VoiceNotes({api,apiRoot,entityType,entityId,projectId,projectWide=false,setNotice,canDelete=false}){
+export function VoiceNotes({api,apiRoot,entityType,entityId,projectId,projectWide=false,allNotes=false,setNotice,canDelete=false}){
   const [notes,setNotes]=useState([]);const [recording,setRecording]=useState(false);const [seconds,setSeconds]=useState(0);const recorder=useRef(null);const chunks=useRef([]);const timer=useRef(null);const startedAt=useRef(0);const transcript=useRef('');const recognition=useRef(null);
-  const load=()=>api(projectWide?`/voice-notes?projectId=${encodeURIComponent(projectId)}`:`/voice-notes?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}`).then((result)=>setNotes(result.notes||[])).catch((error)=>setNotice?.(error.message));
+  const load=()=>api(allNotes?'/voice-notes?all=1':projectWide?`/voice-notes?projectId=${encodeURIComponent(projectId)}`:`/voice-notes?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}`).then((result)=>setNotes(result.notes||[])).catch((error)=>setNotice?.(error.message));
   useEffect(()=>{if(entityId||(projectWide&&projectId))load();const live=(event)=>{if(event.detail?.table==='voice_notes'&&(!projectId||!event.detail.projectId||String(event.detail.projectId)===String(projectId)))load()};window.addEventListener('projects:live-change',live);return()=>{window.removeEventListener('projects:live-change',live);clearInterval(timer.current);recognition.current?.stop()}},[entityType,entityId,projectId,projectWide]);
   const start=async()=>{try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});const media=new MediaRecorder(stream);chunks.current=[];transcript.current='';startedAt.current=Date.now();const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(Recognition){const speech=new Recognition();speech.lang='he-IL';speech.continuous=true;speech.onresult=(event)=>{transcript.current=Array.from(event.results).map((result)=>result[0]?.transcript||'').join(' ').trim()};recognition.current=speech;speech.start()}media.ondataavailable=(event)=>event.data.size&&chunks.current.push(event.data);media.onstop=async()=>{stream.getTracks().forEach((track)=>track.stop());recognition.current?.stop();recognition.current=null;clearInterval(timer.current);const duration=Math.max(1,Math.min(60,(Date.now()-startedAt.current)/1000));const blob=new Blob(chunks.current,{type:media.mimeType||'audio/webm'});const body=new FormData();body.set('audio',blob,'voice-note.webm');body.set('entityType',entityType);body.set('entityId',entityId);if(projectId)body.set('projectId',projectId);body.set('durationSeconds',String(duration));body.set('transcript',transcript.current);try{await api('/voice-notes',{method:'POST',body});load()}catch(error){setNotice?.(error.message)}setSeconds(0)};recorder.current=media;media.start();setRecording(true);timer.current=setInterval(()=>setSeconds((value)=>{if(value>=59){media.stop();setRecording(false);return 60}return value+1}),1000);}catch{setNotice?.('לא ניתן לגשת למיקרופון. בדקו הרשאה במכשיר.')}};
   const stop=()=>{recorder.current?.stop();setRecording(false)};
@@ -25,10 +25,10 @@ function VoicePlayer({note,api,apiRoot,projectId,setNotice,canDelete,onDelete,on
     <audio ref={audio} src={`${apiRoot}/voice-notes/${note.id}/audio`} onTimeUpdate={(event)=>setTime(event.currentTarget.currentTime)} onLoadedMetadata={(event)=>{setDuration(Number.isFinite(event.currentTarget.duration)?event.currentTarget.duration:Number(note.duration_seconds)||0);event.currentTarget.playbackRate=rate}} onEnded={()=>setPlaying(false)}/>
     <div className="voice-transport">
       <button className="voice-play" type="button" title={playing?'השהיה':'ניגון'} aria-label={playing?'השהיה':'ניגון'} onClick={()=>{if(playing)audio.current.pause();else audio.current.play();setPlaying(!playing)}}>{playing?<Pause/>:<Play/>}</button>
-      <button type="button" title="10 שניות אחורה" aria-label="10 שניות אחורה" onClick={()=>seek(-10)}><RotateCcw/><small>10</small></button>
+      <button type="button" title="10 שניות אחורה" aria-label="10 שניות אחורה" onClick={()=>seek(-10)}><RotateCcw/></button>
       <div className="voice-progress"><input aria-label="מיקום בהקלטה" type="range" min="0" max={duration||1} step=".1" value={time} onChange={(event)=>{audio.current.currentTime=Number(event.target.value);setTime(Number(event.target.value))}}/><span>{clock(time)} / {clock(duration)}</span></div>
-      <button type="button" title="10 שניות קדימה" aria-label="10 שניות קדימה" onClick={()=>seek(10)}><RotateCw/><small>10</small></button>
-      <label className="voice-rate" title="מהירות ניגון"><span className="sr-only">מהירות ניגון</span><select value={rate} onChange={changeRate}>{rates.map((value)=><option key={value} value={value}>{value}x</option>)}</select></label>
+      <button type="button" title="10 שניות קדימה" aria-label="10 שניות קדימה" onClick={()=>seek(10)}><RotateCw/></button>
+      <label className="voice-rate" title="מהירות ניגון"><select aria-label="מהירות ניגון" value={rate} onChange={changeRate}>{rates.map((value)=><option key={value} value={value}>{value}x</option>)}</select></label>
       {canDelete&&<button className="voice-delete" type="button" title="מחיקת הקלטה" aria-label="מחיקת הקלטה" onClick={onDelete}><Trash2/></button>}
     </div>
     <div className="voice-actions">
@@ -39,6 +39,6 @@ function VoicePlayer({note,api,apiRoot,projectId,setNotice,canDelete,onDelete,on
     </div>
     {showText&&<div className="voice-transcript">{note.ai_summary&&<><strong>סיכום AI</strong><p>{note.ai_summary}</p></>}<strong>תמלול</strong><p>{note.transcript||'לא נוצר תמלול אוטומטי. האודיו המקורי נשמר.'}</p></div>}
     {taskMode&&<div className="voice-task"><input value={task.title} onChange={(event)=>setTask({...task,title:event.target.value})}/><input type="date" value={task.dueDate} onChange={(event)=>setTask({...task,dueDate:event.target.value})}/><button type="button" onClick={createTask}>יצירת משימה</button></div>}
-    <footer><b>{note.recorded_by_name} · {contextLabel}</b><span>{new Date(note.created_at).toLocaleString('he-IL')} · {Math.round(Number(note.duration_seconds))} שניות</span></footer>
+    <footer><b>{note.recorded_by_name} · {note.project_name||contextLabel}</b><span>{new Date(note.created_at).toLocaleString('he-IL')} · {Math.round(Number(note.duration_seconds))} שניות</span></footer>
   </article>;
 }

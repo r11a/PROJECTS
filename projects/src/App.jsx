@@ -241,7 +241,7 @@ const nav = [
   { id: "clients", label: "לקוחות", icon: Users },
   { id: "professionals", label: "אנשי מקצוע", icon: Users },
   { id: "catalog", label: "מערכות ורכיבים", icon: Database },
-  { id: "forms", label: "טפסים ומסמכים", icon: FormInput },
+  { id: "forms", label: "מסמכים והקלטות", icon: FormInput },
   { id: "finance", label: "תשלומים וגבייה", icon: WalletCards },
 ];
 
@@ -1297,7 +1297,7 @@ const roleLabels = {
 };
 const permissionSections=[
   ["projects","פרויקטים"],["clients","לקוחות"],["professionals","אנשי מקצוע"],["tasks","משימות וגאנט"],
-  ["calendar","לוח שנה"],["forms","טפסים ומסמכים"],["catalog","מערכות ורכיבים"],["finance","כספים וגבייה"],
+  ["calendar","לוח שנה"],["forms","מסמכים והקלטות"],["catalog","מערכות ורכיבים"],["finance","כספים וגבייה"],
   ["reports","דוחות וניתוחים"],["messages","הודעות"],["settings","הגדרות מערכת"],
 ];
 function PermissionMatrix({value={},onChange}){return <div className="permission-matrix"><header><b>מסך / תחום</b><span>ללא</span><span>קריאה</span><span>קריאה וכתיבה</span></header>{permissionSections.map(([key,label])=><div key={key}><b>{label}</b>{["none","read","write"].map(level=><label key={level}><input type="radio" name={`permission-${key}`} checked={(value[key]||"none")===level} onChange={()=>onChange({...value,[key]:level})}/><span/></label>)}</div>)}</div>}
@@ -2992,7 +2992,7 @@ function FormsPage({ setNotice }) {
     <div className="section-page">
       <div className="page-intro">
         <div>
-          <h2>טפסים ומסמכים</h2>
+          <h2>מסמכים והקלטות</h2>
           <p>תבניות חכמות לתיעוד אחיד בכל שלבי הפרויקט</p>
         </div>
         <button

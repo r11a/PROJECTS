@@ -22,7 +22,7 @@ export function calculateHealth(row, canViewFinance = true) {
   return {score,tone:score>=80?'green':score>=60?'yellow':'red',reasons:reasons.sort((a,b)=>b.points-a.points)};
 }
 
-const HEALTH_SQL=`SELECT p.id,p.name,p.progress,p.contractor_progress,
+  const HEALTH_SQL=`SELECT p.id,p.name,p.stage,p.manager,p.progress,p.contractor_progress,
   COALESCE(task_stats.overdue_tasks,0)::int overdue_tasks,COALESCE(task_stats.critical_open,0)::int critical_open,COALESCE(task_stats.gantt_late,0)::int gantt_late,task_stats.risk_task_id,
   COALESCE(payment_stats.overdue_payments,0)::int overdue_payments,COALESCE(equipment_stats.missing_equipment,0)::int missing_equipment,
   CASE WHEN COALESCE(p.installation_hours_target,0)+COALESCE(p.programming_hours_target,0)>0 THEN
@@ -74,8 +74,11 @@ export async function createProjectIntelligenceRouter({pool,authenticate,require
   });
 
   router.get('/voice-notes',async(request,response)=>{
-    const projectId=String(request.query.projectId||'');const entityType=String(request.query.entityType||'');const entityId=String(request.query.entityId||'');
-    const result=projectId
+    const all=request.query.all==='1';const projectId=String(request.query.projectId||'');const entityType=String(request.query.entityType||'');const entityId=String(request.query.entityId||'');
+    if(all&&request.user.permissions?.forms==='none')return response.status(403).json({error:'אין הרשאה לצפייה במסמכים ובהקלטות'});
+    const result=all
+      ? await pool.query(`SELECT v.*,COALESCE(u.display_name,u.username,'מערכת') recorded_by_name,p.name project_name FROM voice_notes v LEFT JOIN users u ON u.id=v.recorded_by LEFT JOIN projects p ON p.id=v.project_id WHERE v.deleted_at IS NULL ORDER BY v.created_at DESC LIMIT 500`)
+      : projectId
       ? await pool.query(`SELECT v.*,COALESCE(u.display_name,u.username,'מערכת') recorded_by_name FROM voice_notes v LEFT JOIN users u ON u.id=v.recorded_by WHERE v.project_id=$1 AND v.deleted_at IS NULL ORDER BY v.created_at DESC`,[projectId])
       : await pool.query(`SELECT v.*,COALESCE(u.display_name,u.username,'מערכת') recorded_by_name FROM voice_notes v LEFT JOIN users u ON u.id=v.recorded_by WHERE v.entity_type=$1 AND v.entity_id=$2 AND v.deleted_at IS NULL ORDER BY v.created_at DESC`,[entityType,entityId]);
     response.json({notes:result.rows});

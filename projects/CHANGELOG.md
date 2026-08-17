@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.26.2
+
+- Renamed the primary sidebar workspace to “מסמכים והקלטות” and added a dedicated voice-recordings view containing recordings from across the system.
+- Added AI text assistance, dictation and saved voice recording to the dashboard project quick-update card.
+- Refined the media player proportions, removed the visible skip numbers and rebuilt the speed selector as a compact control.
+- Unified Performance Control and Risk Center on the same server-side project-health calculation and risk inputs.
+
 ## 0.26.1
 
 - Renamed the project tab to “מסמכים ומדיה” and added a central project-wide voice recording library.

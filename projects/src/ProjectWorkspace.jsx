@@ -326,7 +326,7 @@ export function ProjectWorkspace({
     ["hours", "שעות עבודה"],
     ["systems", "מערכות וצוות"],
     ["priority", "הזמנות Priority"],
-    ["forms", "מסמכים ומדיה"],
+    ["forms", "טפסים וקבצים"],
     ["finance", "כספים"],
     ["activity", "פעילות"],
     ["governance", "שינויים ובקרה"],
@@ -696,11 +696,8 @@ export function ProjectWorkspace({
                   <h3>עדכון מהיר לצוות</h3>
                 </div>
               </div>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="מה קרה, מה הוחלט ומה הפעולה הבאה?"
-              />
+              <SmartTextArea api={api} value={note} onChange={setNote} setNotice={setNotice} label="תוכן העדכון" textareaProps={{placeholder:"מה קרה, מה הוחלט ומה הפעולה הבאה?"}}/>
+              <VoiceNotes api={api} apiRoot={apiRoot} entityType="project_update_draft" entityId={updateVoiceContext} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/>
               <button disabled={!note.trim()}>פרסום עדכון</button>
             </form>
           </div>
@@ -924,10 +921,6 @@ export function ProjectWorkspace({
             ) : (
               <div className="inline-empty">אין מסמכים בפרויקט.</div>
             )}
-          </section>
-          <section className="panel project-resource project-voice-library">
-            <div className="panel-head"><div><h3>הקלטות הפרויקט</h3><span>הקלטות מביקורות, פגישות ועדכוני צוות, יחד עם תמלול וזמן ההקלטה</span></div></div>
-            <VoiceNotes api={api} apiRoot={apiRoot} entityType="project_media" entityId={project.id} projectId={project.id} projectWide setNotice={setNotice} canDelete={user.role==='admin'}/>
           </section>
         </div>
       )}

@@ -10,7 +10,7 @@ const helpDestinations = [
   { page:"tasks",label:"פתח משימות ואבני דרך",pattern:/משימ|אבני דרך|אבן דרך|תלות|אחראי|מבצע/i },
   { page:"reports",label:"פתח דוחות וניתוחים",pattern:/דוח|PDF|מצגת|סטטיסטיקה|ניתוח/i },
   { page:"settings",label:"פתח הגדרות ומערכת",pattern:/הגדר|הרשא|משתמש|Audit|גיבוי|NAS|סוכן AI/i },
-  { page:"forms",label:"פתח טפסים ומסמכים",pattern:/טופס|מסמך|קובץ|תמונה|וידאו/i },
+  { page:"forms",label:"פתח מסמכים והקלטות",pattern:/טופס|מסמך|קובץ|תמונה|וידאו|הקלטה|תמלול/i },
   { page:"finance",label:"פתח תשלומים וגבייה",pattern:/תשלום|גבייה|יתרה|תקציב|כספ/i },
   { page:"catalog",label:"פתח מערכות ורכיבים",pattern:/מערכות ורכיבים|קטלוג|רכיב|KNX|מצלמ/i },
   { page:"professionals",label:"פתח אנשי מקצוע",pattern:/אנשי מקצוע|טכנאי|אדריכל|חשמלאי|ספק/i },

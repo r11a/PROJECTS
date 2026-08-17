@@ -1,4 +1,5 @@
 import express from 'express';
+import { loadProjectHealth } from './projectIntelligence.js';
 
 const ACTIVE_TASKS = "('open','in_progress')";
 const AUTOMATION_TRIGGER_TYPES = ["project_created","project_stage_changed","task_created","task_status_changed","task_overdue"];
@@ -278,15 +279,7 @@ export function createProductivityRouter({ pool, authenticate, requireRoles, aud
   });
   router.delete('/automation-rules/:id',requireRoles('admin'),async(request,response)=>{await pool.query('DELETE FROM automation_rules WHERE id=$1',[request.params.id]);response.status(204).end();});
 
-  router.get('/portfolio-health',async(_request,response)=>{const result=await pool.query(`SELECT p.id,p.name,p.stage,p.progress,p.manager,p.installation_hours_target installation_target,p.programming_hours_target programming_target,
-    (CURRENT_DATE-p.updated_at::date)::int days_without_update,
-    (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id=p.id AND t.status IN ${ACTIVE_TASKS} AND t.due_date<CURRENT_DATE) overdue_tasks,
-    (SELECT COUNT(*)::int FROM tasks t WHERE t.project_id=p.id AND t.status IN ${ACTIVE_TASKS} AND t.due_date<CURRENT_DATE AND t.critical) critical_overdue,
-    (SELECT COUNT(*)::int FROM project_milestones m WHERE m.project_id=p.id AND (m.status='delayed' OR (m.status<>'completed' AND m.due_date<CURRENT_DATE))) delayed_milestones,
-    (SELECT COUNT(*)::int FROM project_payments pay WHERE pay.project_id=p.id AND pay.status='pending' AND pay.due_date<CURRENT_DATE) overdue_payments,
-    COALESCE((SELECT SUM(e.hours) FROM project_time_entries e WHERE e.project_id=p.id AND e.activity_type='installation'),0) installation_actual,
-    COALESCE((SELECT SUM(e.hours) FROM project_time_entries e WHERE e.project_id=p.id AND e.activity_type='programming'),0) programming_actual
-    FROM projects p WHERE p.archived_at IS NULL ORDER BY p.name`);response.json({projects:result.rows.map(row=>{const safeRow=requestFinanceRow(row,_request.user);return {...safeRow,health:healthFor(safeRow)}})});});
+  router.get('/portfolio-health',async(request,response)=>{const projects=await loadProjectHealth(pool,request.user.financeAccess!==false);response.json({projects:projects.map(item=>({...item,health:{score:item.score,tone:item.tone==='green'?'good':item.tone==='yellow'?'warning':'risk',reasons:item.reasons.map(reason=>reason.label),nextAction:item.reasons[0]?.label||'הפרויקט מתנהל ללא חריגות מהותיות'}}))});});
   router.get('/resource-workload',async(_request,response)=>{const result=await pool.query(`SELECT p.id,p.display_name,p.color,p.linked_user_id,COALESCE(u.weekly_capacity_hours,40) weekly_capacity_hours,
     COALESCE(SUM(t.estimated_hours) FILTER(WHERE t.status IN ${ACTIVE_TASKS} AND t.due_date BETWEEN CURRENT_DATE AND CURRENT_DATE+13),0) allocated_hours,
     COUNT(t.id) FILTER(WHERE t.status IN ${ACTIVE_TASKS} AND t.due_date BETWEEN CURRENT_DATE AND CURRENT_DATE+13)::int task_count,
