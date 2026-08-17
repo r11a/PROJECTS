@@ -16,6 +16,7 @@ import { createGeocoder } from './geocoder.js';
 import { createBackupRouter } from './backup.js';
 import { createAiRouter } from './ai.js';
 import { createProductivityRouter, executeAutomations, startAutomationScheduler } from './productivity.js';
+import { createPriorityOrdersRouter } from './priorityOrders.js';
 import { imageFileFilter } from './uploadPolicy.js';
 
 const { Pool, Client } = pg;
@@ -1017,6 +1018,7 @@ app.use('/api', await createOperationalRouter({ pool, authenticate, requireRoles
 app.use('/api', await createAiRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR }));
 app.use('/api', createFormsRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
+app.use('/api', createPriorityOrdersRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', createOperationsRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', createProductivityRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createBackupRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR, appVersion:APP_VERSION }));

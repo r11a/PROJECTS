@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.25.0
+
+- Added a production-ready, six-step Hebrew RTL Priority XLSX order import wizard inside each project.
+- Added safe server-side parsing for regular workbooks and Priority namespace-prefixed OOXML exports, including the real two-header-row structure.
+- Added editable row selection, descriptions, quantities, units, classifications, catalog matches, project-system allocation and bulk mapping.
+- Added persistent `priority_orders` and `priority_order_lines` entities linked to the existing project equipment/BOM model.
+- Added catalog matching by `priority_sku` with `code` fallback, controlled creation of new components and learned SKU mappings.
+- Added explicit installation/programming day conversion at eight reference hours per day without changing actual tracked hours.
+- Added idempotent re-import, duplicate protection, PostgreSQL transaction rollback, audit metadata and live-update notification.
+- Added server-side finance redaction, resource permissions, safe in-memory previews, XLSX size/type/archive limits and no permanent source-file retention.
+- Added responsive mobile cards, imported-order history/detail views, sanitized fixtures, unit coverage and a Playwright critical import path.
+
 ## 0.24.9
 
 - Added admin password reset/unlock flow with strong-password policy and one-time reset generation.

@@ -12,6 +12,7 @@ import {
   Eye,
   Film,
   FileText,
+  FileSpreadsheet,
   Flag,
   Home,
   House,
@@ -38,6 +39,8 @@ import { ProjectGovernancePanel } from "./ProductivityWorkspace";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { summarizeTimeEntries } from "./features/timeTracking/model";
 import { localDateValue } from "./dateTime";
+import { PriorityImportWizard } from "./features/priority-import/PriorityImportWizard";
+import { classificationLabel, priorityMoney } from "./features/priority-import/priorityImport";
 
 const money = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -99,12 +102,14 @@ export function ProjectWorkspace({
     reviews: [],
     meetings: [],
     timeEntries: [],
+    priorityOrders: [],
   });
   const [mentionUsers,setMentionUsers]=useState([]);
   const [note, setNote] = useState("");
   const [modal, setModal] = useState("");
   const [hoursReportRequest, setHoursReportRequest] = useState(0);
   const [previewFile,setPreviewFile]=useState(null);
+  const [priorityOrderDetail,setPriorityOrderDetail]=useState(null);
   const [teamRoleId,setTeamRoleId]=useState("");
   const [teamQuery,setTeamQuery]=useState("");
   const [reference, setReference] = useState({ roles: [], equipment: [] });
@@ -113,6 +118,7 @@ export function ProjectWorkspace({
   const [editClientName, setEditClientName] = useState(project.client || "");
   const canEdit = user.permissions?.projects === "write" || ["admin", "manager", "technician", "supervisor"].includes(user.role);
   const canManage = ["admin", "manager"].includes(user.role);
+  const canImportPriority = ["admin", "manager", "supervisor"].includes(user.role) || user.permissions?.projects === "write";
   const load = async () => {
     try {
       setWorkspace(
@@ -302,6 +308,7 @@ export function ProjectWorkspace({
     ["reviews", "ביקורות ופגישות"],
     ["hours", "שעות עבודה"],
     ["systems", "מערכות וצוות"],
+    ["priority", "הזמנות Priority"],
     ["forms", "טפסים וקבצים"],
     ["finance", "כספים"],
     ["activity", "פעילות"],
@@ -806,6 +813,20 @@ export function ProjectWorkspace({
           </section>
         </div>
       )}
+      {tab === "priority" && (
+        <section className="panel project-resource priority-orders-page">
+          <div className="panel-head">
+            <div><h3>הזמנות Priority</h3><span>היסטוריית הזמנות, שורות מקור, ציוד ושעות ייחוס</span></div>
+            {canImportPriority && <button onClick={() => setModal("priority-import")}><FileSpreadsheet size={16}/>ייבוא הזמנה</button>}
+          </div>
+          {workspace.priorityOrders?.length ? workspace.priorityOrders.map((order) => <article className="priority-order-row" key={order.id}>
+            <span><FileSpreadsheet size={20}/></span>
+            <div><strong>{order.priorityOrderNumber}</strong><small>{order.customerName || project.client} · {order.orderStatus || "ללא סטטוס"} · {dateText(order.orderDate || order.createdAt)} · {order.selectedCount}/{order.lineCount} שורות</small></div>
+            {order.totalAmount !== undefined && <strong>{priorityMoney.format(order.totalAmount)}</strong>}
+            <button type="button" onClick={async()=>{try{setPriorityOrderDetail(await api(`/projects/${encodeURIComponent(project.id)}/priority-orders/${order.id}`))}catch(error){setNotice(error.message)}}}>צפייה</button>
+          </article>) : <div className="priority-order-empty"><FileSpreadsheet size={38}/><p>טרם יובאו הזמנות Priority לפרויקט.</p>{canImportPriority&&<button className="primary-button" onClick={()=>setModal("priority-import")}>ייבוא הזמנה ראשונה</button>}</div>}
+        </section>
+      )}
       {tab === "forms" && (
         <div className="project-two-columns">
           <section className="panel project-resource">
@@ -1134,6 +1155,13 @@ export function ProjectWorkspace({
           onClose={() => setModal("")}
         />
       )}
+      {modal === "priority-import" && <PriorityImportWizard project={project} api={api} onClose={()=>setModal("")} onImported={async()=>{await load();setNotice("הזמנת Priority יובאה ועדכנה את הפרויקט")}} />}
+      {priorityOrderDetail && <AppModal title={`הזמנת Priority ${priorityOrderDetail.order.priorityOrderNumber}`} subtitle="תיעוד הייבוא לפרויקט" onClose={()=>setPriorityOrderDetail(null)} className="priority-order-detail">
+        <div className="priority-order-detail-content">
+          <header><div><span>לקוח</span><strong>{priorityOrderDetail.order.customerName}</strong></div><div><span>סטטוס</span><strong>{priorityOrderDetail.order.orderStatus||"—"}</strong></div><div><span>הצעת מחיר</span><strong>{priorityOrderDetail.order.quotationNumber||"—"}</strong></div>{priorityOrderDetail.order.totalAmount!==undefined&&<div><span>סה״כ</span><strong>{priorityMoney.format(priorityOrderDetail.order.totalAmount)}</strong></div>}</header>
+          <div className="priority-order-detail-lines">{priorityOrderDetail.lines.map(line=><article key={line.id}><span>{line.prioritySku||"—"}</span><div><strong>{line.description}</strong>{line.originalDescription!==line.description&&<small>מקור: {line.originalDescription}</small>}</div><b>{line.quantity} {line.unit}</b><em>{classificationLabel(line.classification)}</em><small>{line.projectSystemName||"ללא מערכת"}{line.catalogItemName?` · ${line.catalogItemName}`:""}</small></article>)}</div>
+        </div>
+      </AppModal>}
       {previewFile&&<Modal title={previewFile.title||previewFile.original_name} onClose={()=>setPreviewFile(null)} className="project-media-modal">
         <div className="project-media-viewer">
           {previewFile.mime_type?.startsWith('image/')?<img src={`${apiRoot}/documents/${previewFile.id}/preview`} alt={previewFile.title||previewFile.original_name}/>:previewFile.mime_type?.startsWith('video/')?<video src={`${apiRoot}/documents/${previewFile.id}/preview`} controls playsInline/>:previewFile.mime_type==='application/pdf'?<iframe src={`${apiRoot}/documents/${previewFile.id}/preview`} title={previewFile.title||previewFile.original_name}/>:<div className="media-unsupported"><FileText size={52}/><h3>המסמך זמין לפתיחה או להורדה</h3><p>תצוגה מקדימה מלאה של קובצי Word ו־Excel תלויה ביישום המותקן במכשיר.</p></div>}

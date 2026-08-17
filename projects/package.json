@@ -2,7 +2,7 @@
   "name": "projects-home-assistant-app",
   "private": true,
   "license": "UNLICENSED",
-  "version": "0.24.9",
+  "version": "0.25.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -10,17 +10,19 @@
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "test:e2e": "playwright test",
     "audit:production": "npm audit --omit=dev --audit-level=critical",
-    "check": "node --check server/index.js && node --check server/ai.js && node --check server/aiKnowledge.js && node --check server/insights.js && node --check server/backup.js && node --check server/geocoder.js && node --check server/operational.js && node --check server/forms.js && node --check server/management.js && node --check server/operations.js && node --check server/productivity.js",
+    "check": "node --check server/index.js && node --check server/ai.js && node --check server/aiKnowledge.js && node --check server/insights.js && node --check server/backup.js && node --check server/geocoder.js && node --check server/operational.js && node --check server/forms.js && node --check server/management.js && node --check server/operations.js && node --check server/productivity.js && node --check server/priorityWorkbook.js && node --check server/priorityOrders.js",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
     "bcryptjs": "3.0.3",
+    "exceljs": "4.4.0",
     "express": "5.2.1",
     "helmet": "8.3.0",
     "html2canvas": "1.4.1",
     "jsonwebtoken": "9.0.3",
     "jspdf": "4.2.1",
+    "jszip": "3.10.1",
     "leaflet": "1.9.4",
     "lucide-react": "1.31.0",
     "multer": "2.2.0",
@@ -35,5 +37,10 @@
     "@playwright/test": "1.62.1",
     "@vitejs/plugin-react": "6.0.5",
     "vite": "8.2.1"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
   }
 }

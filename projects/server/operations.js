@@ -261,7 +261,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
 
   router.get('/projects/:id/workspace', async (request, response) => {
     const id = request.params.id;
-    const [tasks, milestones, payments, team, equipment, forms, files, updates, activity,reviews,meetings,timeEntries] = await Promise.all([
+    const [tasks, milestones, payments, team, equipment, forms, files, updates, activity,reviews,meetings,timeEntries,priorityOrders] = await Promise.all([
       pool.query(`SELECT t.*,pr.display_name assignee_name,pr.color assignee_color,dependency.title dependency_title FROM tasks t LEFT JOIN professionals pr ON pr.id=t.assignee_professional_id LEFT JOIN tasks dependency ON dependency.id=t.dependency_task_id WHERE t.project_id=$1 ORDER BY (t.status='done'),t.due_date`, [id]),
       pool.query(`SELECT m.*,pr.display_name owner_name FROM project_milestones m LEFT JOIN professionals pr ON pr.id=m.owner_professional_id WHERE m.project_id=$1 ORDER BY (m.status='completed'),m.due_date`, [id]),
       pool.query('SELECT * FROM project_payments WHERE project_id=$1 ORDER BY due_date NULLS LAST,created_at DESC', [id]),
@@ -274,8 +274,13 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
       pool.query(`SELECT r.*,p.display_name performed_by_name,u.display_name created_by_name FROM project_site_reviews r LEFT JOIN professionals p ON p.id=r.performed_by LEFT JOIN users u ON u.id=r.created_by WHERE r.project_id=$1 ORDER BY r.review_date DESC,r.created_at DESC`,[id]),
       pool.query(`SELECT m.*,u.display_name created_by_name FROM project_meeting_summaries m LEFT JOIN users u ON u.id=m.created_by WHERE m.project_id=$1 ORDER BY m.meeting_at DESC`,[id]),
       pool.query(`SELECT e.*,p.display_name professional_name,u.display_name user_name FROM project_time_entries e LEFT JOIN professionals p ON p.id=e.professional_id LEFT JOIN users u ON u.id=e.user_id WHERE e.project_id=$1 ORDER BY e.work_date DESC,e.created_at DESC`,[id]),
+      pool.query(`SELECT o.id,o.priority_order_number,o.customer_name,o.order_status,o.order_date,o.total_amount,o.created_at,
+        COUNT(l.id)::int line_count,COUNT(l.id) FILTER (WHERE l.include_in_project)::int selected_count
+        FROM priority_orders o LEFT JOIN priority_order_lines l ON l.priority_order_id=o.id WHERE o.project_id=$1
+        GROUP BY o.id ORDER BY o.created_at DESC`,[id]),
     ]);
-    response.json({ tasks: tasks.rows, milestones: milestones.rows, payments: request.user.financeAccess === false ? [] : payments.rows, team: team.rows, equipment: equipment.rows, forms: forms.rows, files: files.rows, updates: updates.rows, activity: activity.rows,reviews:reviews.rows,meetings:meetings.rows,timeEntries:timeEntries.rows });
+    response.json({ tasks: tasks.rows, milestones: milestones.rows, payments: request.user.financeAccess === false ? [] : payments.rows, team: team.rows, equipment: equipment.rows, forms: forms.rows, files: files.rows, updates: updates.rows, activity: activity.rows,reviews:reviews.rows,meetings:meetings.rows,timeEntries:timeEntries.rows,
+      priorityOrders:priorityOrders.rows.map((row)=>({id:row.id,priorityOrderNumber:row.priority_order_number,customerName:row.customer_name,orderStatus:row.order_status,orderDate:row.order_date,lineCount:Number(row.line_count),selectedCount:Number(row.selected_count),createdAt:row.created_at,...(request.user.financeAccess===false?{}:{totalAmount:Number(row.total_amount||0)})})) });
   });
 
   router.post('/projects/:id/time-entries',requireRoles('admin','manager','technician'),async(request,response)=>{
