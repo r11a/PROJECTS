@@ -1,5 +1,6 @@
 import express from 'express';
 import { executeAutomations } from './productivity.js';
+import { normalizeDateOnly } from './dateOnly.js';
 
 const TASK_STATUSES = ['open', 'in_progress', 'done', 'cancelled'];
 const MILESTONE_STATUSES = ['planned', 'in_progress', 'completed', 'delayed'];
@@ -98,6 +99,9 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
 
   router.post('/operations/tasks', requireRoles('admin', 'manager', 'technician'), async (request, response) => {
     const title = String(request.body.title || '').trim();
+    const dueDate = normalizeDateOnly(request.body.dueDate);
+    const startDate = normalizeDateOnly(request.body.startDate || request.body.dueDate);
+    if (!dueDate || !startDate) return response.status(400).json({ error: 'התאריך שנשלח אינו תקין' });
     if (!title || !request.body.dueDate || (!request.body.projectId && !request.body.clientId)) return response.status(400).json({ error: 'כותרת, תאריך סיום ופרויקט או לקוח הם שדות חובה' });
     if (request.body.startDate && request.body.startDate > request.body.dueDate) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
     if (request.body.dependencyTaskId) { const dependency=await pool.query("SELECT project_id,status FROM tasks WHERE id=$1",[request.body.dependencyTaskId]); if(!dependency.rowCount||dependency.rows[0].project_id!==request.body.projectId||!['open','in_progress'].includes(dependency.rows[0].status))return response.status(400).json({error:'משימת התלות חייבת להיות פתוחה או בביצוע ובאותו פרויקט'}); }
@@ -106,7 +110,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const durationHours=Math.max(0,Number(request.body.durationHours ?? request.body.estimatedHours)||0);
     const allDay=Boolean(request.body.allDay);
     const result = await pool.query(`INSERT INTO tasks(client_id,project_id,title,description,status,priority,assignee_professional_id,owner_professional_id,start_date,due_date,start_time,end_time,all_day,duration_hours,estimated_hours,task_type,dependency_task_id,parent_task_id,critical,created_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,$16,$17,$18,$19) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null,request.body.ownerProfessionalId || null, request.body.startDate || request.body.dueDate, request.body.dueDate, allDay?null:(request.body.startTime || null), allDay?null:(request.body.endTime || null), allDay, durationHours, request.body.taskType || 'task', request.body.dependencyTaskId || null,request.body.parentTaskId || null,Boolean(request.body.critical), request.user.id]);
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,$16,$17,$18,$19) RETURNING *`, [request.body.clientId || null, request.body.projectId || null, title, request.body.description || '', TASK_STATUSES.includes(request.body.status) ? request.body.status : 'open', request.body.priority || 'normal', request.body.assigneeProfessionalId || null,request.body.ownerProfessionalId || null, startDate, dueDate, allDay?null:(request.body.startTime || null), allDay?null:(request.body.endTime || null), allDay, durationHours, request.body.taskType || 'task', request.body.dependencyTaskId || null,request.body.parentTaskId || null,Boolean(request.body.critical), request.user.id]);
     await syncProjectMetrics(pool, request.body.projectId);
     await audit(request, 'create', 'task', String(result.rows[0].id), { title, projectId: request.body.projectId });
     await executeAutomations({
@@ -133,7 +137,11 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     if (!(await mayEditProject(pool, request, row.project_id))) return response.status(403).json({error:'רק מנהל הפרויקט המשויך רשאי לערוך משימות בפרויקט'});
     const status = TASK_STATUSES.includes(request.body.status) ? request.body.status : row.status;
     const dependencyId=Object.prototype.hasOwnProperty.call(request.body,'dependencyTaskId')?(request.body.dependencyTaskId||null):row.dependency_task_id;
-    const nextStart = request.body.startDate ?? row.start_date; const nextDue = request.body.dueDate ?? row.due_date;
+    const hasStartDate = Object.prototype.hasOwnProperty.call(request.body, 'startDate');
+    const hasDueDate = Object.prototype.hasOwnProperty.call(request.body, 'dueDate');
+    const nextStart = hasStartDate ? normalizeDateOnly(request.body.startDate) : row.start_date;
+    const nextDue = hasDueDate ? normalizeDateOnly(request.body.dueDate) : row.due_date;
+    if ((hasStartDate && !nextStart) || (hasDueDate && !nextDue)) return response.status(400).json({ error: 'התאריך שנשלח אינו תקין' });
     if(String(request.body.dependencyTaskId||'')===String(request.params.id))return response.status(400).json({error:'משימה אינה יכולה להיות תלויה בעצמה'});
     if(dependencyId){const dependency=await pool.query("SELECT project_id,status FROM tasks WHERE id=$1",[dependencyId]);if(!dependency.rowCount||dependency.rows[0].project_id!==row.project_id||!['open','in_progress'].includes(dependency.rows[0].status))return response.status(400).json({error:'משימת התלות חייבת להיות פתוחה או בביצוע ובאותו פרויקט'});}
     const parentTaskId=Object.prototype.hasOwnProperty.call(request.body,'parentTaskId')?(request.body.parentTaskId||null):row.parent_task_id;
@@ -143,7 +151,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const durationHours=Math.max(0,Number(request.body.durationHours ?? request.body.estimatedHours ?? row.duration_hours ?? row.estimated_hours)||0);
     const allDay=request.body.allDay ?? row.all_day;
     const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,owner_professional_id=$6,start_date=$7,due_date=$8,start_time=$9,end_time=$10,all_day=$11,duration_hours=$12,estimated_hours=$12,task_type=$13,dependency_task_id=$14,parent_task_id=$15,critical=$16,color=$17,
-      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$18 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id,request.body.ownerProfessionalId ?? row.owner_professional_id, request.body.startDate ?? row.start_date, request.body.dueDate ?? row.due_date, allDay?null:(request.body.startTime ?? row.start_time), allDay?null:(request.body.endTime ?? row.end_time), allDay, durationHours, request.body.taskType ?? row.task_type, dependencyId,parentTaskId,request.body.critical ?? row.critical, request.body.color ?? row.color, request.params.id]);
+      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$18 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id,request.body.ownerProfessionalId ?? row.owner_professional_id, nextStart, nextDue, allDay?null:(request.body.startTime ?? row.start_time), allDay?null:(request.body.endTime ?? row.end_time), allDay, durationHours, request.body.taskType ?? row.task_type, dependencyId,parentTaskId,request.body.critical ?? row.critical, request.body.color ?? row.color, request.params.id]);
     await syncProjectMetrics(pool, row.project_id);
     await audit(request, 'update', 'task', request.params.id, request.body);
     if(status!==row.status) {

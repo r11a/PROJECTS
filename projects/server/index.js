@@ -18,8 +18,10 @@ import { createAiRouter } from './ai.js';
 import { createProductivityRouter, executeAutomations, startAutomationScheduler } from './productivity.js';
 import { createPriorityOrdersRouter } from './priorityOrders.js';
 import { imageFileFilter } from './uploadPolicy.js';
+import { installPostgresDateOnlyParser } from './dateOnly.js';
 
-const { Pool, Client } = pg;
+const { Pool, Client, types } = pg;
+installPostgresDateOnlyParser(types);
 const DATA_DIR = process.env.PROJECTS_DATA_DIR || '/data';
 const OPTIONS_FILE = process.env.PROJECTS_OPTIONS_FILE || '/data/options.json';
 const MIGRATIONS_DIR = new URL('../migrations/', import.meta.url);

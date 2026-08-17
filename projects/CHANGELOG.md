@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.25.2
+
+- Fixed the critical one-day shift in task start and end dates by keeping PostgreSQL `DATE` values timezone-free end to end.
+- Added strict calendar-date validation and regression coverage for task date persistence.
+
 ## 0.25.1
 
 - Dashboard collection chart now shows project names instead of internal serial identifiers.
