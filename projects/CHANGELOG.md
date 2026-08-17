@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.27.2
+
+- Refined mobile right-edge sidebar gesture so opening only reacts to horizontal swipes from the right screen edge, avoiding accidental opens during normal content interactions.
+- Kept swipe-to-close behavior while adding a vertical movement tolerance and stronger direction checks for more stable gestures.
+- Bumped addon release metadata to 0.27.2.
+
 ## 0.27.1
 
 - Replaced the expanded voice-recording feed with a compact, table-like list showing context, recorder, timestamp and duration.

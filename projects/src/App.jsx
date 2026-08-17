@@ -306,11 +306,41 @@ function App() {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [stageFilter, setStageFilter] = useState("all");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const navigationSwipe=useRef(null);
+  const navigationSwipe = useRef(null);
+  const SWIPE_EDGE_TRIGGER_PX = 30;
+  const SWIPE_OPEN_THRESHOLD_PX = 72;
+  const SWIPE_VERTICAL_TOLERANCE_PX = 28;
   useEffect(()=>{
-    const start=(event)=>{const touch=event.touches?.[0];if(touch)navigationSwipe.current={x:touch.clientX,y:touch.clientY};};
-    const end=(event)=>{const startPoint=navigationSwipe.current;const touch=event.changedTouches?.[0];navigationSwipe.current=null;if(!startPoint||!touch||Math.abs(touch.clientY-startPoint.y)>70)return;const delta=touch.clientX-startPoint.x;if(delta<-85&&!sidebarOpen)setSidebarOpen(true);if(delta>85&&sidebarOpen)setSidebarOpen(false);};
-    window.addEventListener('touchstart',start,{passive:true});window.addEventListener('touchend',end,{passive:true});return()=>{window.removeEventListener('touchstart',start);window.removeEventListener('touchend',end);};
+    const start=(event)=>{
+      const touch=event.touches?.[0];
+      if(!touch) return;
+      navigationSwipe.current={
+        x: touch.clientX,
+        y: touch.clientY,
+        edge: touch.clientX >= window.innerWidth - SWIPE_EDGE_TRIGGER_PX,
+      };
+    };
+    const end=(event)=>{
+      const startPoint=navigationSwipe.current;
+      const touch=event.changedTouches?.[0];
+      navigationSwipe.current=null;
+      if(!startPoint||!touch) return;
+      const deltaX=touch.clientX-startPoint.x;
+      const deltaY=touch.clientY-startPoint.y;
+      const absDeltaX=Math.abs(deltaX);
+      const absDeltaY=Math.abs(deltaY);
+      if(absDeltaY > SWIPE_VERTICAL_TOLERANCE_PX || absDeltaX < SWIPE_OPEN_THRESHOLD_PX) return;
+      if(deltaX <= -SWIPE_OPEN_THRESHOLD_PX && startPoint.edge && !sidebarOpen) {
+        setSidebarOpen(true);
+        return;
+      }
+      if(deltaX >= SWIPE_OPEN_THRESHOLD_PX && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener('touchstart',start,{passive:true});
+    window.addEventListener('touchend',end,{passive:true});
+    return()=>{window.removeEventListener('touchstart',start);window.removeEventListener('touchend',end);};
   },[sidebarOpen]);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [notice, setNotice] = useState("");
