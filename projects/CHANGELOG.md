@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.27.1
+
+- Replaced the expanded voice-recording feed with a compact, table-like list showing context, recorder, timestamp and duration.
+- Added an inline disclosure control so only one selected recording player is rendered open at a time.
+- Constrained long recording libraries to an internal scroll area instead of extending the entire page.
+- Rebuilt the mobile player grid to stay within the viewport without horizontal overflow.
+
 ## 0.27.0
 
 - Added a generic project domain classification: Smart Home or Other, with a required free-text type for Other projects.
