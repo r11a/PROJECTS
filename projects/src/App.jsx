@@ -29,12 +29,14 @@ import {
   ListFilter,
   Database,
   LogOut,
+  KeyRound,
   Mail,
   Map,
   MapPin,
   Menu,
   MessageSquare,
   MoreHorizontal,
+  Unlock,
   Phone,
   Plus,
   RotateCcw,
@@ -1395,6 +1397,8 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
   const [activeTab, setActiveTab] = useState("accounts");
   const [identityLink, setIdentityLink] = useState({ primaryUserId:"", secondaryUserId:"" });
   const [linkingIdentity,setLinkingIdentity]=useState(false);
+  const [passwordActions,setPasswordActions]=useState({});
+  const [savingAction,setSavingAction]=useState("");
   const [form, setForm] = useState({
     username: "",
     displayName: "",
@@ -1497,6 +1501,72 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       setNotice("הזהויות אוחדו בהצלחה לחשבון אחד");
     } catch (error) { setNotice(error.message); } finally { setLinkingIdentity(false); }
   };
+  const openPasswordReset = (itemId) => setPasswordActions((state)=>({
+    ...state,
+    [itemId]: { ...(state[itemId] || { newPassword:"", requirePasswordChange:true, generatedPassword:"" }), open: true },
+  }));
+  const updatePasswordAction = (itemId, patch) => setPasswordActions((state)=>({
+    ...state,
+    [itemId]: { ...(state[itemId] || { newPassword:"", requirePasswordChange:true, open:true, generatedPassword:"" }), ...patch },
+  }));
+  const closePasswordReset = (itemId) => setPasswordActions((state)=>({
+    ...state,
+    [itemId]: { ...(state[itemId] || {}), open:false, newPassword:"", generatedPassword:"" },
+  }));
+  const randomPassword = () => {
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const digits = "0123456789";
+    const symbols = "!@#$%^&*";
+    const all = `${upper}${lower}${digits}${symbols}`;
+    const pick = (set) => set[Math.floor(Math.random() * set.length)];
+    const created = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+    for (let index = 0; index < 12; index += 1) created.push(pick(all));
+    return created.sort(() => Math.random() - 0.5).join("");
+  };
+  const hasStrongPassword = (value) => value.length >= 12 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value);
+  const resetUserPassword = async (itemId) => {
+    const state = passwordActions[itemId] || {};
+    const requestedPassword = String(state.newPassword || "").trim();
+    const finalPassword = requestedPassword || randomPassword();
+    if (!hasStrongPassword(finalPassword)) return setNotice("Password must contain at least 12 characters, upper and lower case letters, and a number");
+    setSavingAction(`reset:${itemId}`);
+    try {
+      const result = await api(`/users/${itemId}/reset-password`, {
+        method: "POST",
+        body: JSON.stringify({
+          newPassword: requestedPassword || "",
+          requirePasswordChange: state.requirePasswordChange !== false,
+          unlockAccount: true,
+        }),
+      });
+      setPasswordActions((current) => ({
+        ...current,
+        [itemId]: { ...(current[itemId] || {}), newPassword:"", generatedPassword: requestedPassword ? "" : (result.generatedPassword || finalPassword), open: true, requirePasswordChange: true },
+      }));
+      loadUsers();
+      if (typeof onChanged === "function") onChanged(result.user);
+      setNotice("סיסמת משתמש עודכנה בהצלחה");
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setSavingAction("");
+    }
+  };
+  const unlockUser = async (item) => {
+    if (!window.confirm(`לשחרר נעילה של \"${item.displayName}\"?`)) return;
+    setSavingAction(`unlock:${item.id}`);
+    try {
+      const result = await api(`/users/${item.id}/unlock`, { method: "POST" });
+      loadUsers();
+      if (typeof onChanged === "function") onChanged(result.user);
+      setNotice("נעילת המשתמש שוחררה");
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setSavingAction("");
+    }
+  };
   return (
     <div className="section-page users-page">
       <div className="page-intro">
@@ -1550,6 +1620,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                   <span className={item.financeAccess !== false ? "admin-finance-badge allowed" : "admin-finance-badge blocked"}>
                     {item.financeAccess !== false ? "כספים גלויים" : "כספים מוסתרים"}
                   </span>
+                  {item.isLocked ? <span className="admin-lock-badge">ננעל</span> : null}
                   <label className="admin-switch" title={item.active ? "החשבון פעיל" : "החשבון מושבת"}>
                     <input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} />
                     <span aria-hidden="true" />
@@ -1560,6 +1631,27 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
               <details className="admin-user-settings">
                 <summary><span>עריכת משתמש והרשאות</span><ChevronDown size={16} /></summary>
                 <div className="admin-user-controls">
+                  <div className="admin-password-action">
+                    <button
+                      type="button"
+                      className="admin-secondary-action"
+                      onClick={() => openPasswordReset(item.id)}
+                    >
+                      <KeyRound size={15} />
+                      <span>איפוס סיסמה</span>
+                    </button>
+                    {item.isLocked ? (
+                      <button
+                        type="button"
+                        className="admin-secondary-action"
+                        onClick={() => unlockUser(item)}
+                        disabled={savingAction === `unlock:${item.id}`}
+                      >
+                        <Unlock size={15} />
+                        <span>{savingAction === `unlock:${item.id}` ? "פועל..." : "שחרור נעילה"}</span>
+                      </button>
+                    ) : null}
+                  </div>
                   <label className="user-control-field admin-icon-field">
                     <span>תפקיד והרשאה</span>
                     <select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>
@@ -1586,6 +1678,60 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                   </label>
                   {item.avatarImage && <button type="button" className="admin-secondary-action" onClick={() => removeAvatar(item.id)}>הסרת תמונה</button>}
                   <button type="button" className="admin-delete-action" disabled={String(item.id) === String(currentUser.id)} onClick={() => deleteUser(item)} title="מחיקת משתמש"><Trash2 size={15} /><span>מחיקה</span></button>
+                  {passwordActions[item.id]?.open ? (
+                    <div className="admin-password-editor">
+                      <h5>איפוס סיסמה למשתמש</h5>
+                      <label className="user-control-field admin-icon-field">
+                        <span>סיסמה חדשה</span>
+                        <input
+                          type="password"
+                          dir="ltr"
+                          value={passwordActions[item.id]?.newPassword || ""}
+                          onChange={(event) => updatePasswordAction(item.id, { newPassword: event.target.value })}
+                          placeholder="השאר ריק ליצירת סיסמה אקראית"
+                        />
+                      </label>
+                      <div className="admin-password-inline">
+                        <label className="admin-checkbox-option">
+                          <input
+                            type="checkbox"
+                            checked={passwordActions[item.id]?.requirePasswordChange !== false}
+                            onChange={(event) => updatePasswordAction(item.id, { requirePasswordChange: event.target.checked })}
+                          />
+                          <span>דרוש שינוי סיסמה בכניסה הבאה</span>
+                        </label>
+                        <button
+                          type="button"
+                          className="admin-secondary-action"
+                          onClick={() => updatePasswordAction(item.id, { newPassword: randomPassword() })}
+                        >
+                          יצירת סיסמה
+                        </button>
+                      </div>
+                      <div className="admin-password-actions">
+                        <button
+                          type="button"
+                          className="primary-button"
+                          onClick={() => resetUserPassword(item.id)}
+                          disabled={savingAction === `reset:${item.id}`}
+                        >
+                          {savingAction === `reset:${item.id}` ? "שומר..." : "שמירת סיסמה"}
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-secondary-action"
+                          onClick={() => closePasswordReset(item.id)}
+                        >
+                          ביטול
+                        </button>
+                      </div>
+                      {passwordActions[item.id]?.generatedPassword ? (
+                        <p className="admin-generated-password">
+                          סיסמה זמנית: <strong>{passwordActions[item.id]?.generatedPassword}</strong> (שמור במקום בטוח)
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
                 {item.role === "custom" && <details className="user-permissions"><summary>הרשאות מפורטות</summary><PermissionMatrix value={item.permissions} onChange={(permissions) => updateUser(item.id, { permissions })} /></details>}
               </details>
@@ -1623,7 +1769,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
             סיסמה
             <input
               type="password"
-              minLength="8"
+              minLength="12"
               required
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -3988,3 +4134,5 @@ function NewProjectModal({
 }
 
 export default App;
+
+

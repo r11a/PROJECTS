@@ -330,7 +330,37 @@ function cookieValue(request, name) {
 }
 
 function publicUser(row) {
-  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, permissions:row.permissions||{}, financeAccess:canViewFinanceUser(row), mustChangePassword:Boolean(row.must_change_password), haUserId: row.ha_user_id, mergedIntoUserId:row.merged_into_user_id, identityTypes:[row.username?'web':null,row.ha_user_id?'ingress':null].filter(Boolean), avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', avatarImage: row.avatar_image || '', appearanceTheme: row.appearance_theme || 'light', messageSoundEnabled:row.message_sound_enabled !== false, lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000) };
+  const lockedUntil = row.locked_until ? new Date(row.locked_until).toISOString() : null;
+  const isLocked = Boolean(row.locked_until && new Date(row.locked_until).getTime() > Date.now());
+  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role, active: row.active, permissions:row.permissions||{}, financeAccess:canViewFinanceUser(row), mustChangePassword:Boolean(row.must_change_password), haUserId: row.ha_user_id, mergedIntoUserId:row.merged_into_user_id, identityTypes:[row.username?'web':null,row.ha_user_id?'ingress':null].filter(Boolean), avatarColor: row.avatar_color || '#6957df', avatarIcon: row.avatar_icon || 'user', avatarImage: row.avatar_image || '', appearanceTheme: row.appearance_theme || 'light', messageSoundEnabled:row.message_sound_enabled !== false, lastSeenAt:row.last_seen_at, lastLoginAt:row.last_login_at, online:Boolean(row.last_seen_at&&Date.now()-new Date(row.last_seen_at).getTime()<120000), failedLoginAttempts:Number(row.failed_login_attempts || 0), lockedUntil, isLocked };
+}
+
+function isStrongPassword(value) {
+  const password = String(value || '');
+  return password.length >= 12 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password);
+}
+
+function generateStrongPassword() {
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  const digits = '0123456789';
+  const symbols = '!@#$%^&*';
+  const all = `${upper}${lower}${digits}${symbols}`;
+  const randomChar = (set) => set[randomBytes(1)[0] % set.length];
+  const base = [
+    randomChar(upper),
+    randomChar(lower),
+    randomChar(digits),
+    randomChar(symbols),
+  ];
+  for (let index = 0; index < 16; index += 1) {
+    base.push(all[randomBytes(1)[0] % all.length]);
+  }
+  const password = base
+    .map((value, index, list) => list[(index * 13 + randomBytes(1)[0]) % list.length])
+    .join('');
+  if (isStrongPassword(password)) return password;
+  return generateStrongPassword();
 }
 
 const ROLE_PERMISSIONS={
@@ -488,7 +518,7 @@ app.get('/api/auth/me', authenticate, (request, response) => response.json({ use
 
 app.post('/api/auth/password', authenticate, async (request,response) => {
   const currentPassword=String(request.body?.currentPassword||''),newPassword=String(request.body?.newPassword||'');
-  if(newPassword.length<12||!/[a-z]/.test(newPassword)||!/[A-Z]/.test(newPassword)||!/\d/.test(newPassword))return response.status(400).json({error:'Password must contain at least 12 characters, upper and lower case letters, and a number'});
+  if(!isStrongPassword(newPassword))return response.status(400).json({error:'Password must contain at least 12 characters, upper and lower case letters, and a number'});
   const current=await pool.query('SELECT * FROM users WHERE id=$1 AND active=TRUE',[request.user.id]);
   if(!current.rowCount||!current.rows[0].password_hash||!await bcrypt.compare(currentPassword,current.rows[0].password_hash))return response.status(401).json({error:'Current password is incorrect'});
   if(await bcrypt.compare(newPassword,current.rows[0].password_hash))return response.status(400).json({error:'Choose a different password'});
@@ -829,7 +859,7 @@ app.post('/api/users', authenticate, requireRoles('admin'), async (request, resp
   const username = String(request.body.username || '').trim();
   const password = String(request.body.password || '');
   const role = ROLES.includes(request.body.role) ? request.body.role : 'viewer';
-  if (!username || password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) return response.status(400).json({ error: 'Password must contain at least 12 characters, upper and lower case letters, and a number' });
+  if (!username || !isStrongPassword(password)) return response.status(400).json({ error: 'Password must contain at least 12 characters, upper and lower case letters, and a number' });
   const passwordHash = await bcrypt.hash(password, 12);
   const result = await pool.query(
     `INSERT INTO users(username, display_name, password_hash, role, avatar_color, avatar_icon)
@@ -854,7 +884,7 @@ app.patch('/api/users/:id', authenticate, requireRoles('admin'), async (request,
   if (typeof request.body.financeAccess==='boolean') { values.push(request.body.financeAccess); updates.push(`finance_access = $${values.length}`); }
   if (request.body.password) {
     const newPassword=String(request.body.password);
-    if (newPassword.length < 12 || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword)) return response.status(400).json({ error: 'Password must contain at least 12 characters, upper and lower case letters, and a number' });
+    if (!isStrongPassword(newPassword)) return response.status(400).json({ error: 'Password must contain at least 12 characters, upper and lower case letters, and a number' });
     values.push(await bcrypt.hash(newPassword, 12)); updates.push(`password_hash = $${values.length}`); updates.push('must_change_password = FALSE');
   }
   if (!updates.length) return response.status(400).json({ error: 'No editable fields supplied' });
@@ -862,6 +892,46 @@ app.patch('/api/users/:id', authenticate, requireRoles('admin'), async (request,
   const result = await pool.query(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`, values);
   if (!result.rowCount) return response.status(404).json({ error: 'User not found' });
   await audit(request, 'update', 'user', request.params.id);
+  response.json({ user: publicUser(result.rows[0]) });
+});
+
+app.post('/api/users/:id/reset-password', authenticate, requireRoles('admin'), async (request, response) => {
+  const targetUserId = request.params.id;
+  const requestedPassword = String(request.body?.newPassword || '').trim();
+  const requirePasswordChange = request.body?.requirePasswordChange !== false;
+  const unlock = request.body?.unlockAccount === true;
+  const finalPassword = requestedPassword || generateStrongPassword();
+
+  if (!isStrongPassword(finalPassword)) {
+    return response.status(400).json({ error: 'Password must contain at least 12 characters, upper and lower case letters, and a number' });
+  }
+
+  const updates = ['password_hash = $1', 'updated_at = NOW()'];
+  const values = [await bcrypt.hash(finalPassword, 12)];
+  updates.push(`must_change_password = $${values.length + 1}`);
+  values.push(requirePasswordChange);
+  if (unlock) {
+    updates.push('failed_login_attempts = 0');
+    updates.push('locked_until = NULL');
+  }
+  values.push(targetUserId);
+  const result = await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`, values);
+  if (!result.rowCount) return response.status(404).json({ error: 'User not found' });
+  await audit(request, 'reset_password', 'user', targetUserId, { unlockAccount: unlock, requirePasswordChange });
+  response.json({
+    user: publicUser(result.rows[0]),
+    generatedPassword: requestedPassword ? null : finalPassword,
+  });
+});
+
+app.post('/api/users/:id/unlock', authenticate, requireRoles('admin'), async (request, response) => {
+  const targetUserId = request.params.id;
+  const result = await pool.query(
+    'UPDATE users SET failed_login_attempts = 0, locked_until = NULL, updated_at = NOW() WHERE id = $1 RETURNING *',
+    [targetUserId],
+  );
+  if (!result.rowCount) return response.status(404).json({ error: 'User not found' });
+  await audit(request, 'unlock_account', 'user', targetUserId);
   response.json({ user: publicUser(result.rows[0]) });
 });
 
