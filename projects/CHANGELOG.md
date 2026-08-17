@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.5
+- Release bump to force HA update visibility.
+- Navigation selector remains explicit for map routing: always choose Google Maps / Apple Maps / Waze from project workspace and dashboard card.
+
+## 0.27.4
+
+- Fixed project detail workspace navigation UX to open the map provider selector on desktop and project pages instead of launching the default map directly.
+- Added reusable navigation provider selection with Google Maps, Apple Maps and Waze, plus persistent “remember my choice” behavior.
+- Added navigation modal in project workspace header for quick one-tap destination routing.
+
 ## 0.27.2
 
 - Refined mobile right-edge sidebar gesture so opening only reacts to horizontal swipes from the right screen edge, avoiding accidental opens during normal content interactions.
