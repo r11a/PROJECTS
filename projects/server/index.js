@@ -17,6 +17,7 @@ import { createBackupRouter } from './backup.js';
 import { createAiRouter } from './ai.js';
 import { createProductivityRouter, executeAutomations, startAutomationScheduler } from './productivity.js';
 import { createPriorityOrdersRouter } from './priorityOrders.js';
+import { createProjectIntelligenceRouter, loadProjectHealth } from './projectIntelligence.js';
 import { imageFileFilter } from './uploadPolicy.js';
 import { installPostgresDateOnlyParser } from './dateOnly.js';
 
@@ -543,7 +544,8 @@ app.get('/api/projects', authenticate, async (request, response) => {
     FROM projects p LEFT JOIN professionals pr ON pr.id=p.manager_professional_id
     ${where}
     ORDER BY p.created_at DESC,p.id DESC`);
-  response.json({ projects: result.rows.map((row) => projectForUser(row, request.user)) });
+  const healthById=new Map((await loadProjectHealth(pool,request.user.financeAccess!==false)).map((item)=>[String(item.id),item]));
+  response.json({ projects: result.rows.map((row) => {const project=projectForUser(row, request.user);const health=healthById.get(String(row.id));return health?{...project,health:health.score,healthTone:health.tone,healthReasons:health.reasons}:project;}) });
 });
 
 app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async (request, response) => {
@@ -1021,6 +1023,7 @@ app.use('/api', await createAiRouter({ pool, authenticate, requireRoles, audit, 
 app.use('/api', createFormsRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
 app.use('/api', createPriorityOrdersRouter({ pool, authenticate, requireRoles, audit }));
+app.use('/api', await createProjectIntelligenceRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR }));
 app.use('/api', createOperationsRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', createProductivityRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createBackupRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR, appVersion:APP_VERSION }));

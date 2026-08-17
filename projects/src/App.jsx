@@ -96,6 +96,7 @@ import {
 import { ProjectWorkspace } from "./ProjectWorkspace";
 import { MyWorkWorkspace, PortfolioControlWorkspace } from "./ProductivityWorkspace";
 import { localDateValue } from "./dateTime";
+import { RiskCenter } from "./features/risk-center/RiskCenter";
 
 const projectClassificationOptions = [
   ["private_house", "בית פרטי"],
@@ -1088,6 +1089,7 @@ function App() {
         <div className="page-content">
           {page === "dashboard" && (
             <Dashboard
+              api={api}
               projects={projects}
               openProject={openProject}
               setPage={setPage}
@@ -1977,7 +1979,7 @@ function SystemPage({ setNotice }) {
   );
 }
 
-function Dashboard({ projects, openProject, setPage, insights, insightsRefreshing, onRefreshInsights, user }) {
+function Dashboard({ api, projects, openProject, setPage, insights, insightsRefreshing, onRefreshInsights, user }) {
   const active = projects.filter((p) => p.stage !== "completed");
   const canViewFinance = userCanAccess(user,"finance");
   const value = canViewFinance ? active.reduce((sum, p) => sum + p.value, 0) : 0;
@@ -2062,6 +2064,7 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
         />}
       </section>
       <InsightsTile insights={insights} onNavigate={setPage} refreshing={insightsRefreshing} onRefresh={onRefreshInsights} />
+      <RiskCenter api={api} projects={projects} openProject={openProject}/>
       <section className="dashboard-grid top">
         <div className="panel portfolio-panel">
           <PanelHead

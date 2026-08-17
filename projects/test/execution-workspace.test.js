@@ -12,14 +12,16 @@ test('execution workspace migration includes critical path, records and recycle 
 });
 
 test('meeting summaries support Hebrew voice dictation and AI professional editing', async () => {
-  const [form,ai,workspace]=await Promise.all([
+  const [form,smartInput,ai,workspace]=await Promise.all([
     read('../src/features/meetings/MeetingSummaryForm.jsx'),
+    read('../src/features/smart-input/SmartTextArea.jsx'),
     read('../server/ai.js'),
     read('../src/ProjectWorkspace.jsx'),
   ]);
-  assert.match(form,/SpeechRecognition \|\| window\.webkitSpeechRecognition/);
-  assert.match(form,/he-IL/);
-  assert.match(form,/meeting-polish/);
+  assert.match(form,/SmartTextArea/);
+  assert.match(smartInput,/SpeechRecognition\|\|window\.webkitSpeechRecognition/);
+  assert.match(smartInput,/he-IL/);
+  assert.match(form,/meeting-actions/);
   assert.match(ai,/router\.post\('\/ai\/meeting-polish'/);
   assert.match(ai,/אל תמציא עובדות/);
   assert.match(workspace,/MeetingSummaryForm/);

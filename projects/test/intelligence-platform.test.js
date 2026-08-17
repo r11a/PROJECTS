@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { calculateHealth } from '../server/projectIntelligence.js';
+
+const read=(name)=>readFile(new URL(`../${name}`,import.meta.url),'utf8');
+
+test('Priority learning and operational BOM are persisted independently',async()=>{const [migration,router,wizard]=await Promise.all([read('migrations/035_intelligence_voice_bom.sql'),read('server/priorityOrders.js'),read('src/features/priority-import/PriorityImportWizard.jsx')]);for(const token of ['priority_sku_system_mappings','quantity_installed','quantity_programmed','meeting_task_links','voice_notes'])assert.match(migration,new RegExp(token));assert.match(router,/mappingSource:'manual'/);assert.match(router,/systemManuallyChanged/);assert.match(router,/ON CONFLICT\(lower\(priority_sku\)\)/);assert.match(wizard,/systemManuallyChanged/);});
+
+test('health score is deterministic, explained and finance-aware',()=>{const severe=calculateHealth({overdue_tasks:3,critical_open:2,gantt_late:1,hours_overrun_pct:25,overdue_payments:2,missing_equipment:2,progress:70,contractor_progress:30},true);assert.equal(severe.tone,'red');assert.ok(severe.score<60);assert.ok(severe.reasons.length>=6);const privateScore=calculateHealth({overdue_tasks:0,critical_open:0,gantt_late:0,hours_overrun_pct:0,overdue_payments:8,missing_equipment:0,progress:30,contractor_progress:30},false);assert.equal(privateScore.score,100);assert.equal(privateScore.reasons.some((item)=>item.kind==='finance'),false);});
+
+test('meeting actions, reusable smart text and reusable voice notes are wired',async()=>{const [ai,operations,smart,voice,intelligence]=await Promise.all([read('server/ai.js'),read('server/operations.js'),read('src/features/smart-input/SmartTextArea.jsx'),read('src/features/voice-notes/VoiceNotes.jsx'),read('server/projectIntelligence.js')]);assert.match(ai,/\/ai\/meeting-actions/);assert.match(ai,/\/ai\/text-polish/);assert.match(operations,/meeting_task_links/);assert.match(operations,/email-draft-opened/);assert.match(smart,/SpeechRecognition\|\|window\.webkitSpeechRecognition/);assert.match(smart,/תצוגה מקדימה/);assert.match(voice,/MediaRecorder/);assert.match(voice,/60/);assert.match(intelligence,/duration>60\.5/);assert.match(intelligence,/voice_playback_rate/);});

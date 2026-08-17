@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.0
+
+- Added persistent Priority SKU-to-system learning with manual mapping precedence and idempotent re-import behavior.
+- Added a project BOM grouped by system with ordered, installed, programmed and remaining quantities.
+- Added automatic, explained project health scoring and a central severity-sorted Risk Center.
+- Added AI meeting action extraction, editable task proposals, linked task creation and editable `mailto:` drafts with recipient selection.
+- Added reusable AI/voice text editing with preview approval, plus reusable persisted 60-second voice notes and a commercial audio player.
+
 ## 0.25.2
 
 - Fixed the critical one-day shift in task start and end dates by keeping PostgreSQL `DATE` values timezone-free end to end.

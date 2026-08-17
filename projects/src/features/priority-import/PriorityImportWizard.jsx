@@ -61,7 +61,7 @@ export function PriorityImportWizard({ project, api, onClose, onImported }) {
         lines: lines.map((line) => ({ sourceRow: line.sourceRow, include: line.include, description: line.description, quantity: Number(line.quantity), unit: line.unit,
           classification: line.classification, catalogItemId: line.catalogItemId || null, projectSystemId: line.projectSystemId || null,
           createCatalogItem: line.createCatalogItem, includeInEquipment: line.includeInEquipment, includeInReferenceHours: line.includeInReferenceHours,
-          manufacturer: line.manufacturer, model: line.model })),
+          manufacturer: line.manufacturer, model: line.model, systemManuallyChanged:Boolean(line.systemManuallyChanged) })),
       }) });
       setResult(response.import); window.dispatchEvent(new Event("projects:data-changed")); await onImported?.(response.import);
     } catch (importError) { setError(importError.message); }

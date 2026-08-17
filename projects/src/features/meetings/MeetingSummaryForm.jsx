@@ -1,75 +1,16 @@
-import { useEffect, useRef, useState } from "react";
-import { LoaderCircle, Mic, Sparkles, Square } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Mail, Sparkles, Trash2 } from "lucide-react";
 import { AppModal } from "../../AppModal";
 import { localDateTimeValue } from "../../dateTime";
+import { SmartTextArea } from "../smart-input/SmartTextArea";
 import "./meeting-summary.css";
 
-export function MeetingSummaryForm({ api, onClose, onSubmit, setNotice }) {
-  const [summary, setSummary] = useState("");
-  const [followUp, setFollowUp] = useState("");
-  const [listening, setListening] = useState(false);
-  const [polishing, setPolishing] = useState(false);
-  const recognitionRef = useRef(null);
-  const speechBaseRef = useRef("");
-
-  useEffect(() => () => recognitionRef.current?.stop(), []);
-
-  const toggleListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      return;
-    }
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Recognition) {
-      setNotice("הכתבה קולית אינה נתמכת בדפדפן הזה. ניתן להשתמש במיקרופון של המקלדת במכשיר.");
-      return;
-    }
-    const recognition = new Recognition();
-    speechBaseRef.current = summary.trim();
-    recognition.lang = "he-IL";
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results).map((result) => result[0]?.transcript || "").join(" ").trim();
-      setSummary([speechBaseRef.current, transcript].filter(Boolean).join("\n"));
-    };
-    recognition.onerror = () => setNotice("ההכתבה הקולית הופסקה. בדקו הרשאת מיקרופון ונסו שוב.");
-    recognition.onend = () => { recognitionRef.current = null; setListening(false); };
-    recognitionRef.current = recognition;
-    recognition.start();
-    setListening(true);
-  };
-
-  const polish = async () => {
-    if (summary.trim().length < 10) return setNotice("יש להקליד או להכתיב תוכן לפני העיבוד המקצועי");
-    setPolishing(true);
-    try {
-      const result = await api("/ai/meeting-polish", { method:"POST", body:JSON.stringify({ transcript:summary, followUp }) });
-      setSummary(result.summary || summary);
-      setFollowUp(result.followUp || followUp);
-      setNotice("סיכום הפגישה נוסח מחדש. מומלץ לעבור עליו לפני השמירה.");
-    } catch (error) { setNotice(error.message); }
-    finally { setPolishing(false); }
-  };
-
-  return <AppModal title="סיכום פגישה חדש" subtitle="הכתבה, ניסוח מקצועי והמשך טיפול" onClose={onClose} className="meeting-summary-modal">
-    <form className="work-form meeting-summary-form" onSubmit={onSubmit}>
-      <label>תאריך ושעה<input type="datetime-local" name="meetingAt" required defaultValue={localDateTimeValue()} /></label>
-      <label>נוכחים<input name="attendees" placeholder="שמות מופרדים בפסיק" /></label>
-      <label>שעות תכנון / ישיבה<input type="number" name="hours" min="0" max="24" step="0.25" placeholder="0" /></label>
-      <section className={`wide meeting-dictation ${listening ? "listening" : ""}`}>
-        <div><strong>סיכום והחלטות</strong><span>אפשר להקליד או להכתיב באופן חופשי</span></div>
-        <div className="meeting-dictation-actions">
-          <button type="button" className="voice-button" onClick={toggleListening}>{listening ? <Square size={15} /> : <Mic size={16} />}{listening ? "סיום הקלטה" : "הכתבה קולית"}</button>
-          <button type="button" className="ai-polish-button" onClick={polish} disabled={polishing}>{polishing ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}ניסוח מקצועי עם AI</button>
-        </div>
-        {listening && <div className="meeting-listening"><i /><i /><i /><i /><span>מאזין וממיר לטקסט…</span></div>}
-        <textarea name="summary" required rows="9" value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="החלטות, תובנות, נושאים שעלו והערות חופשיות…" />
-        <small>ה־AI מסדר כותרות, מספור, תובנות והמשכי טיפול בלי להמציא מידע שלא נאמר.</small>
-      </section>
-      <label className="wide">המשך טיפול<textarea name="followUp" rows="4" value={followUp} onChange={(event) => setFollowUp(event.target.value)} /></label>
-      <label className="wide">תמונות ומסמכי הפגישה<input type="file" name="attachments" accept="image/*,application/pdf,.doc,.docx,.xlsx" multiple /></label>
-      <div className="wide form-actions"><button type="button" className="ops-secondary" onClick={onClose}>ביטול</button><button className="ops-primary">שמירת סיכום</button></div>
-    </form>
-  </AppModal>;
+export function MeetingSummaryForm({ api, onClose, onSubmit, setNotice, project, professionals=[] }) {
+  const [summary,setSummary]=useState("");const [followUp,setFollowUp]=useState("");const [tasks,setTasks]=useState([]);const [email,setEmail]=useState({subject:"",body:""});const [recipients,setRecipients]=useState([]);const [to,setTo]=useState([]);const [cc,setCc]=useState([]);const [busy,setBusy]=useState(false);
+  useEffect(()=>{if(project?.id)api(`/projects/${project.id}/email-recipients`).then((result)=>setRecipients(result.recipients||[])).catch(()=>{})},[project?.id]);
+  const analyze=async()=>{if(summary.trim().length<10)return setNotice('יש להזין סיכום לפני חילוץ פעולות');setBusy(true);try{const result=await api('/ai/meeting-actions',{method:'POST',body:JSON.stringify({text:`${summary}\n${followUp}`})});setTasks((result.tasks||[]).map((task)=>({...task,enabled:true,assigneeProfessionalId:professionals.find((person)=>String(person.display_name||'').includes(task.assigneeName))?.id||''})));setEmail(result.email||{subject:'סיכום פגישה והמשך טיפול',body:summary});}catch(error){setNotice(error.message)}finally{setBusy(false)}};
+  const openMail=async()=>{const toEmails=recipients.filter((item)=>to.includes(String(item.id))).map((item)=>item.email);const ccEmails=recipients.filter((item)=>cc.includes(String(item.id))).map((item)=>item.email);if(!toEmails.length)return setNotice('יש לבחור לפחות נמען אחד');await api(`/projects/${project.id}/email-draft-opened`,{method:'POST',body:JSON.stringify({recipientCount:toEmails.length,ccCount:ccEmails.length})});window.location.href=`mailto:${toEmails.join(',')}?cc=${encodeURIComponent(ccEmails.join(','))}&subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`;};
+  const submit=(event)=>{event.preventDefault();const form=new FormData(event.currentTarget);form.set('summary',summary);form.set('followUp',followUp);form.set('aiTasks',JSON.stringify(tasks.filter((task)=>task.enabled)));onSubmit(event,form);};
+  const updateTask=(index,patch)=>setTasks((current)=>current.map((task,i)=>i===index?{...task,...patch}:task));
+  return <AppModal title="סיכום פגישה חדש" subtitle="הכתבה, ניסוח מקצועי, פעולות המשך וטיוטת מייל" onClose={onClose} className="meeting-summary-modal"><form className="work-form meeting-summary-form" onSubmit={submit}><label>תאריך ושעה<input type="datetime-local" name="meetingAt" required defaultValue={localDateTimeValue()}/></label><label>נוכחים<input name="attendees" placeholder="שמות מופרדים בפסיק"/></label><label>שעות תכנון / ישיבה<input type="number" name="hours" min="0" max="24" step="0.25" placeholder="0"/></label><div className="wide"><SmartTextArea api={api} value={summary} onChange={setSummary} setNotice={setNotice} label="סיכום והחלטות" textareaProps={{name:'summary',required:true,rows:9,placeholder:'החלטות, תובנות ונושאים שעלו…'}}/></div><div className="wide"><SmartTextArea api={api} value={followUp} onChange={setFollowUp} setNotice={setNotice} label="המשך טיפול" textareaProps={{name:'followUp',rows:4}}/></div><div className="wide meeting-ai-actions"><button type="button" onClick={analyze} disabled={busy}><Sparkles size={16}/>{busy?'מנתח…':'הצע משימות וטיוטת מייל'}</button></div>{tasks.length>0&&<section className="wide meeting-task-suggestions"><header><h3>משימות מוצעות</h3><span>ערכו, השלימו תאריך ובחרו אילו משימות ליצור</span></header>{tasks.map((task,index)=><article key={index}><input type="checkbox" checked={task.enabled} onChange={(event)=>updateTask(index,{enabled:event.target.checked})}/><input value={task.title} onChange={(event)=>updateTask(index,{title:event.target.value})} placeholder="כותרת"/><input type="date" value={task.dueDate||''} onChange={(event)=>updateTask(index,{dueDate:event.target.value})} required={task.enabled}/><select value={task.assigneeProfessionalId||''} onChange={(event)=>updateTask(index,{assigneeProfessionalId:event.target.value})}><option value="">ללא אחראי</option>{professionals.map((person)=><option key={person.id} value={person.id}>{person.display_name}</option>)}</select><select value={task.priority} onChange={(event)=>updateTask(index,{priority:event.target.value})}><option value="normal">רגילה</option><option value="high">גבוהה</option><option value="urgent">דחופה</option></select><button type="button" onClick={()=>setTasks((current)=>current.filter((_,i)=>i!==index))}><Trash2 size={15}/></button><textarea value={task.description} onChange={(event)=>updateTask(index,{description:event.target.value})} placeholder="תיאור המשימה"/></article>)}</section>}{email.subject&&<section className="wide meeting-email-draft"><header><h3>טיוטת מייל</h3><button type="button" onClick={openMail}><Mail size={16}/>פתח במייל</button></header><label>נושא<input value={email.subject} onChange={(event)=>setEmail({...email,subject:event.target.value})}/></label><textarea value={email.body} onChange={(event)=>setEmail({...email,body:event.target.value})}/><div className="meeting-recipient-grid"><fieldset><legend>נמענים</legend>{recipients.map((item)=><label key={item.id}><input type="checkbox" checked={to.includes(String(item.id))} onChange={(event)=>setTo((current)=>event.target.checked?[...current,String(item.id)]:current.filter((id)=>id!==String(item.id)))}/>{item.name} · {item.email}</label>)}</fieldset><fieldset><legend>עותק (CC)</legend>{recipients.map((item)=><label key={item.id}><input type="checkbox" checked={cc.includes(String(item.id))} onChange={(event)=>setCc((current)=>event.target.checked?[...current,String(item.id)]:current.filter((id)=>id!==String(item.id)))}/>{item.name}</label>)}</fieldset></div></section>}<label className="wide">תמונות ומסמכי הפגישה<input type="file" name="attachments" accept="image/*,application/pdf,.doc,.docx,.xlsx" multiple/></label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={onClose}>ביטול</button><button className="ops-primary">שמירת סיכום{tasks.some((task)=>task.enabled)?' ויצירת משימות':''}</button></div></form></AppModal>;
 }

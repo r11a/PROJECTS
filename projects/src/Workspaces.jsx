@@ -37,6 +37,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { SmartTextArea } from "./features/smart-input/SmartTextArea";
 import { AppModal } from "./AppModal";
 import { createMilestoneDraft, createTaskDraft } from "./features/tasks/taskDefaults";
 import { localDateValue } from "./dateTime";
@@ -145,6 +146,8 @@ function AiReportContent({ text }) {
 }
 
 export function TaskEditor({
+  api,
+  setNotice,
   kind = "task",
   projects,
   professionals,
@@ -390,14 +393,7 @@ export function TaskEditor({
           </label>
           </>
         )}
-        <label className="wide">
-          הנחיות והערות
-          <textarea
-            value={form.description || ""}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="מידע שיאפשר לאחראי לבצע בלי צורך בבירור נוסף"
-          />
-        </label>
+        <div className="wide"><SmartTextArea api={api} value={form.description||""} onChange={(description)=>setForm({...form,description})} setNotice={setNotice} label="הנחיות והערות" textareaProps={{placeholder:'מידע שיאפשר לאחראי לבצע בלי צורך בבירור נוסף'}}/></div>
         <div className="wide form-actions">
           <button type="button" className="ops-secondary" onClick={onClose}>
             ביטול
@@ -812,6 +808,8 @@ export function TasksWorkspace({
       </div>
       {editor && (
         <TaskEditor
+          api={api}
+          setNotice={setNotice}
           kind={editor.kind}
           projects={
             projectId ? projects.filter((p) => p.id === projectId) : projects

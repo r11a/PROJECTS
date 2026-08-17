@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, CheckCheck, CornerUpLeft, Link2, Mail, MessageSquare, Plus, Send, Trash2, X } from "lucide-react";
 import { ModalPortal } from "./AppModal";
+import { SmartTextArea } from "./features/smart-input/SmartTextArea";
 
 export function MessageCenter({
   api,
@@ -129,16 +130,7 @@ export function MessageCenter({
                 }
               />
             </label>
-            <label>
-              הודעה
-              <textarea
-                required
-                value={form.body}
-                onChange={(event) =>
-                  setForm({ ...form, body: event.target.value })
-                }
-              />
-            </label>
+            <SmartTextArea api={api} value={form.body} onChange={(body)=>setForm({...form,body})} setNotice={setNotice} label="הודעה" textareaProps={{required:true}}/>
             <div className="message-mentions"><small>תיוג משתמש:</small>{users.filter(item=>String(item.id)!==String(user.id)&&item.active!==false).map(item=><button type="button" key={item.id} onClick={()=>insertMention(item)}>@{item.displayName}</button>)}</div>
             <button className="ops-primary">
               <Send size={15} />

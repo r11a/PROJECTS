@@ -41,6 +41,8 @@ import { summarizeTimeEntries } from "./features/timeTracking/model";
 import { formatDateIL, localDateValue } from "./dateTime";
 import { PriorityImportWizard } from "./features/priority-import/PriorityImportWizard";
 import { MeetingSummaryForm } from "./features/meetings/MeetingSummaryForm";
+import { VoiceNotes, VoiceNotesToggle } from "./features/voice-notes/VoiceNotes";
+import { SmartTextArea } from "./features/smart-input/SmartTextArea";
 import { classificationLabel, priorityMoney } from "./features/priority-import/priorityImport";
 
 const money = new Intl.NumberFormat("he-IL", {
@@ -107,6 +109,7 @@ export function ProjectWorkspace({
     timeEntries: [],
     priorityOrders: [],
   });
+  const [bom,setBom]=useState([]);
   const [mentionUsers,setMentionUsers]=useState([]);
   const [note, setNote] = useState("");
   const [modal, setModal] = useState("");
@@ -124,13 +127,13 @@ export function ProjectWorkspace({
   const canImportPriority = ["admin", "manager", "supervisor"].includes(user.role) || user.permissions?.projects === "write";
   const load = async () => {
     try {
-      setWorkspace(
-        await api(`/projects/${encodeURIComponent(project.id)}/workspace`),
-      );
+      const [nextWorkspace,bomResult]=await Promise.all([api(`/projects/${encodeURIComponent(project.id)}/workspace`),api(`/projects/${encodeURIComponent(project.id)}/bom`)]);
+      setWorkspace(nextWorkspace);setBom(bomResult.items||[]);
     } catch (e) {
       setNotice(e.message);
     }
   };
+  const updateBom=async(item,patch)=>{try{await api(`/projects/${project.id}/bom/${item.id}`,{method:'PATCH',body:JSON.stringify(patch)});setNotice('נתוני הביצוע עודכנו');load()}catch(error){setNotice(error.message)}};
   useEffect(() => {
     load();
     api('/team').then(result=>setMentionUsers(result.users||[])).catch(()=>{});
@@ -234,7 +237,7 @@ export function ProjectWorkspace({
   };
   const uploadRecordFiles=async(files,title,category)=>{for(const file of files.filter(file=>file instanceof File&&file.size)){const body=new FormData();body.set('projectId',project.id);body.set('title',`${title} · ${file.name}`);body.set('category',category);body.set('file',file);await api('/documents',{method:'POST',body});}};
   const addReview=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/projects/${project.id}/site-reviews`,{method:'POST',body:JSON.stringify({reviewDate:f.get('reviewDate'),performedBy:f.get('performedBy'),supervisionType:f.get('supervisionType'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours'),planUpdateRequired:f.get('planUpdateRequired')==='on'})});await uploadRecordFiles(f.getAll('attachments'),`ביקורת אתר ${f.get('reviewDate')}`,'ביקורת אתר');setModal('');setNotice('ביקורת האתר, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
-  const addMeeting=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/projects/${project.id}/meetings`,{method:'POST',body:JSON.stringify({meetingAt:f.get('meetingAt'),attendees:f.get('attendees'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours')})});await uploadRecordFiles(f.getAll('attachments'),`סיכום פגישה ${String(f.get('meetingAt')).slice(0,10)}`,'סיכום פגישה');setModal('');setNotice('סיכום הפגישה, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
+  const addMeeting=async(e,providedForm)=>{e.preventDefault();const f=providedForm||new FormData(e.currentTarget);try{const result=await api(`/projects/${project.id}/meetings`,{method:'POST',body:JSON.stringify({meetingAt:f.get('meetingAt'),attendees:f.get('attendees'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours')})});const aiTasks=JSON.parse(String(f.get('aiTasks')||'[]'));if(aiTasks.length)await api(`/projects/${project.id}/meetings/${result.meeting.id}/tasks`,{method:'POST',body:JSON.stringify({tasks:aiTasks})});await uploadRecordFiles(f.getAll('attachments'),`סיכום פגישה ${String(f.get('meetingAt')).slice(0,10)}`,'סיכום פגישה');setModal('');setNotice(aiTasks.length?`סיכום הפגישה נשמר ונוצרו ${aiTasks.length} משימות`:'סיכום הפגישה, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
   const archiveDocument=async(file)=>{if(user.role!=='admin'||!confirm(`להעביר את „${file.title||file.original_name}” לסל המחזור ל־14 יום?`))return;try{await api(`/documents/${file.id}`,{method:'DELETE'});setNotice('המסמך הועבר לסל המחזור ל־14 יום');load()}catch(error){setNotice(error.message)}};
   const deleteTeam = async (x) => {
     if (!confirm(`להסיר את ${x.display_name} מהפרויקט?`)) return;
@@ -736,6 +739,7 @@ export function ProjectWorkspace({
       )}
       {tab === "systems" && (
         <div className="project-two-columns">
+          <section className="panel project-resource project-bom"><div className="panel-head"><div><h3>BOM לפי מערכות</h3><span>הוזמן, הותקן, תוכנת ויתרה לביצוע</span></div></div>{[...new Map(bom.map((item)=>[item.project_system_id||'none',{name:item.system_name||'ללא מערכת',color:item.system_color||'#6957df'}])).entries()].map(([systemId,system])=><div className="bom-system" key={systemId}><header style={{borderInlineStartColor:system.color}}><strong>{system.name}</strong></header><div className="bom-head"><span>פריט</span><span>הוזמן</span><span>הותקן</span><span>תוכנת</span><span>יתרה</span></div>{bom.filter((item)=>String(item.project_system_id||'none')===String(systemId)).map((item)=><article key={item.id}><div><strong>{item.name}</strong><small>{item.priority_sku||item.code}</small></div><b>{item.ordered}</b><input type="number" min="0" max={item.ordered} step="1" value={item.installed} disabled={!canEdit} onChange={(event)=>setBom((current)=>current.map((row)=>row.id===item.id?{...row,installed:Number(event.target.value),remaining:Math.max(0,row.ordered-Number(event.target.value))}:row))} onBlur={(event)=>updateBom(item,{installed:Number(event.target.value),programmed:item.programmed})}/><input type="number" min="0" max={item.installed} step="1" value={item.programmed} disabled={!canEdit} onChange={(event)=>setBom((current)=>current.map((row)=>row.id===item.id?{...row,programmed:Number(event.target.value)}:row))} onBlur={(event)=>updateBom(item,{installed:item.installed,programmed:Number(event.target.value)})}/><strong className={item.remaining?'remaining':''}>{item.remaining}</strong></article>)}</div>)}</section>
           <section className="panel project-resource">
             <div className="panel-head">
               <div>
@@ -815,6 +819,7 @@ export function ProjectWorkspace({
                       <Trash2 size={15} />
                     </button>
                   )}
+                  <VoiceNotesToggle api={api} apiRoot={apiRoot} entityType="equipment" entityId={x.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/>
                 </div>
               ))
             ) : (
@@ -920,19 +925,15 @@ export function ProjectWorkspace({
         </div>
       )}
       {tab === "reviews"&&<div className="project-two-columns execution-records">
-        <section className="panel project-resource"><div className="panel-head"><div><h3>ביקורות אתר</h3><span>פיקוח, ממצאים ועדכון תוכניות</span></div>{canEdit&&<button onClick={()=>setModal('review')}><Plus size={15}/>ביקורת</button>}</div>{workspace.reviews.length?workspace.reviews.map(x=><article className="execution-card" key={x.id}><header><strong>{dateText(x.review_date)} · {x.supervision_type||'פיקוח אתר'}</strong><small>{x.performed_by_name||x.created_by_name||'לא צוין'}</small></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}{x.plan_update_required&&<b>נדרש עדכון תכנית</b>}</article>):<div className="inline-empty">טרם תועדו ביקורות אתר.</div>}</section>
-        <section className="panel project-resource"><div className="panel-head"><div><h3>סיכומי פגישות</h3><span>נוכחים, החלטות והמשך טיפול</span></div>{canEdit&&<button onClick={()=>setModal('meeting')}><Plus size={15}/>פגישה</button>}</div>{workspace.meetings.length?workspace.meetings.map(x=><article className="execution-card" key={x.id}><header><strong>{new Date(x.meeting_at).toLocaleString('he-IL')}</strong><small>{x.attendees||'לא צוינו נוכחים'}</small></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}</article>):<div className="inline-empty">טרם נשמרו סיכומי פגישות.</div>}</section>
+        <section className="panel project-resource"><div className="panel-head"><div><h3>ביקורות אתר</h3><span>פיקוח, ממצאים ועדכון תוכניות</span></div>{canEdit&&<button onClick={()=>setModal('review')}><Plus size={15}/>ביקורת</button>}</div>{workspace.reviews.length?workspace.reviews.map(x=><article className="execution-card" key={x.id}><header><strong>{dateText(x.review_date)} · {x.supervision_type||'פיקוח אתר'}</strong><small>{x.performed_by_name||x.created_by_name||'לא צוין'}</small></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}{x.plan_update_required&&<b>נדרש עדכון תכנית</b>}<VoiceNotesToggle api={api} apiRoot={apiRoot} entityType="site_review" entityId={x.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></article>):<div className="inline-empty">טרם תועדו ביקורות אתר.</div>}</section>
+        <section className="panel project-resource"><div className="panel-head"><div><h3>סיכומי פגישות</h3><span>נוכחים, החלטות והמשך טיפול</span></div>{canEdit&&<button onClick={()=>setModal('meeting')}><Plus size={15}/>פגישה</button>}</div>{workspace.meetings.length?workspace.meetings.map(x=><article className="execution-card" key={x.id}><header><strong>{new Date(x.meeting_at).toLocaleString('he-IL')}</strong><small>{x.attendees||'לא צוינו נוכחים'}</small></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}<VoiceNotesToggle api={api} apiRoot={apiRoot} entityType="meeting" entityId={x.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></article>):<div className="inline-empty">טרם נשמרו סיכומי פגישות.</div>}</section>
       </div>}
       {tab === "activity" && (
         <div className="project-two-columns activity-layout">
           <form className="panel project-update-form" onSubmit={addUpdate}>
             <h3>פרסום עדכון</h3>
             <p>העדכון נשמר בהיסטוריה ומופיע לכל מי שמורשה לצפות בפרויקט.</p>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="סיכום ביקור, החלטה, חריגה או הנחיה לביצוע"
-            />
+            <SmartTextArea api={api} value={note} onChange={setNote} setNotice={setNotice} label="תוכן העדכון" textareaProps={{placeholder:'סיכום ביקור, החלטה, חריגה או הנחיה לביצוע'}}/>
             <div className="project-mention-picker"><small>תיוג משתמש:</small>{mentionUsers.filter(item=>item.active&&String(item.id)!==String(user.id)).map(item=><button type="button" key={item.id} onClick={()=>setNote(current=>`${current}${current&&!current.endsWith(' ')?' ':''}@${item.displayName} `)}>@{item.displayName}</button>)}</div>
             <button className="ops-primary" disabled={!note.trim()}>
               <MessageSquare size={16} />
@@ -984,7 +985,7 @@ export function ProjectWorkspace({
         </div>
       )}
       {modal==='review'&&<Modal title="ביקורת אתר חדשה" onClose={()=>setModal('')}><form className="work-form" onSubmit={addReview}><label>תאריך פיקוח<input type="date" name="reviewDate" required defaultValue={localDateValue()}/></label><label>סוג פיקוח<input name="supervisionType" placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy"><option value="">בחירה מהמאגר</option>{professionals.filter(x=>x.active).map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.25" placeholder="0"/></label><label className="wide">ממצאים וסיכום<textarea name="summary" required rows="5"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired"/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת ביקורת</button></div></form></Modal>}
-      {modal==='meeting'&&<MeetingSummaryForm api={api} setNotice={setNotice} onClose={()=>setModal('')} onSubmit={addMeeting}/>}
+      {modal==='meeting'&&<MeetingSummaryForm api={api} project={project} professionals={professionals} setNotice={setNotice} onClose={()=>setModal('')} onSubmit={addMeeting}/>}
       {modal === "team" && (
         <Modal title="שיוך איש צוות" onClose={() => setModal("")}>
           <form className="work-form" onSubmit={addTeam}>
@@ -1165,6 +1166,7 @@ export function ProjectWorkspace({
           onClose={() => setModal("")}
         />
       )}
+      {tab === "activity"&&<VoiceNotes api={api} apiRoot={apiRoot} entityType="project" entityId={project.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/>}
       {modal === "priority-import" && <PriorityImportWizard project={project} api={api} onClose={()=>setModal("")} onImported={async()=>{await load();setNotice("הזמנת Priority יובאה ועדכנה את הפרויקט")}} />}
       {priorityOrderDetail && <AppModal title={`הזמנת Priority ${priorityOrderDetail.order.priorityOrderNumber}`} subtitle="תיעוד הייבוא לפרויקט" onClose={()=>setPriorityOrderDetail(null)} className="priority-order-detail">
         <div className="priority-order-detail-content">
@@ -1658,7 +1660,7 @@ function CommercialProjectGantt({ tasks, milestones, project, projects, professi
   return (
     <>
       <GanttTimeline compact groups={[[project.name, items]]} onOpen={(item) => setEditor({ kind: item.kind, item })} onScheduleChange={saveSchedule} users={users} title={`גאנט ביצוע · ${project.name}`} />
-      {editor && <TaskEditor kind={editor.kind} initial={editor.item} projects={projects} professionals={professionals} tasks={tasks} fixedProjectId={project.id} onClose={() => setEditor(null)} onSave={save} />}
+      {editor && <TaskEditor api={api} setNotice={setNotice} kind={editor.kind} initial={editor.item} projects={projects} professionals={professionals} tasks={tasks} fixedProjectId={project.id} onClose={() => setEditor(null)} onSave={save} />}
     </>
   );
 }

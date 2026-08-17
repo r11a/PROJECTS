@@ -71,7 +71,7 @@ export function publicParsedLine(line, canViewFinance) {
     remainingQuantity: line.remainingQuantity, lineStatus: line.lineStatus || '', classification: line.classification,
     include: line.include, includeInEquipment: line.includeInEquipment,
     includeInReferenceHours: line.includeInReferenceHours, referenceHours: line.referenceHours,
-    catalogMatch: line.catalogMatch, catalogItem: line.catalogItem ? publicCatalog(line.catalogItem) : null,
+    catalogMatch: line.catalogMatch, mappingSource:line.mappingSource || line.catalogMatch || 'keywords', catalogItem: line.catalogItem ? publicCatalog(line.catalogItem) : null,
   };
   if (canViewFinance) Object.assign(result, { unitPrice: line.unitPrice, lineTotal: line.lineTotal, cost: line.cost });
   return result;
@@ -117,6 +117,7 @@ export function normalizeEditedLines(parsedLines, edits) {
       referenceHours: includeInReferenceHours ? quantity * 8 : 0,
       catalogItemId: edit.catalogItemId ? Number(edit.catalogItemId) : null,
       projectSystemId: edit.projectSystemId ? Number(edit.projectSystemId) : null,
+      systemManuallyChanged: Boolean(edit.systemManuallyChanged),
       createCatalogItem: Boolean(edit.createCatalogItem),
       manufacturer: String(edit.manufacturer ?? source.manufacturer ?? '').trim().slice(0, 240),
       model: String(edit.model ?? source.model ?? '').trim().slice(0, 240),
@@ -150,12 +151,15 @@ export function createPriorityOrdersRouter({ pool, authenticate, requireRoles, a
       FROM projects p LEFT JOIN clients c ON c.id=p.client_id WHERE p.id=$1`, [request.params.projectId]);
     if (!projectResult.rowCount) return response.status(404).json({ error: 'הפרויקט לא נמצא' });
     const parsed = await parsePriorityWorkbook(request.file.buffer, cleanFilename(request.file.originalname));
-    const [catalog, systems, duplicate] = await Promise.all([
+    const [catalog, systems, duplicate, learnedMappings] = await Promise.all([
       pool.query("SELECT * FROM equipment_catalog WHERE item_type='component' AND active=TRUE ORDER BY name"),
       pool.query("SELECT * FROM equipment_catalog WHERE item_type='system' AND active=TRUE ORDER BY name"),
       pool.query('SELECT id,priority_order_number,created_at FROM priority_orders WHERE project_id=$1 AND lower(priority_order_number)=lower($2)', [request.params.projectId, parsed.order.priorityOrderNumber]),
+      pool.query('SELECT * FROM priority_sku_system_mappings'),
     ]);
     parsed.lines = assignPrioritySystems(matchPriorityLines(parsed.lines, catalog.rows), systems.rows);
+    const learnedBySku=new Map(learnedMappings.rows.map((row)=>[String(row.priority_sku).trim().toLocaleLowerCase('en-US'),row]));
+    parsed.lines=parsed.lines.map((line)=>{const learned=learnedBySku.get(String(line.prioritySku||'').trim().toLocaleLowerCase('en-US'));return learned?{...line,projectSystemId:Number(learned.system_id),mappingSource:'manual',catalogItem:line.catalogItem||catalog.rows.find((item)=>Number(item.id)===Number(learned.catalog_item_id))||null,catalogMatch:line.catalogItem?'priority_sku':learned.catalog_item_id?'learned':'none'}:{...line,mappingSource:line.catalogItem?'catalog':'keywords'};});
     const project = projectResult.rows[0];
     const savedCustomerNumber = String(project.priority_customer_number || '').trim();
     const importedCustomerNumber = String(parsed.order.priorityCustomerNumber || '').trim();
@@ -201,6 +205,7 @@ export function createPriorityOrdersRouter({ pool, authenticate, requireRoles, a
       if (existing.rowCount && request.body.mode !== 'update') throw Object.assign(new Error('הזמנה זו כבר קיימת בפרויקט'), { statusCode: 409, code: 'PRIORITY_ORDER_EXISTS', orderId: existing.rows[0].id });
       let oldInstallationHours = 0;
       let oldProgrammingHours = 0;
+      const oldBomProgress = new Map();
       let orderId;
       if (existing.rowCount) {
         orderId = existing.rows[0].id;
@@ -210,6 +215,8 @@ export function createPriorityOrdersRouter({ pool, authenticate, requireRoles, a
           FROM priority_order_lines WHERE priority_order_id=$1`, [orderId]);
         oldInstallationHours = Number(oldHours.rows[0].installation || 0);
         oldProgrammingHours = Number(oldHours.rows[0].programming || 0);
+        const previousProgress=await db.query(`SELECT l.priority_sku,l.sort_order,pe.quantity_installed,pe.quantity_programmed FROM priority_order_lines l JOIN project_equipment pe ON pe.source_priority_order_line_id=l.id WHERE l.priority_order_id=$1`,[orderId]);
+        for(const item of previousProgress.rows)oldBomProgress.set(`${String(item.priority_sku).toLocaleLowerCase('en-US')}:${item.sort_order}`,{installed:Number(item.quantity_installed||0),programmed:Number(item.quantity_programmed||0)});
         await db.query('DELETE FROM project_equipment WHERE source_priority_order_line_id IN (SELECT id FROM priority_order_lines WHERE priority_order_id=$1)', [orderId]);
         await db.query('DELETE FROM priority_order_lines WHERE priority_order_id=$1', [orderId]);
         await db.query(`UPDATE priority_orders SET client_id=$1,priority_customer_number=$2,quotation_number=$3,customer_name=$4,contact_name=$5,
@@ -257,6 +264,10 @@ export function createPriorityOrdersRouter({ pool, authenticate, requireRoles, a
         } else if (catalogItemId) existingMatches += 1;
         if (line.includeInEquipment && !catalogItemId) throw Object.assign(new Error(`יש לבחור או ליצור פריט קטלוג בשורה ${line.sourceRow}`), { statusCode: 400 });
         if (line.includeInEquipment && !line.projectSystemId) throw Object.assign(new Error(`יש לבחור מערכת יעד בשורה ${line.sourceRow}`), { statusCode: 400 });
+        if (line.systemManuallyChanged && line.prioritySku && line.prioritySku !== '000' && line.projectSystemId) {
+          await db.query(`INSERT INTO priority_sku_system_mappings(priority_sku,system_id,catalog_item_id,learned_by,source)
+            VALUES($1,$2,$3,$4,'manual') ON CONFLICT(lower(priority_sku)) DO UPDATE SET system_id=EXCLUDED.system_id,catalog_item_id=COALESCE(EXCLUDED.catalog_item_id,priority_sku_system_mappings.catalog_item_id),learned_by=EXCLUDED.learned_by,source='manual',updated_at=NOW()`,[line.prioritySku,line.projectSystemId,catalogItemId||null,request.user.id]);
+        }
         const insertedLine = await db.query(`INSERT INTO priority_order_lines(priority_order_id,priority_sku,original_description,imported_description,quantity,unit,
           unit_price,line_total,cost,barcode,line_status,classification,catalog_item_id,project_system_id,include_in_project,include_in_equipment,
           include_in_reference_hours,reference_hours,metadata,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING id`,
@@ -264,8 +275,9 @@ export function createPriorityOrdersRouter({ pool, authenticate, requireRoles, a
           line.barcode, line.lineStatus || '', line.classification, catalogItemId, line.projectSystemId, line.include, line.includeInEquipment,
           line.includeInReferenceHours, line.referenceHours, JSON.stringify(line.metadata || {}), line.sortOrder]);
         if (line.include && line.includeInEquipment && catalogItemId) {
-          await db.query(`INSERT INTO project_equipment(project_id,catalog_item_id,project_system_id,source_priority_order_line_id,quantity,quantity_ordered,source_unit,status,notes)
-            VALUES($1,$2,$3,$4,$5,$5,$6,'planned',$7)`, [request.params.projectId, catalogItemId, line.projectSystemId, insertedLine.rows[0].id, line.quantity, line.unit, `הזמנת Priority ${order.priorityOrderNumber}`]);
+          const progress=oldBomProgress.get(`${String(line.prioritySku).toLocaleLowerCase('en-US')}:${line.sortOrder}`)||{installed:0,programmed:0};const installed=Math.min(line.quantity,progress.installed);const programmed=Math.min(installed,progress.programmed);
+          await db.query(`INSERT INTO project_equipment(project_id,catalog_item_id,project_system_id,source_priority_order_line_id,quantity,quantity_ordered,quantity_installed,quantity_programmed,source_unit,status,notes)
+            VALUES($1,$2,$3,$4,$5,$5,$6,$7,$8,CASE WHEN $6>=$5 THEN 'installed' ELSE 'planned' END,$9)`, [request.params.projectId, catalogItemId, line.projectSystemId, insertedLine.rows[0].id, line.quantity, installed, programmed, line.unit, `הזמנת Priority ${order.priorityOrderNumber}`]);
           equipmentAdded += 1;
         }
       }

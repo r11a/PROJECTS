@@ -558,6 +558,21 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     }
   });
 
+  router.post('/ai/meeting-actions', async (request,response) => {
+    const text=String(request.body?.text||'').trim();if(text.length<10||text.length>12000)return response.status(400).json({error:'יש להזין סיכום פגישה תקין'});
+    const [globalResult,providerResult]=await Promise.all([pool.query("SELECT value FROM app_settings WHERE key='ai'"),pool.query('SELECT provider,enabled,model,api_key_encrypted FROM ai_provider_settings')]);
+    const global={activeProvider:'gemini',monthlyBudgetUsd:10,...(globalResult.rows[0]?.value||{})};const selected=providerResult.rows.find((row)=>row.provider===global.activeProvider);
+    if(!selected?.enabled||!selected.api_key_encrypted)return response.status(409).json({error:'יש להפעיל ספק AI בהגדרות'});
+    const prompt=`נתח את סיכום הפגישה הבא. אל תמציא אחראי או תאריך שלא נאמרו. החזר JSON בלבד: {"tasks":[{"title":"","description":"","assigneeName":"","dueDate":"YYYY-MM-DD או ריק","priority":"normal|high|urgent"}],"email":{"subject":"","body":""}}. צור משימות רק מפעולות המשך מפורשות וטיוטת מייל מקצועית בעברית.\n\n${text}`;
+    try{await enforceBudget(global);const raw=await generateProviderText(global.activeProvider,selected.model,decrypt(selected.api_key_encrypted,encryptionKey),prompt,{responseJson:true,onUsage:usageRecorder(request,global.activeProvider,selected.model,'meeting_actions')});const cleaned=String(raw).replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();const parsed=JSON.parse(cleaned.slice(cleaned.indexOf('{'),cleaned.lastIndexOf('}')+1));const tasks=Array.isArray(parsed.tasks)?parsed.tasks.slice(0,20).map((item)=>({title:String(item.title||'').trim().slice(0,240),description:String(item.description||'').trim().slice(0,3000),assigneeName:String(item.assigneeName||'').trim().slice(0,160),dueDate:/^\d{4}-\d{2}-\d{2}$/.test(String(item.dueDate||''))?item.dueDate:'',priority:['normal','high','urgent'].includes(item.priority)?item.priority:'normal'})).filter((item)=>item.title):[];response.json({tasks,email:{subject:String(parsed.email?.subject||'סיכום פגישה והמשך טיפול').slice(0,240),body:String(parsed.email?.body||text).slice(0,12000)}});}catch(error){response.status(error.statusCode||422).json(chatError(error));}
+  });
+
+  router.post('/ai/text-polish', async (request,response) => {
+    const input=String(request.body?.text||'').trim();const action=String(request.body?.action||'professional');if(input.length<2||input.length>12000)return response.status(400).json({error:'יש להזין טקסט באורך 2–12,000 תווים'});
+    const [globalResult,providerResult]=await Promise.all([pool.query("SELECT value FROM app_settings WHERE key='ai'"),pool.query('SELECT provider,enabled,model,api_key_encrypted FROM ai_provider_settings')]);const global={activeProvider:'gemini',monthlyBudgetUsd:10,...(globalResult.rows[0]?.value||{})};const selected=providerResult.rows.find((row)=>row.provider===global.activeProvider);if(!selected?.enabled||!selected.api_key_encrypted)return response.status(409).json({error:'יש להפעיל ספק AI בהגדרות'});
+    const instruction={professional:'נסח באופן מקצועי וברור',structure:'סדר בכותרות ובסעיפים',shorten:'קצר בלי לאבד מידע חיוני',language:'שפר שפה, דקדוק ובהירות'}[action]||'נסח באופן מקצועי וברור';try{await enforceBudget(global);const improved=(await generateProviderText(global.activeProvider,selected.model,decrypt(selected.api_key_encrypted,encryptionKey),`${instruction}. אל תמציא מידע שלא קיים. החזר רק את הטקסט המשופר בעברית.\n\n${input}`,{onUsage:usageRecorder(request,global.activeProvider,selected.model,'text_polish')})).trim();await audit(request,'polish','text','draft',{action,characters:input.length});response.json({text:improved.slice(0,12000)});}catch(error){response.status(error.statusCode||422).json(chatError(error));}
+  });
+
   router.post('/ai/chat/stream', async (request,response) => {
     const question=String(request.body?.question || '').trim();
     if (question.length<2 || question.length>1500) return response.status(400).json({ error:'יש להזין שאלה באורך 2–1,500 תווים' });
