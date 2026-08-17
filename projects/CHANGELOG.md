@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.27.6
+- Fixed add-on release visibility issue by synchronizing all version metadata in manifest/package/Dockerfile/lockfile.
+- Rebuilt compatibility metadata to force clean re-detection of updates from GitHub.
+
 ## 0.27.5
 - Release bump to force HA update visibility.
 - Navigation selector remains explicit for map routing: always choose Google Maps / Apple Maps / Waze from project workspace and dashboard card.
