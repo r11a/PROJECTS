@@ -62,6 +62,7 @@ import { themeOptions } from "./features/appearance/themeOptions";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ModalPortal } from "./AppModal";
 import { ProductivitySettings } from "./ProductivityWorkspace";
+import { formatDateIL, localDateValue } from "./dateTime";
 
 const roleNames = {
   architect: "אדריכל",
@@ -125,7 +126,8 @@ function initials(name = "") {
   );
 }
 function formatDate(value) {
-  return value ? new Date(value).toLocaleDateString("he-IL") : "ללא תאריך";
+  if (!value) return "ללא תאריך";
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? formatDateIL(value) : new Date(value).toLocaleDateString("he-IL");
 }
 function bytes(value) {
   return value > 1024 * 1024
@@ -2764,7 +2766,7 @@ function TaskForm({ clientId, api, onDone, setNotice }) {
 function InspectionForm({ clientId, api, onDone, setNotice }) {
   const [form, setForm] = useState({
     title: "ביקורת אתר",
-    inspectionDate: new Date().toISOString().slice(0, 10),
+    inspectionDate: localDateValue(),
     score: "",
     findingsText: "",
     notes: "",

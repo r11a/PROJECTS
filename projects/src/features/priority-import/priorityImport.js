@@ -21,7 +21,7 @@ export function preparePriorityLines(lines = []) {
   return lines.map((line) => ({
     ...line,
     catalogItemId: line.catalogItem?.id || "",
-    projectSystemId: line.catalogItem?.parentId || "",
+    projectSystemId: line.projectSystemId || line.catalogItem?.parentId || "",
     createCatalogItem: false,
     manufacturer: line.manufacturer || line.catalogItem?.manufacturer || "",
     model: line.model || line.catalogItem?.model || "",

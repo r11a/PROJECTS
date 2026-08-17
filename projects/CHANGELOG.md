@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.25.1
+
+- Dashboard collection chart now shows project names instead of internal serial identifiers.
+- Fixed local date handling so selected dates remain stable in Israel without UTC day shifts.
+- Added distinct contractor-progress colors consistent with the current-stage visual language.
+- Added Hebrew voice dictation and AI-assisted professional meeting summaries with structured decisions and follow-up actions.
+- Extended realtime database notifications and added silent PWA resume/focus synchronization.
+- Added an explicit archive confirmation path, and changed both Gantt views to open on Day at 220%.
+- Priority imports now infer camera, network, alarm, audio and smart-home target systems and normalize quantities to whole units.
+
 ## 0.25.0
 
 - Added a production-ready, six-step Hebrew RTL Priority XLSX order import wizard inside each project.

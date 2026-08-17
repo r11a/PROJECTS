@@ -992,6 +992,13 @@ export function FinanceWorkspace({
       .then(([paymentData,summary]) => { setPayments(Array.isArray(paymentData.payments)?paymentData.payments:[]); setFinanceProjects(Array.isArray(summary.projects)?summary.projects:[]); })
       .catch((e) => setNotice(e.message));
   useEffect(load, [projectId]);
+  useEffect(() => {
+    const live = (event) => {
+      if (["projects", "project_payments"].includes(event.detail?.table)) load();
+    };
+    window.addEventListener("projects:live-change", live);
+    return () => window.removeEventListener("projects:live-change", live);
+  }, [projectId]);
   const visible = payments.filter((x) =>
     `${x.title} ${x.project_name || ""} ${x.reference}`
       .toLowerCase()

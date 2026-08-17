@@ -39,12 +39,12 @@ const isBlockedWorkday = (value, workCalendar) => {
 };
 
 export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onScheduleChange, users = [], title = "לוח גאנט", compact = false }) {
-  const [zoom, setZoom] = useState("week");
+  const [zoom, setZoom] = useState("day");
   const [anchor, setAnchor] = useState(midnight(new Date()));
   const [collapsed, setCollapsed] = useState(new Set());
   const [tooltip, setTooltip] = useState(null);
   const [timelineFocus, setTimelineFocus] = useState(true);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(2.2);
   const [dragging, setDragging] = useState(false);
   const [schedulePreview, setSchedulePreview] = useState({});
   const [scheduleDialog, setScheduleDialog] = useState(null);

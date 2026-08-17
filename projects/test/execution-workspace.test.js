@@ -11,6 +11,20 @@ test('execution workspace migration includes critical path, records and recycle 
   }
 });
 
+test('meeting summaries support Hebrew voice dictation and AI professional editing', async () => {
+  const [form,ai,workspace]=await Promise.all([
+    read('../src/features/meetings/MeetingSummaryForm.jsx'),
+    read('../server/ai.js'),
+    read('../src/ProjectWorkspace.jsx'),
+  ]);
+  assert.match(form,/SpeechRecognition \|\| window\.webkitSpeechRecognition/);
+  assert.match(form,/he-IL/);
+  assert.match(form,/meeting-polish/);
+  assert.match(ai,/router\.post\('\/ai\/meeting-polish'/);
+  assert.match(ai,/אל תמציא עובדות/);
+  assert.match(workspace,/MeetingSummaryForm/);
+});
+
 test('document deletion is admin-only soft deletion with a restore route', async () => {
   const management = await read('../server/management.js');
   assert.match(management, /router\.delete\('\/documents\/:id', requireRoles\('admin'\)/);

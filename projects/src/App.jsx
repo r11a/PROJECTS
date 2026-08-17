@@ -109,7 +109,7 @@ const projectClassificationOptions = [
 const projectClassificationLabels = Object.fromEntries(projectClassificationOptions);
 const contractorProgressLabels = {
   finishing: "עבודות גמר", carpentry: "הרכבות נגרות", waiting: "בהמתנה",
-  infrastructure: "סלילת תשתיות", drywall_paint: "עבודות גבס וצבע", stopped: "בעצירה",
+  infrastructure: "סלילת תשתיות", infrastructure_paving: "סלילת תשתיות", drywall_paint: "עבודות גבס וצבע", stopped: "בעצירה",
 };
 import { GanttWorkspace } from "./GanttWorkspace";
 import { MessageCenter } from "./Messages";
@@ -468,6 +468,22 @@ function App() {
     const refresh = () => loadProjects().catch(() => {});
     window.addEventListener("projects:data-changed", refresh);
     return () => window.removeEventListener("projects:data-changed", refresh);
+  }, [user?.id]);
+  useEffect(() => {
+    if (!user) return undefined;
+    const refreshWhenActive = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) loadProjects().catch(() => {});
+    };
+    const timer = window.setInterval(refreshWhenActive, 20000);
+    window.addEventListener("focus", refreshWhenActive);
+    window.addEventListener("online", refreshWhenActive);
+    document.addEventListener("visibilitychange", refreshWhenActive);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshWhenActive);
+      window.removeEventListener("online", refreshWhenActive);
+      document.removeEventListener("visibilitychange", refreshWhenActive);
+    };
   }, [user?.id]);
   useEffect(() => {
     if (!user) return undefined;
@@ -1979,7 +1995,7 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
   const cashData = canViewFinance ? projects
     .slice(0, 6)
     .map((project) => ({
-      month: project.id.replace("PRJ-", ""),
+      projectName: project.name,
       paid: Math.round(project.paid / 1000),
       expected: Math.round(project.value / 1000),
     })) : [];
@@ -2165,7 +2181,7 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
                 stroke="#edf0f6"
               />
               <XAxis
-                dataKey="month"
+                dataKey="projectName"
                 axisLine={false}
                 tickLine={false}
                 tick={{ fill: "#8b93a7", fontSize: 12 }}
@@ -2181,7 +2197,7 @@ function Dashboard({ projects, openProject, setPage, insights, insightsRefreshin
                   `${chartValue} אלפי ₪`,
                   name === "paid" ? "התקבל" : "היקף חוזה",
                 ]}
-                labelFormatter={(label) => `פרויקט PRJ-${label}`}
+                labelFormatter={(label) => `פרויקט ${label}`}
                 contentStyle={{ direction: "rtl", textAlign: "right" }}
               />
               <Bar dataKey="expected" fill="#e8ebf3" radius={[5, 5, 0, 0]} />
@@ -2576,7 +2592,7 @@ function ProjectsPage({
                   <td>
                     <StatusBadge stage={project.stage} />
                   </td>
-                  <td><span className="contractor-progress-chip">{contractorProgressLabels[project.contractorProgress] || "בהמתנה"}</span></td>
+                  <td><span className={`contractor-progress-chip contractor-${project.contractorProgress || "waiting"}`}>{contractorProgressLabels[project.contractorProgress] || "בהמתנה"}</span></td>
                   <td>
                     <div className="table-progress">
                       <div>

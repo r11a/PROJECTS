@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { classifyPriorityLine, matchPriorityLines, parsePriorityWorkbook } from '../server/priorityWorkbook.js';
+import { assignPrioritySystems, classifyPriorityLine, inferPrioritySystem, matchPriorityLines, parsePriorityWorkbook } from '../server/priorityWorkbook.js';
 import { hasCatalogWrite, normalizeEditedLines, publicParsedLine, publicParsedOrder } from '../server/priorityOrders.js';
 
 const fixture = fileURLToPath(new URL('./fixtures/priority-order-sanitized.xlsx', import.meta.url));
@@ -51,6 +51,15 @@ test('catalog learning matches priority_sku first and falls back to code case-in
   assert.equal(lines[3].catalogItem, null);
 });
 
+test('Priority lines infer their target system from catalog hierarchy and domain keywords', () => {
+  const systems=[{id:10,name:'מצלמות'},{id:20,name:'תקשורת ורשת'},{id:30,name:'מערכת אזעקה'},{id:40,name:'אודיו ומולטימדיה'}];
+  assert.equal(inferPrioritySystem({description:'מצלמת כיפה IP חיצונית'},systems),10);
+  assert.equal(inferPrioritySystem({description:'מתג 24 יציאות POE'},systems),20);
+  assert.equal(inferPrioritySystem({description:'גלאי נפח פנימי'},systems),30);
+  assert.equal(inferPrioritySystem({catalogItem:{parent_id:40},description:'פריט קיים'},systems),40);
+  assert.equal(assignPrioritySystems([{description:'מגבר WIIM'}],systems)[0].projectSystemId,40);
+});
+
 test('confirmed row payload supports quantity, description, classification, system and ignore overrides', async () => {
   const parsed = await parsePriorityWorkbook(await readFile(fixture));
   const edits = parsed.lines.map((line) => ({ ...line, catalogItemId: null, projectSystemId: null }));
@@ -62,6 +71,14 @@ test('confirmed row payload supports quantity, description, classification, syst
   assert.equal(normalized[1].projectSystemId, 42);
   assert.equal(normalized[1].classification, 'material');
   assert.equal(normalized[5].include, false);
+});
+
+test('Priority quantities are normalized to whole units', async () => {
+  const parsed=await parsePriorityWorkbook(await readFile(fixture));
+  const edits=parsed.lines.map((line)=>({ ...line,quantity:line.sourceRow===parsed.lines[1].sourceRow?7.8:line.quantity }));
+  const normalized=normalizeEditedLines(parsed.lines,edits);
+  assert.equal(normalized[1].quantity,8);
+  assert.equal(Number.isInteger(normalized[1].quantity),true);
 });
 
 test('installation and programming day overrides convert quantity to eight-hour reference targets', async () => {

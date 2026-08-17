@@ -138,7 +138,7 @@ function asNumber(value) {
 
 function asDate(value) {
   if (!value) return null;
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return `${value.getFullYear()}-${String(value.getMonth()+1).padStart(2,'0')}-${String(value.getDate()).padStart(2,'0')}`;
   if (typeof value === 'number') return excelDate(value)?.toISOString().slice(0, 10) || null;
   const text = String(value).trim();
   const local = text.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
@@ -165,6 +165,39 @@ export function classifyPriorityLine(line) {
   if (/(שירות|התקנה[, ]|אינטגרציה|הפעלה|service|integration)/i.test(text)) return 'service';
   if (/(כבל|צינור|מחבר|מתאם|תקע|שקע|חוט|סיב|cat\s*[5678]|cable|connector|pipe)/i.test(text) || /(מטר|meter)/i.test(String(line.unit || ''))) return 'material';
   return 'equipment';
+}
+
+const SYSTEM_KEYWORDS = {
+  cameras: ['מצלמ', 'camera', 'nvr', 'dvr', 'cctv', 'frigate', 'scrypted', 'faceid', 'אינטרקום', 'video'],
+  network: ['רשת', 'תקשורת', 'network', 'poe', 'switch', 'מתג', 'ראוטר', 'router', 'wifi', 'access point', 'patch panel', 'ארון תקשורת'],
+  alarm: ['אזעק', 'alarm', 'ריסקו', 'risco', 'פרדוקס', 'paradox', 'גלאי', 'צופר', 'קיבורד', 'מגנט', 'עשן'],
+  audio: ['אודיו', 'מולטימדיה', 'רמקול', 'מגבר', 'wiim', 'סטרימר', 'streamer', 'speaker', 'amplifier'],
+  smart_home: ['בית חכם', 'smart home', 'knx', 'switchbee', 'homeii', 'shelly', 'somfy', 'מודול מיזוג', 'מודול ביטחון', 'טאבלט'],
+};
+
+function systemBucket(value) {
+  const text = String(value || '').toLocaleLowerCase('he-IL');
+  return Object.entries(SYSTEM_KEYWORDS).find(([, keywords]) => keywords.some((keyword) => text.includes(keyword)))?.[0] || '';
+}
+
+export function inferPrioritySystem(line, systems = []) {
+  if (line.catalogItem?.parent_id || line.catalogItem?.parentId) return Number(line.catalogItem.parent_id || line.catalogItem.parentId);
+  const lineText = `${line.prioritySku || ''} ${line.description || ''} ${line.manufacturer || ''} ${line.model || ''}`.toLocaleLowerCase('he-IL');
+  const bucket = systemBucket(lineText);
+  let best = null;
+  for (const system of systems) {
+    const name = String(system.name || '').trim();
+    if (!name) continue;
+    const normalizedName = name.toLocaleLowerCase('he-IL');
+    let score = lineText.includes(normalizedName) ? 200 : 0;
+    if (bucket && systemBucket(name) === bucket) score += 100;
+    if (!best || score > best.score) best = { id:Number(system.id),score };
+  }
+  return best?.score > 0 ? best.id : null;
+}
+
+export function assignPrioritySystems(lines, systems = []) {
+  return lines.map((line) => ({ ...line, projectSystemId: inferPrioritySystem(line, systems) }));
 }
 
 function headerScore(row) {
@@ -213,7 +246,7 @@ export async function parsePriorityWorkbook(buffer, sourceFilename = '') {
     for (const [field, column] of Object.entries(lineColumns)) line[field] = row[column] ?? '';
     line.prioritySku = String(line.prioritySku || '').trim();
     line.description = String(line.description || '').trim();
-    line.quantity = asNumber(line.quantity) ?? 0;
+    line.quantity = Math.max(0, Math.round(asNumber(line.quantity) ?? 0));
     if (!line.prioritySku && !line.description && !line.quantity) continue;
     line.unit = String(line.unit || '').trim();
     line.unitPrice = asNumber(line.unitPrice);

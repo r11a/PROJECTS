@@ -530,6 +530,34 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     }
   });
 
+  router.post('/ai/meeting-polish', async (request,response) => {
+    const transcript=String(request.body?.transcript || '').trim();
+    const currentFollowUp=String(request.body?.followUp || '').trim();
+    if (transcript.length<10 || transcript.length>12000) return response.status(400).json({ error:'יש להזין תוכן פגישה באורך 10–12,000 תווים' });
+    const [globalResult,providerResult]=await Promise.all([
+      pool.query("SELECT value FROM app_settings WHERE key='ai'"),
+      pool.query('SELECT provider,enabled,model,api_key_encrypted FROM ai_provider_settings'),
+    ]);
+    const global={ activeProvider:'gemini',monthlyBudgetUsd:10,...(globalResult.rows[0]?.value || {}) };
+    const selected=providerResult.rows.find((row)=>row.provider===global.activeProvider);
+    if (!selected?.enabled || !selected.api_key_encrypted) return response.status(409).json({ error:'כדי לנסח סיכום פגישה יש להפעיל ספק AI בהגדרות הסוכן החכם' });
+    try {
+      await enforceBudget(global);
+      const prompt=`אתה עורך מקצועי של סיכומי פגישות בפרויקטי בית חכם ומתח נמוך. סדר את התמלול בעברית רשמית, ברורה ותמציתית. אל תמציא עובדות, שמות, תאריכים, החלטות או אחראים שלא נמסרו. החזר JSON בלבד במבנה {"summary":"...","followUp":"..."}. בשדה summary השתמש בכותרות קצרות, סעיפים ממוספרים, החלטות ותובנות. בשדה followUp רכז פעולות המשך; אם אין פעולות מפורשות כתוב שיש להשלים הגדרת פעולות ואחראים.\nתמלול:\n${transcript}\nהמשך טיפול קיים:\n${currentFollowUp}`;
+      const text=await generateProviderText(global.activeProvider,selected.model,decrypt(selected.api_key_encrypted,encryptionKey),prompt,{ responseJson:true,onUsage:usageRecorder(request,global.activeProvider,selected.model,'meeting_summary') });
+      const cleaned=String(text).replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+      const parsed=JSON.parse(cleaned.slice(cleaned.indexOf('{'),cleaned.lastIndexOf('}')+1));
+      const summary=String(parsed.summary || '').trim().slice(0,12000);
+      const followUp=String(parsed.followUp || '').trim().slice(0,5000);
+      if (!summary) throw new Error('AI returned an empty meeting summary');
+      await audit(request,'polish','meeting_summary','draft',{ characters:transcript.length,provider:global.activeProvider,model:selected.model });
+      response.json({ summary,followUp });
+    } catch (error) {
+      console.error('AI meeting summary failed',error.message);
+      response.status(error.statusCode || 422).json(chatError(error));
+    }
+  });
+
   router.post('/ai/chat/stream', async (request,response) => {
     const question=String(request.body?.question || '').trim();
     if (question.length<2 || question.length>1500) return response.status(400).json({ error:'יש להזין שאלה באורך 2–1,500 תווים' });

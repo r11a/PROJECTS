@@ -15,7 +15,7 @@ export function PriorityLineEditor({ line, index, systems, catalogItems, canCrea
       <label className="priority-include" data-label="ייבוא"><input type="checkbox" checked={Boolean(line.include)} onChange={(event) => patch({ include: event.target.checked })} /><span>{line.sourceRow}</span></label>
       <label data-label="מק״ט"><input value={line.prioritySku || ""} readOnly title="מק״ט המקור נשמר לצורכי ביקורת" /></label>
       <label className="priority-description" data-label="תיאור"><input value={line.description} onChange={(event) => patch({ description: event.target.value })} /></label>
-      <label data-label="כמות"><input type="number" min="0" step="0.001" value={line.quantity} onChange={(event) => patch({ quantity: event.target.value })} /></label>
+      <label data-label="כמות"><input type="number" min="0" step="1" inputMode="numeric" value={line.quantity} onChange={(event) => patch({ quantity: event.target.value })} /></label>
       <label data-label="יחידה"><input value={line.unit || ""} onChange={(event) => patch({ unit: event.target.value })} /></label>
       <label data-label="סיווג"><select value={line.classification} onChange={(event) => changeClassification(event.target.value)}>{priorityClassifications.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
       <label data-label="פריט קטלוג"><select value={line.catalogItemId || ""} onChange={(event) => patch({ catalogItemId: event.target.value, createCatalogItem: false })}><option value="">ללא התאמה</option>{catalogItems.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.prioritySku || item.code}</option>)}</select></label>

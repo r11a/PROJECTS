@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { matchPriorityLines, parsePriorityWorkbook } from './priorityWorkbook.js';
+import { assignPrioritySystems, matchPriorityLines, parsePriorityWorkbook } from './priorityWorkbook.js';
 
 const MAX_PRIORITY_FILE_SIZE = 15 * 1024 * 1024;
 const PREVIEW_TTL = 30 * 60 * 1000;
@@ -66,7 +66,7 @@ export function publicParsedOrder(order, canViewFinance) {
 export function publicParsedLine(line, canViewFinance) {
   const result = {
     sourceRow: line.sourceRow, prioritySku: line.prioritySku, description: line.description,
-    quantity: line.quantity, unit: line.unit, barcode: line.barcode, supplier: line.supplier || '',
+    quantity: line.quantity, unit: line.unit, barcode: line.barcode, supplier: line.supplier || '', projectSystemId:line.projectSystemId || null,
     manufacturer: line.manufacturer || '', model: line.model || '', deliveryDate: line.deliveryDate,
     remainingQuantity: line.remainingQuantity, lineStatus: line.lineStatus || '', classification: line.classification,
     include: line.include, includeInEquipment: line.includeInEquipment,
@@ -99,7 +99,7 @@ export function normalizeEditedLines(parsedLines, edits) {
     if (!edit) throw Object.assign(new Error(`חסרה שורה ${source.sourceRow} באישור הייבוא`), { statusCode: 400 });
     const classification = String(edit.classification || source.classification);
     if (!CLASSIFICATIONS.has(classification)) throw Object.assign(new Error(`סיווג לא תקין בשורה ${source.sourceRow}`), { statusCode: 400 });
-    const quantity = safeNumber(edit.quantity, source.quantity);
+    const quantity = Math.round(safeNumber(edit.quantity, source.quantity));
     if (quantity < 0 || quantity > 1000000) throw Object.assign(new Error(`כמות לא תקינה בשורה ${source.sourceRow}`), { statusCode: 400 });
     const include = Boolean(edit.include) && classification !== 'ignore';
     const includeInReferenceHours = include && Boolean(edit.includeInReferenceHours) && ['installation_day', 'programming_day'].includes(classification);
@@ -155,7 +155,7 @@ export function createPriorityOrdersRouter({ pool, authenticate, requireRoles, a
       pool.query("SELECT * FROM equipment_catalog WHERE item_type='system' AND active=TRUE ORDER BY name"),
       pool.query('SELECT id,priority_order_number,created_at FROM priority_orders WHERE project_id=$1 AND lower(priority_order_number)=lower($2)', [request.params.projectId, parsed.order.priorityOrderNumber]),
     ]);
-    parsed.lines = matchPriorityLines(parsed.lines, catalog.rows);
+    parsed.lines = assignPrioritySystems(matchPriorityLines(parsed.lines, catalog.rows), systems.rows);
     const project = projectResult.rows[0];
     const savedCustomerNumber = String(project.priority_customer_number || '').trim();
     const importedCustomerNumber = String(parsed.order.priorityCustomerNumber || '').trim();

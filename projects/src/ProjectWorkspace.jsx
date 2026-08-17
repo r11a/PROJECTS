@@ -38,8 +38,9 @@ import { AppModal } from "./AppModal";
 import { ProjectGovernancePanel } from "./ProductivityWorkspace";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { summarizeTimeEntries } from "./features/timeTracking/model";
-import { localDateValue } from "./dateTime";
+import { formatDateIL, localDateValue } from "./dateTime";
 import { PriorityImportWizard } from "./features/priority-import/PriorityImportWizard";
+import { MeetingSummaryForm } from "./features/meetings/MeetingSummaryForm";
 import { classificationLabel, priorityMoney } from "./features/priority-import/priorityImport";
 
 const money = new Intl.NumberFormat("he-IL", {
@@ -47,8 +48,10 @@ const money = new Intl.NumberFormat("he-IL", {
   currency: "ILS",
   maximumFractionDigits: 0,
 });
-const dateText = (value) =>
-  value ? new Date(value).toLocaleDateString("he-IL") : "ללא תאריך";
+const dateText = (value) => {
+  if (!value) return "ללא תאריך";
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? formatDateIL(value) : new Date(value).toLocaleDateString("he-IL");
+};
 const projectClassificationOptions = [
   ["private_house", "בית פרטי"],
   ["villa", "וילה"],
@@ -131,6 +134,13 @@ export function ProjectWorkspace({
   useEffect(() => {
     load();
     api('/team').then(result=>setMentionUsers(result.users||[])).catch(()=>{});
+  }, [project.id]);
+  useEffect(() => {
+    const live = (event) => {
+      if (["tasks","project_milestones","project_payments","project_equipment","project_professionals","client_files","project_updates","project_site_reviews","project_meeting_summaries","project_time_entries","priority_orders","priority_order_lines"].includes(event.detail?.table)) load();
+    };
+    window.addEventListener("projects:live-change", live);
+    return () => window.removeEventListener("projects:live-change", live);
   }, [project.id]);
   useEffect(() => {
     if (linkedTaskId) setTab("tasks");
@@ -398,7 +408,7 @@ export function ProjectWorkspace({
           </div>
           <div>
             <span>התקדמות קבלן</span>
-            <strong className="contractor-progress-value">
+            <strong className={`contractor-progress-value contractor-${project.contractorProgress || "waiting"}`}>
               {{ finishing: "עבודות גמר", carpentry: "הרכבות נגרות", waiting: "בהמתנה", infrastructure_paving: "סלילת תשתיות", drywall_paint: "עבודות גבס וצבע", stopped: "בעצירה" }[project.contractorProgress] || "בהמתנה"}
             </strong>
           </div>
@@ -973,8 +983,8 @@ export function ProjectWorkspace({
           </section>
         </div>
       )}
-      {modal==='review'&&<Modal title="ביקורת אתר חדשה" onClose={()=>setModal('')}><form className="work-form" onSubmit={addReview}><label>תאריך פיקוח<input type="date" name="reviewDate" required defaultValue={new Date().toISOString().slice(0,10)}/></label><label>סוג פיקוח<input name="supervisionType" placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy"><option value="">בחירה מהמאגר</option>{professionals.filter(x=>x.active).map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.25" placeholder="0"/></label><label className="wide">ממצאים וסיכום<textarea name="summary" required rows="5"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired"/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת ביקורת</button></div></form></Modal>}
-      {modal==='meeting'&&<Modal title="סיכום פגישה חדש" onClose={()=>setModal('')}><form className="work-form" onSubmit={addMeeting}><label>תאריך ושעה<input type="datetime-local" name="meetingAt" required defaultValue={new Date().toISOString().slice(0,16)}/></label><label>נוכחים<input name="attendees" placeholder="שמות מופרדים בפסיק"/></label><label>שעות תכנון / ישיבה<input type="number" name="hours" min="0" max="24" step="0.25" placeholder="0"/></label><label className="wide">סיכום והחלטות<textarea name="summary" required rows="6"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><label className="wide">תמונות ומסמכי הפגישה<input type="file" name="attachments" accept="image/*,application/pdf,.doc,.docx,.xlsx" multiple/></label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת סיכום</button></div></form></Modal>}
+      {modal==='review'&&<Modal title="ביקורת אתר חדשה" onClose={()=>setModal('')}><form className="work-form" onSubmit={addReview}><label>תאריך פיקוח<input type="date" name="reviewDate" required defaultValue={localDateValue()}/></label><label>סוג פיקוח<input name="supervisionType" placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy"><option value="">בחירה מהמאגר</option>{professionals.filter(x=>x.active).map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.25" placeholder="0"/></label><label className="wide">ממצאים וסיכום<textarea name="summary" required rows="5"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired"/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת ביקורת</button></div></form></Modal>}
+      {modal==='meeting'&&<MeetingSummaryForm api={api} setNotice={setNotice} onClose={()=>setModal('')} onSubmit={addMeeting}/>}
       {modal === "team" && (
         <Modal title="שיוך איש צוות" onClose={() => setModal("")}>
           <form className="work-form" onSubmit={addTeam}>
@@ -1666,7 +1676,7 @@ function ProjectHoursPanel({project,entries,professionals,api,setNotice,onDone,c
     <header className="panel project-hours-head"><div><span><Timer size={19}/></span><div><h3>מונה שעות לפרויקט</h3><p>נתוני ביצוע מובנים מדוחות, טפסים ודיווח ידני. יעדים נקבעים בהקמת הפרויקט או בעריכתו.</p></div></div><strong>{totalHours.toLocaleString('he-IL',{maximumFractionDigits:1})}<small> שעות בפועל</small></strong>{canEdit&&<div className="hours-actions"><button className="ops-primary" onClick={()=>setOpen(true)}><Plus size={16}/>דיווח שעות</button></div>}</header>
     <div className="project-hours-kpis">{totals.map(item=>{const target=targetFor(item.key);const percent=target?item.hours/target*100:0;return <article className={target&&item.hours>target?'over-target':''} key={item.key}><span>{item.label}</span><b>{item.hours.toLocaleString('he-IL',{maximumFractionDigits:1})}</b><small>{target?`מתוך יעד ${target} שעות`:'שעות שנמדדו'}</small><i style={{width:`${target?Math.min(100,Math.max(4,percent)):totalHours?Math.max(4,item.hours/totalHours*100):0}%`}}/>{target>0&&<em>{Math.round(percent)}%</em>}</article>})}</div>
     <div className="project-hours-grid"><section className="panel"><h3>התפלגות שעות לפי פעילות</h3><div className="project-hours-chart" dir="ltr"><ResponsiveContainer width="100%" height={300}><BarChart data={totals} layout="vertical" margin={{top:8,right:18,bottom:4,left:86}}><CartesianGrid strokeDasharray="3 3" horizontal={false}/><XAxis type="number" allowDecimals={false} domain={[0,'auto']}/><YAxis type="category" dataKey="label" width={78} tickLine={false} axisLine={false} tick={{fill:'#626a7d',fontSize:12}}/><Tooltip formatter={(value)=>[`${value} שעות`,'בפועל']} labelFormatter={(label)=>String(label)} contentStyle={{direction:'rtl',textAlign:'right'}}/><Bar dataKey="hours" fill="#6957df" radius={[0,8,8,0]} minPointSize={2} isAnimationActive/></BarChart></ResponsiveContainer></div></section><section className="panel time-entry-list"><h3>דיווחים אחרונים</h3>{entries.slice(0,12).map(item=><article key={item.id}><i/><div><strong>{timeActivityLabels[item.activity_type]||item.activity_type}</strong><small>{item.professional_name||item.user_name||'משתמש'} · {dateText(item.work_date)}</small></div><b>{Number(item.hours)} ש׳</b></article>)}{!entries.length&&<div className="inline-empty">טרם דווחו שעות לפרויקט.</div>}</section></div>
-    {open&&<Modal title="דיווח שעות עבודה" onClose={()=>setOpen(false)}><form className="work-form" onSubmit={submit}><label>סוג פעילות<select name="activityType" required>{Object.entries(timeActivityLabels).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label><label>תאריך<input type="date" name="workDate" required defaultValue={new Date().toISOString().slice(0,10)}/></label><label>מספר שעות<input type="number" name="hours" required min="0.25" max="24" step="0.25" autoFocus/></label><label>מבצע<select name="professionalId"><option value="">המשתמש המדווח</option>{professionals.filter(item=>item.active!==false).map(item=><option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label><label className="wide">הערות<textarea name="notes"/></label><div className="form-actions wide"><button type="button" className="secondary-button" onClick={()=>setOpen(false)}>ביטול</button><button className="ops-primary">שמירת דיווח</button></div></form></Modal>}
+    {open&&<Modal title="דיווח שעות עבודה" onClose={()=>setOpen(false)}><form className="work-form" onSubmit={submit}><label>סוג פעילות<select name="activityType" required>{Object.entries(timeActivityLabels).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label><label>תאריך<input type="date" name="workDate" required defaultValue={localDateValue()}/></label><label>מספר שעות<input type="number" name="hours" required min="0.25" max="24" step="0.25" autoFocus/></label><label>מבצע<select name="professionalId"><option value="">המשתמש המדווח</option>{professionals.filter(item=>item.active!==false).map(item=><option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label><label className="wide">הערות<textarea name="notes"/></label><div className="form-actions wide"><button type="button" className="secondary-button" onClick={()=>setOpen(false)}>ביטול</button><button className="ops-primary">שמירת דיווח</button></div></form></Modal>}
   </section>;
 }
 
