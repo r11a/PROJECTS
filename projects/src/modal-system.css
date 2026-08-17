@@ -235,3 +235,70 @@ body > .modal-backdrop .master-modal { --dialog-max-width: 920px; }
     animation: none !important;
   }
 }
+
+.navigation-selector-modal {
+  --dialog-max-width: 460px;
+}
+
+.navigation-selector-body {
+  display: grid;
+  gap: 16px;
+  padding: 6px 2px 16px;
+}
+
+.navigation-provider-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.navigation-provider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  width: 100%;
+  border: 1px solid #dfe3ec;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  color: #3a4150;
+  font-weight: 700;
+}
+
+.navigation-provider.active,
+.navigation-provider:hover {
+  border-color: #6f5cdf;
+  color: #5540cb;
+}
+
+.navigation-provider-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.navigation-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6f7486;
+}
+
+.navigation-remember input {
+  width: 18px;
+  height: 18px;
+}
+
+.project-nav-button {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  font-weight: 700;
+}
