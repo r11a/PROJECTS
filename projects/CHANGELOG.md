@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.24.9
+
+- Added admin password reset/unlock flow with strong-password policy and one-time reset generation.
+- Extended user lockout metadata and admin-level recovery controls for secure account handling.
+- Kept production hardening and automation UX refinements for practical day-to-day operation.
+- Synchronized release metadata and ensured deployment-facing versioning is consistent across package + add-on manifest.
+
 ## 0.24.8
 
 - Fixed a regression in Hebrew/RTL rendering in core workspace and server endpoints so UI labels and messages now display consistently across the app.
