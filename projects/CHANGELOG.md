@@ -6,6 +6,12 @@
 - Kept swipe-to-close behavior while adding a vertical movement tolerance and stronger direction checks for more stable gestures.
 - Bumped addon release metadata to 0.27.2.
 
+## 0.27.3
+
+- Synced release metadata and lockfile versions for addon visibility (`package.json`, `package-lock.json`, `config.yaml`, `Dockerfile`).
+- Kept side-nav behavior and modal updates untouched while resolving release visibility drift reported by repeated upgrade checks.
+- Prepared release artifacts for a clean redeploy flow (frontend/server manifests read same version source).
+
 ## 0.27.1
 
 - Replaced the expanded voice-recording feed with a compact, table-like list showing context, recorder, timestamp and duration.
