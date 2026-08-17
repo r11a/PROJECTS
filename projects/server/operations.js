@@ -308,6 +308,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const summary=String(request.body.summary||'').trim();if(!request.body.reviewDate||!summary)return response.status(400).json({error:'תאריך פיקוח וסיכום הם שדות חובה'});
     const hours=Math.max(0,Number(request.body.hours)||0);if(hours>24)return response.status(400).json({error:'לא ניתן לדווח יותר מ־24 שעות ביום'});
     const result=await pool.query(`INSERT INTO project_site_reviews(project_id,review_date,performed_by,supervision_type,summary,follow_up,plan_update_required,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,[request.params.id,request.body.reviewDate,request.body.performedBy||null,request.body.supervisionType||'',summary,request.body.followUp||'',Boolean(request.body.planUpdateRequired),request.user.id]);
+    if(request.body.voiceContextId)await pool.query(`UPDATE voice_notes SET entity_type='site_review',entity_id=$1,project_id=$2 WHERE entity_type='site_review_draft' AND entity_id=$3 AND recorded_by=$4`,[String(result.rows[0].id),request.params.id,String(request.body.voiceContextId),request.user.id]);
     if(hours)await pool.query(`INSERT INTO project_time_entries(project_id,professional_id,user_id,activity_type,work_date,hours,source_type,source_id,notes) VALUES($1,$2,$3,'supervision',$4,$5,'site_review',$6,$7)`,[request.params.id,request.body.performedBy||null,request.user.id,request.body.reviewDate,hours,String(result.rows[0].id),request.body.supervisionType||'ביקורת אתר']);
     await audit(request,'create','site_review',String(result.rows[0].id),{projectId:request.params.id});response.status(201).json({review:result.rows[0]});
   });
@@ -315,6 +316,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const summary=String(request.body.summary||'').trim();if(!request.body.meetingAt||!summary)return response.status(400).json({error:'תאריך פגישה וסיכום הם שדות חובה'});
     const hours=Math.max(0,Number(request.body.hours)||0);if(hours>24)return response.status(400).json({error:'לא ניתן לדווח יותר מ־24 שעות ביום'});
     const result=await pool.query(`INSERT INTO project_meeting_summaries(project_id,meeting_at,attendees,summary,follow_up,created_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[request.params.id,request.body.meetingAt,request.body.attendees||'',summary,request.body.followUp||'',request.user.id]);
+    if(request.body.voiceContextId)await pool.query(`UPDATE voice_notes SET entity_type='meeting',entity_id=$1,project_id=$2 WHERE entity_type='meeting_draft' AND entity_id=$3 AND recorded_by=$4`,[String(result.rows[0].id),request.params.id,String(request.body.voiceContextId),request.user.id]);
     if(hours)await pool.query(`INSERT INTO project_time_entries(project_id,user_id,activity_type,work_date,hours,source_type,source_id,notes) VALUES($1,$2,'planning',$3,$4,'meeting_summary',$5,$6)`,[request.params.id,request.user.id,String(request.body.meetingAt).slice(0,10),hours,String(result.rows[0].id),'סיכום פגישה']);
     await audit(request,'create','meeting_summary',String(result.rows[0].id),{projectId:request.params.id});response.status(201).json({meeting:result.rows[0]});
   });
@@ -331,6 +333,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
   router.post('/projects/:id/updates', requireRoles('admin', 'manager', 'technician'), async (request, response) => {
     const body = String(request.body.body || '').trim(); if (!body) return response.status(400).json({ error: 'יש לכתוב תוכן לעדכון' });
     const result = await pool.query('INSERT INTO project_updates(project_id,body,created_by) VALUES($1,$2,$3) RETURNING *', [request.params.id, body, request.user.id]);
+    if(request.body.voiceContextId)await pool.query(`UPDATE voice_notes SET entity_type='project_update',entity_id=$1,project_id=$2 WHERE entity_type='project_update_draft' AND entity_id=$3 AND recorded_by=$4`,[String(result.rows[0].id),request.params.id,String(request.body.voiceContextId),request.user.id]);
     const team=await pool.query('SELECT id,username,display_name FROM users WHERE active=TRUE AND id<>$1',[request.user.id]);
     const normalized=body.toLocaleLowerCase('he-IL');const mentioned=team.rows.filter(item=>normalized.includes(`@${String(item.display_name).toLocaleLowerCase('he-IL')}`)||normalized.includes(`@${String(item.username||'').toLocaleLowerCase('he-IL')}`));
     const projectName=(await pool.query('SELECT name FROM projects WHERE id=$1',[request.params.id])).rows[0]?.name||request.params.id;

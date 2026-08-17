@@ -76,6 +76,7 @@ function openNavigation(project){
 function Modal({ title, onClose, children }) {
   return <AppModal title={title} subtitle="כרטיס פרויקט" onClose={onClose}>{children}</AppModal>;
 }
+const newVoiceContext=()=>globalThis.crypto?.randomUUID?.()||`voice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export function ProjectWorkspace({
   project,
@@ -112,6 +113,8 @@ export function ProjectWorkspace({
   const [bom,setBom]=useState([]);
   const [mentionUsers,setMentionUsers]=useState([]);
   const [note, setNote] = useState("");
+  const [updateVoiceContext,setUpdateVoiceContext]=useState(newVoiceContext);
+  const [reviewVoiceContext,setReviewVoiceContext]=useState(newVoiceContext);
   const [modal, setModal] = useState("");
   const [hoursReportRequest, setHoursReportRequest] = useState(0);
   const [previewFile,setPreviewFile]=useState(null);
@@ -162,9 +165,10 @@ export function ProjectWorkspace({
     try {
       await api(`/projects/${project.id}/updates`, {
         method: "POST",
-        body: JSON.stringify({ body: note }),
+        body: JSON.stringify({ body: note, voiceContextId:updateVoiceContext }),
       });
       setNote("");
+      setUpdateVoiceContext(newVoiceContext());
       setNotice("העדכון פורסם לצוות");
       load();
     } catch (err) {
@@ -236,8 +240,8 @@ export function ProjectWorkspace({
     }
   };
   const uploadRecordFiles=async(files,title,category)=>{for(const file of files.filter(file=>file instanceof File&&file.size)){const body=new FormData();body.set('projectId',project.id);body.set('title',`${title} · ${file.name}`);body.set('category',category);body.set('file',file);await api('/documents',{method:'POST',body});}};
-  const addReview=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/projects/${project.id}/site-reviews`,{method:'POST',body:JSON.stringify({reviewDate:f.get('reviewDate'),performedBy:f.get('performedBy'),supervisionType:f.get('supervisionType'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours'),planUpdateRequired:f.get('planUpdateRequired')==='on'})});await uploadRecordFiles(f.getAll('attachments'),`ביקורת אתר ${f.get('reviewDate')}`,'ביקורת אתר');setModal('');setNotice('ביקורת האתר, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
-  const addMeeting=async(e,providedForm)=>{e.preventDefault();const f=providedForm||new FormData(e.currentTarget);try{const result=await api(`/projects/${project.id}/meetings`,{method:'POST',body:JSON.stringify({meetingAt:f.get('meetingAt'),attendees:f.get('attendees'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours')})});const aiTasks=JSON.parse(String(f.get('aiTasks')||'[]'));if(aiTasks.length)await api(`/projects/${project.id}/meetings/${result.meeting.id}/tasks`,{method:'POST',body:JSON.stringify({tasks:aiTasks})});await uploadRecordFiles(f.getAll('attachments'),`סיכום פגישה ${String(f.get('meetingAt')).slice(0,10)}`,'סיכום פגישה');setModal('');setNotice(aiTasks.length?`סיכום הפגישה נשמר ונוצרו ${aiTasks.length} משימות`:'סיכום הפגישה, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
+  const addReview=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/projects/${project.id}/site-reviews`,{method:'POST',body:JSON.stringify({reviewDate:f.get('reviewDate'),performedBy:f.get('performedBy'),supervisionType:f.get('supervisionType'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours'),planUpdateRequired:f.get('planUpdateRequired')==='on',voiceContextId:reviewVoiceContext})});await uploadRecordFiles(f.getAll('attachments'),`ביקורת אתר ${f.get('reviewDate')}`,'ביקורת אתר');setReviewVoiceContext(newVoiceContext());setModal('');setNotice('ביקורת האתר, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
+  const addMeeting=async(e,providedForm)=>{e.preventDefault();const f=providedForm||new FormData(e.currentTarget);try{const result=await api(`/projects/${project.id}/meetings`,{method:'POST',body:JSON.stringify({meetingAt:f.get('meetingAt'),attendees:f.get('attendees'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours'),voiceContextId:f.get('voiceContextId')})});const aiTasks=JSON.parse(String(f.get('aiTasks')||'[]'));if(aiTasks.length)await api(`/projects/${project.id}/meetings/${result.meeting.id}/tasks`,{method:'POST',body:JSON.stringify({tasks:aiTasks})});await uploadRecordFiles(f.getAll('attachments'),`סיכום פגישה ${String(f.get('meetingAt')).slice(0,10)}`,'סיכום פגישה');setModal('');setNotice(aiTasks.length?`סיכום הפגישה נשמר ונוצרו ${aiTasks.length} משימות`:'סיכום הפגישה, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
   const archiveDocument=async(file)=>{if(user.role!=='admin'||!confirm(`להעביר את „${file.title||file.original_name}” לסל המחזור ל־14 יום?`))return;try{await api(`/documents/${file.id}`,{method:'DELETE'});setNotice('המסמך הועבר לסל המחזור ל־14 יום');load()}catch(error){setNotice(error.message)}};
   const deleteTeam = async (x) => {
     if (!confirm(`להסיר את ${x.display_name} מהפרויקט?`)) return;
@@ -322,7 +326,7 @@ export function ProjectWorkspace({
     ["hours", "שעות עבודה"],
     ["systems", "מערכות וצוות"],
     ["priority", "הזמנות Priority"],
-    ["forms", "טפסים וקבצים"],
+    ["forms", "מסמכים ומדיה"],
     ["finance", "כספים"],
     ["activity", "פעילות"],
     ["governance", "שינויים ובקרה"],
@@ -819,7 +823,6 @@ export function ProjectWorkspace({
                       <Trash2 size={15} />
                     </button>
                   )}
-                  <VoiceNotesToggle api={api} apiRoot={apiRoot} entityType="equipment" entityId={x.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/>
                 </div>
               ))
             ) : (
@@ -922,6 +925,10 @@ export function ProjectWorkspace({
               <div className="inline-empty">אין מסמכים בפרויקט.</div>
             )}
           </section>
+          <section className="panel project-resource project-voice-library">
+            <div className="panel-head"><div><h3>הקלטות הפרויקט</h3><span>הקלטות מביקורות, פגישות ועדכוני צוות, יחד עם תמלול וזמן ההקלטה</span></div></div>
+            <VoiceNotes api={api} apiRoot={apiRoot} entityType="project_media" entityId={project.id} projectId={project.id} projectWide setNotice={setNotice} canDelete={user.role==='admin'}/>
+          </section>
         </div>
       )}
       {tab === "reviews"&&<div className="project-two-columns execution-records">
@@ -934,6 +941,7 @@ export function ProjectWorkspace({
             <h3>פרסום עדכון</h3>
             <p>העדכון נשמר בהיסטוריה ומופיע לכל מי שמורשה לצפות בפרויקט.</p>
             <SmartTextArea api={api} value={note} onChange={setNote} setNotice={setNotice} label="תוכן העדכון" textareaProps={{placeholder:'סיכום ביקור, החלטה, חריגה או הנחיה לביצוע'}}/>
+            <VoiceNotes api={api} apiRoot={apiRoot} entityType="project_update_draft" entityId={updateVoiceContext} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/>
             <div className="project-mention-picker"><small>תיוג משתמש:</small>{mentionUsers.filter(item=>item.active&&String(item.id)!==String(user.id)).map(item=><button type="button" key={item.id} onClick={()=>setNote(current=>`${current}${current&&!current.endsWith(' ')?' ':''}@${item.displayName} `)}>@{item.displayName}</button>)}</div>
             <button className="ops-primary" disabled={!note.trim()}>
               <MessageSquare size={16} />
@@ -984,8 +992,8 @@ export function ProjectWorkspace({
           </section>
         </div>
       )}
-      {modal==='review'&&<Modal title="ביקורת אתר חדשה" onClose={()=>setModal('')}><form className="work-form" onSubmit={addReview}><label>תאריך פיקוח<input type="date" name="reviewDate" required defaultValue={localDateValue()}/></label><label>סוג פיקוח<input name="supervisionType" placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy"><option value="">בחירה מהמאגר</option>{professionals.filter(x=>x.active).map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.25" placeholder="0"/></label><label className="wide">ממצאים וסיכום<textarea name="summary" required rows="5"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired"/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת ביקורת</button></div></form></Modal>}
-      {modal==='meeting'&&<MeetingSummaryForm api={api} project={project} professionals={professionals} setNotice={setNotice} onClose={()=>setModal('')} onSubmit={addMeeting}/>}
+      {modal==='review'&&<Modal title="ביקורת אתר חדשה" onClose={()=>setModal('')}><form className="work-form" onSubmit={addReview}><label>תאריך פיקוח<input type="date" name="reviewDate" required defaultValue={localDateValue()}/></label><label>סוג פיקוח<input name="supervisionType" placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy"><option value="">בחירה מהמאגר</option>{professionals.filter(x=>x.active).map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.25" placeholder="0"/></label><label className="wide">ממצאים וסיכום<textarea name="summary" required rows="5"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><div className="wide"><VoiceNotes api={api} apiRoot={apiRoot} entityType="site_review_draft" entityId={reviewVoiceContext} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></div><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired"/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת ביקורת</button></div></form></Modal>}
+      {modal==='meeting'&&<MeetingSummaryForm api={api} apiRoot={apiRoot} project={project} professionals={professionals} setNotice={setNotice} onClose={()=>setModal('')} onSubmit={addMeeting}/>}
       {modal === "team" && (
         <Modal title="שיוך איש צוות" onClose={() => setModal("")}>
           <form className="work-form" onSubmit={addTeam}>
@@ -1166,7 +1174,6 @@ export function ProjectWorkspace({
           onClose={() => setModal("")}
         />
       )}
-      {tab === "activity"&&<VoiceNotes api={api} apiRoot={apiRoot} entityType="project" entityId={project.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/>}
       {modal === "priority-import" && <PriorityImportWizard project={project} api={api} onClose={()=>setModal("")} onImported={async()=>{await load();setNotice("הזמנת Priority יובאה ועדכנה את הפרויקט")}} />}
       {priorityOrderDetail && <AppModal title={`הזמנת Priority ${priorityOrderDetail.order.priorityOrderNumber}`} subtitle="תיעוד הייבוא לפרויקט" onClose={()=>setPriorityOrderDetail(null)} className="priority-order-detail">
         <div className="priority-order-detail-content">

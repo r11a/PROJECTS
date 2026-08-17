@@ -74,8 +74,10 @@ export async function createProjectIntelligenceRouter({pool,authenticate,require
   });
 
   router.get('/voice-notes',async(request,response)=>{
-    const entityType=String(request.query.entityType||'');const entityId=String(request.query.entityId||'');
-    const result=await pool.query(`SELECT v.*,COALESCE(u.display_name,u.username,'מערכת') recorded_by_name FROM voice_notes v LEFT JOIN users u ON u.id=v.recorded_by WHERE v.entity_type=$1 AND v.entity_id=$2 AND v.deleted_at IS NULL ORDER BY v.created_at DESC`,[entityType,entityId]);
+    const projectId=String(request.query.projectId||'');const entityType=String(request.query.entityType||'');const entityId=String(request.query.entityId||'');
+    const result=projectId
+      ? await pool.query(`SELECT v.*,COALESCE(u.display_name,u.username,'מערכת') recorded_by_name FROM voice_notes v LEFT JOIN users u ON u.id=v.recorded_by WHERE v.project_id=$1 AND v.deleted_at IS NULL ORDER BY v.created_at DESC`,[projectId])
+      : await pool.query(`SELECT v.*,COALESCE(u.display_name,u.username,'מערכת') recorded_by_name FROM voice_notes v LEFT JOIN users u ON u.id=v.recorded_by WHERE v.entity_type=$1 AND v.entity_id=$2 AND v.deleted_at IS NULL ORDER BY v.created_at DESC`,[entityType,entityId]);
     response.json({notes:result.rows});
   });
   router.post('/voice-notes',upload.single('audio'),async(request,response)=>{

@@ -105,6 +105,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     const subject=String(request.body.subject||'').trim();const linkedUrl=String(request.body.linkedUrl||'').slice(0,500);const parentId=Number(request.body.parentId)||null;
     const result=await pool.query('INSERT INTO user_messages(sender_id,recipient_id,subject,body,parent_message_id,linked_url) SELECT $1,id,$2,$3,$4,$5 FROM users WHERE id=$6 AND active=TRUE RETURNING *',[request.user.id,subject,body,parentId,linkedUrl,recipientId]);
     if(!result.rowCount)return response.status(404).json({error:'הנמען אינו זמין'});
+    if(request.body.voiceContextId)await pool.query(`UPDATE voice_notes SET entity_type='message',entity_id=$1 WHERE entity_type='message_draft' AND entity_id=$2 AND recorded_by=$3`,[String(result.rows[0].id),String(request.body.voiceContextId),request.user.id]);
     const team=await pool.query('SELECT id,username,display_name FROM users WHERE active=TRUE AND id<>$1',[request.user.id]);
     const normalized=body.toLocaleLowerCase('he-IL');const mentioned=team.rows.filter(item=>normalized.includes(`@${String(item.display_name).toLocaleLowerCase('he-IL')}`)||normalized.includes(`@${String(item.username||'').toLocaleLowerCase('he-IL')}`)).filter(item=>Number(item.id)!==recipientId);
     for(const item of mentioned)await pool.query('INSERT INTO user_messages(sender_id,recipient_id,subject,body,parent_message_id,linked_url,mention) VALUES($1,$2,$3,$4,$5,$6,TRUE)',[request.user.id,item.id,subject||'תויגת בהודעה',body,result.rows[0].id,linkedUrl]);

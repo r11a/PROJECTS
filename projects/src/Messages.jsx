@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { Check, CheckCheck, CornerUpLeft, Link2, Mail, MessageSquare, Plus, Send, Trash2, X } from "lucide-react";
 import { ModalPortal } from "./AppModal";
 import { SmartTextArea } from "./features/smart-input/SmartTextArea";
+import { VoiceNotes } from "./features/voice-notes/VoiceNotes";
+
+const newVoiceContext=()=>globalThis.crypto?.randomUUID?.()||`voice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export function MessageCenter({
   api,
@@ -17,6 +20,7 @@ export function MessageCenter({
   const [compose, setCompose] = useState(false);
   const [selected,setSelected]=useState([]);
   const [form, setForm] = useState({ recipientId: "", subject: "", body: "", parentId:null, linkedUrl:"" });
+  const [voiceContext,setVoiceContext]=useState(newVoiceContext);
   const load = () =>
     api("/messages")
       .then((result) => {
@@ -42,8 +46,9 @@ export function MessageCenter({
   const send = async (event) => {
     event.preventDefault();
     try {
-      await api("/messages", { method: "POST", body: JSON.stringify(form) });
+      await api("/messages", { method: "POST", body: JSON.stringify({...form,voiceContextId:voiceContext}) });
       setForm({ recipientId: "", subject: "", body: "", parentId:null, linkedUrl:"" });
+      setVoiceContext(newVoiceContext());
       setCompose(false);
       setNotice("ההודעה נשלחה");
       load();
@@ -131,6 +136,7 @@ export function MessageCenter({
               />
             </label>
             <SmartTextArea api={api} value={form.body} onChange={(body)=>setForm({...form,body})} setNotice={setNotice} label="הודעה" textareaProps={{required:true}}/>
+            <VoiceNotes api={api} apiRoot={apiRoot} entityType="message_draft" entityId={voiceContext} setNotice={setNotice} canDelete/>
             <div className="message-mentions"><small>תיוג משתמש:</small>{users.filter(item=>String(item.id)!==String(user.id)&&item.active!==false).map(item=><button type="button" key={item.id} onClick={()=>insertMention(item)}>@{item.displayName}</button>)}</div>
             <button className="ops-primary">
               <Send size={15} />

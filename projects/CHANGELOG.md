@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.26.1
+
+- Renamed the project tab to “מסמכים ומדיה” and added a central project-wide voice recording library.
+- Removed voice recording from systems and equipment, while keeping it beside relevant free-text workflows such as site reviews, team updates and private messages.
+- Preserved the originating context when a draft review, update or message is saved, with project-wide discovery, audit and live-update support.
+- Rebuilt the voice player as a compact responsive media control with icon-only actions, tooltips, clearer progress and improved dark/mobile layouts.
+
 ## 0.26.0
 
 - Added persistent Priority SKU-to-system learning with manual mapping precedence and idempotent re-import behavior.
