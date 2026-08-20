@@ -80,7 +80,6 @@ import {
   AlertCenter,
   CalendarWorkspace,
   ClientsWorkspace,
-  InsightsTile,
   OperationalSettings,
 } from "./Operational";
 import { FormsWorkspace } from "./FormsWorkspace";
@@ -2082,6 +2081,8 @@ function SystemPage({ setNotice }) {
 }
 
 function Dashboard({ api, projects, openProject, setPage, insights, insightsRefreshing, onRefreshInsights, user }) {
+  const [insightsOpen,setInsightsOpen]=useState(false);
+  const [insightsBusy,setInsightsBusy]=useState(false);
   const active = projects.filter((p) => p.stage !== "completed");
   const smartHomeCount=active.filter((project)=>project.projectCategory!=='other').length;
   const otherCount=active.length-smartHomeCount;
@@ -2098,13 +2099,14 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
       color: value.color,
     }))
     .filter((x) => x.value);
-  const cashData = canViewFinance ? projects
-    .slice(0, 6)
-    .map((project) => ({
+  const cashData = canViewFinance ? active.map((project,index) => ({
+      id:project.id,
       projectName: project.name,
       paid: Math.round(project.paid / 1000),
       expected: Math.round(project.value / 1000),
+      color:`hsl(${Math.round((index*137.508+258)%360)} 68% 52%)`,
     })) : [];
+  const generateInsights=async()=>{setInsightsBusy(true);try{await onRefreshInsights?.();setInsightsOpen(true)}finally{setInsightsBusy(false)}};
   const upcomingMilestones = projects
     .filter((project) => project.stage !== "completed")
     .slice(0, 4);
@@ -2126,6 +2128,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
             <span>משימות</span>
             <b>{insights?.stats?.open || 0}</b>
           </button>
+          <button className="dashboard-ai-button" onClick={generateInsights} disabled={insightsBusy||insightsRefreshing}><Sparkles size={18}/><span>{insightsBusy||insightsRefreshing?'מפיק תובנות…':'הפק תובנות'}</span></button>
           <div className="live-pill">
             <i />
             הנתונים מעודכנים עכשיו
@@ -2167,7 +2170,6 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
           onClick={() => setPage("finance")}
         />}
       </section>
-      <InsightsTile insights={insights} onNavigate={setPage} refreshing={insightsRefreshing} onRefresh={onRefreshInsights} />
       <RiskCenter api={api} projects={projects} openProject={openProject}/>
       <section className="dashboard-grid top">
         {projects.some((p) => p.flag) && <div className="panel portfolio-panel">
@@ -2280,7 +2282,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
               צפי
             </span>
           </div>
-          <ResponsiveContainer width="100%" height={235}>
+          <div className="cash-chart-scroll"><div style={{minWidth:`${Math.max(640,cashData.length*112)}px`}}><ResponsiveContainer width="100%" height={270}>
             <BarChart data={cashData} barGap={5}>
               <CartesianGrid
                 strokeDasharray="3 3"
@@ -2289,9 +2291,12 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
               />
               <XAxis
                 dataKey="projectName"
+                interval={0}
+                height={56}
                 axisLine={false}
                 tickLine={false}
                 tick={{ fill: "#8b93a7", fontSize: 12 }}
+                tickFormatter={(label)=>String(label).length>16?`${String(label).slice(0,16)}…`:label}
               />
               <YAxis
                 axisLine={false}
@@ -2307,10 +2312,10 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
                 labelFormatter={(label) => `פרויקט ${label}`}
                 contentStyle={{ direction: "rtl", textAlign: "right" }}
               />
-              <Bar dataKey="expected" fill="#e8ebf3" radius={[5, 5, 0, 0]} />
-              <Bar dataKey="paid" fill="#6d5de8" radius={[5, 5, 0, 0]} />
+              <Bar dataKey="expected" radius={[6, 6, 0, 0]}>{cashData.map((entry)=><Cell key={`expected-${entry.id}`} fill={entry.color} fillOpacity={0.18}/>)}</Bar>
+              <Bar dataKey="paid" radius={[6, 6, 0, 0]}>{cashData.map((entry)=><Cell key={`paid-${entry.id}`} fill={entry.color}/>)}</Bar>
             </BarChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer></div></div>
         </div>}
         <div className="panel milestones-panel">
           <PanelHead
@@ -2344,6 +2349,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
           </div>
         </div>
       </section>
+      {insightsOpen&&<AppModal title="תובנות ניהוליות" subtitle="ניתוח עדכני של נתוני PROJECTS" className="dashboard-insights-modal" onClose={()=>setInsightsOpen(false)}><div className="dashboard-insights-list">{(insights?.suggestions||[]).slice(0,5).map((item,index)=><button key={`${item.title}-${index}`} className={item.tone||'info'} onClick={()=>{setInsightsOpen(false);setPage(item.target)}}><span><Sparkles size={17}/></span><div><strong>{item.title}</strong><p>{item.text}</p></div><ChevronLeft size={17}/></button>)}{!(insights?.suggestions||[]).length&&<div className="inline-empty">לא נמצאו כרגע תובנות הדורשות פעולה.</div>}</div></AppModal>}
     </div>
   );
 }

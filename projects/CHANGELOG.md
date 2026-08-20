@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.28.2
+
+- Removed the AI insight tile from the dashboard and replaced it with one compact `הפק תובנות` action; generated insights now open in a focused modal.
+- Replaced the overflowing Risk Center action with a small `הרחב` / `צמצם` button in the header.
+- Rebuilt the collection chart to include every active project, preserve horizontal readability and give every project a distinct color while retaining paid-versus-contract comparison.
+- Refined dashboard chart proportions, scrolling, legends and responsive behavior on desktop and mobile.
+- Added regression tests for the compact AI action, Risk Center expansion and complete multi-color collection chart.
+
 ## 0.28.1
 
 - Fixed the My Work runtime crash and expanded the personal workspace with overdue styling, unread messages, follow-ups and attention items.
