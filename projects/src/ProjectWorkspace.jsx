@@ -169,6 +169,9 @@ export function ProjectWorkspace({
   const [note, setNote] = useState("");
   const [updateVoiceContext,setUpdateVoiceContext]=useState(newVoiceContext);
   const [reviewVoiceContext,setReviewVoiceContext]=useState(newVoiceContext);
+  const [reviewDraft,setReviewDraft]=useState({summary:'',followUp:''});
+  const [editingReview,setEditingReview]=useState(null);
+  const [editingMeeting,setEditingMeeting]=useState(null);
   const [modal, setModal] = useState("");
   const [hoursReportRequest, setHoursReportRequest] = useState(0);
   const [previewFile,setPreviewFile]=useState(null);
@@ -219,6 +222,8 @@ export function ProjectWorkspace({
       .catch((e) => setNotice(e.message));
   }, [modal]);
   const due = Number(project.value) - Number(project.paid);
+  const totalHours = (workspace.timeEntries||[]).reduce((sum,item)=>sum+Number(item.hours||0),0);
+  const targetHours = Number(project.installationHoursTarget||project.installation_hours_target||0)+Number(project.programmingHoursTarget||project.programming_hours_target||0);
   const completed = workspace.tasks.filter((x) => x.status === "done").length;
   const addUpdate = async (e) => {
     e.preventDefault();
@@ -301,8 +306,10 @@ export function ProjectWorkspace({
     }
   };
   const uploadRecordFiles=async(files,title,category)=>{for(const file of files.filter(file=>file instanceof File&&file.size)){const body=new FormData();body.set('projectId',project.id);body.set('title',`${title} · ${file.name}`);body.set('category',category);body.set('file',file);await api('/documents',{method:'POST',body});}};
-  const addReview=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);try{await api(`/projects/${project.id}/site-reviews`,{method:'POST',body:JSON.stringify({reviewDate:f.get('reviewDate'),performedBy:f.get('performedBy'),supervisionType:f.get('supervisionType'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours'),planUpdateRequired:f.get('planUpdateRequired')==='on',voiceContextId:reviewVoiceContext})});await uploadRecordFiles(f.getAll('attachments'),`ביקורת אתר ${f.get('reviewDate')}`,'ביקורת אתר');setReviewVoiceContext(newVoiceContext());setModal('');setNotice('ביקורת האתר, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
-  const addMeeting=async(e,providedForm)=>{e.preventDefault();const f=providedForm||new FormData(e.currentTarget);try{const result=await api(`/projects/${project.id}/meetings`,{method:'POST',body:JSON.stringify({meetingAt:f.get('meetingAt'),attendees:f.get('attendees'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours'),voiceContextId:f.get('voiceContextId')})});const aiTasks=JSON.parse(String(f.get('aiTasks')||'[]'));if(aiTasks.length)await api(`/projects/${project.id}/meetings/${result.meeting.id}/tasks`,{method:'POST',body:JSON.stringify({tasks:aiTasks})});await uploadRecordFiles(f.getAll('attachments'),`סיכום פגישה ${String(f.get('meetingAt')).slice(0,10)}`,'סיכום פגישה');setModal('');setNotice(aiTasks.length?`סיכום הפגישה נשמר ונוצרו ${aiTasks.length} משימות`:'סיכום הפגישה, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
+  const addReview=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);const payload={reviewDate:f.get('reviewDate'),performedBy:f.get('performedBy'),supervisionType:f.get('supervisionType'),summary:reviewDraft.summary,followUp:reviewDraft.followUp,hours:f.get('hours'),planUpdateRequired:f.get('planUpdateRequired')==='on',voiceContextId:reviewVoiceContext};try{await api(editingReview?`/projects/${project.id}/site-reviews/${editingReview.id}`:`/projects/${project.id}/site-reviews`,{method:editingReview?'PATCH':'POST',body:JSON.stringify(payload)});await uploadRecordFiles(f.getAll('attachments'),`ביקורת אתר ${f.get('reviewDate')}`,'ביקורת אתר');setReviewVoiceContext(newVoiceContext());setEditingReview(null);setReviewDraft({summary:'',followUp:''});setModal('');setNotice(editingReview?'ביקורת האתר עודכנה':'ביקורת האתר, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
+  const addMeeting=async(e,providedForm)=>{e.preventDefault();const f=providedForm||new FormData(e.currentTarget);try{const endpoint=editingMeeting?`/projects/${project.id}/meetings/${editingMeeting.id}`:`/projects/${project.id}/meetings`;const result=await api(endpoint,{method:editingMeeting?'PATCH':'POST',body:JSON.stringify({meetingAt:f.get('meetingAt'),attendees:f.get('attendees'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours'),voiceContextId:f.get('voiceContextId')})});const aiTasks=JSON.parse(String(f.get('aiTasks')||'[]'));if(aiTasks.length)await api(`/projects/${project.id}/meetings/${result.meeting.id}/tasks`,{method:'POST',body:JSON.stringify({tasks:aiTasks})});await uploadRecordFiles(f.getAll('attachments'),`סיכום פגישה ${String(f.get('meetingAt')).slice(0,10)}`,'סיכום פגישה');setEditingMeeting(null);setModal('');setNotice(editingMeeting?'סיכום הפגישה עודכן':aiTasks.length?`סיכום הפגישה נשמר ונוצרו ${aiTasks.length} משימות`:'סיכום הפגישה, השעות והקבצים נשמרו');load()}catch(error){setNotice(error.message)}};
+  const deleteReview=async(item)=>{if(user.role!=='admin'||!confirm('למחוק את ביקורת האתר?'))return;try{await api(`/projects/${project.id}/site-reviews/${item.id}`,{method:'DELETE'});setNotice('ביקורת האתר נמחקה');load()}catch(error){setNotice(error.message)}};
+  const deleteMeeting=async(item)=>{if(user.role!=='admin'||!confirm('למחוק את סיכום הפגישה?'))return;try{await api(`/projects/${project.id}/meetings/${item.id}`,{method:'DELETE'});setNotice('סיכום הפגישה נמחק');load()}catch(error){setNotice(error.message)}};
   const archiveDocument=async(file)=>{if(user.role!=='admin'||!confirm(`להעביר את "${file.title||file.original_name}" לסל המחזור ל־14 יום?`))return;try{await api(`/documents/${file.id}`,{method:'DELETE'});setNotice('המסמך הועבר לסל המחזור ל־14 יום');load()}catch(error){setNotice(error.message)}};
   const deleteTeam = async (x) => {
     if (!confirm(`להסיר את ${x.display_name} מהפרויקט?`)) return;
@@ -399,10 +406,9 @@ export function ProjectWorkspace({
     ["hours", "שעות עבודה"],
     ["systems", "מערכות וצוות"],
     ["priority", "הזמנות Priority"],
-    ["forms", "טפסים וקבצים"],
+    ["forms", "קבצים ומסמכים"],
     ["finance", "כספים"],
-    ["activity", "פעילות"],
-    ["governance", "שינויים ובקרה"],
+    ["activity", "פעילות, שינויים ובקרה"],
   ].filter(([key])=>key!=="finance"||user.financeAccess!==false);
   return (
     <div className="project-detail project-workspace">
@@ -428,21 +434,6 @@ export function ProjectWorkspace({
               <button type="button" className="project-navigation-link" onClick={() => requestNavigation(project)} title="נווט לכתובת באפליקציית הניווט"><MapPin size={15} />{project.address}<small>נווט</small></button>
             </p>
           </div>
-        </div>
-        <div className="project-hero-actions">
-          <button className="secondary-button" disabled={!canEdit||project.archived} onClick={toggleCompleted}><CheckCircle2 size={16}/>{project.completed?"החזרה לפעילים":"סימון כהסתיים"}</button>
-          <button className="secondary-button" disabled={!canEdit} onClick={() => { setTab("hours"); setHoursReportRequest((current) => current + 1); }}>
-            <Timer size={16}/>
-            דיווח שעות
-          </button>
-          <button
-            className="secondary-button"
-            disabled={!canEdit}
-            onClick={() => setTab("activity")}
-          >
-            <MessageSquare size={16} />
-            הוספת עדכון
-          </button>
         </div>
         <div className="hero-metrics">
           <div>
@@ -488,9 +479,9 @@ export function ProjectWorkspace({
           </div>
           <div>
             <span>התקדמות קבלן</span>
-            <strong className={`contractor-progress-value contractor-${project.contractorProgress || "waiting"}`}>
-              {{ finishing: "עבודות גמר", carpentry: "הרכבות נגרות", waiting: "בהמתנה", infrastructure_paving: "סלילת תשתיות", drywall_paint: "עבודות גבס וצבע", stopped: "בעצירה" }[project.contractorProgress] || "בהמתנה"}
-            </strong>
+            <select disabled={!canEdit} className={`contractor-progress-value contractor-${project.contractorProgress || "waiting"}`} value={project.contractorProgress||'waiting'} onChange={(event)=>updateProject(project.id,{contractorProgress:event.target.value})}>
+              <option value="waiting">בהמתנה</option><option value="infrastructure_paving">סלילת תשתיות</option><option value="drywall_paint">עבודות גבס וצבע</option><option value="carpentry">הרכבות נגרות</option><option value="finishing">עבודות גמר</option><option value="stopped">בעצירה</option>
+            </select>
           </div>
           <div>
             <span>בריאות הפרויקט</span>
@@ -543,6 +534,7 @@ export function ProjectWorkspace({
               באיחור
             </small>
           </div>
+          <div><span>שעות עבודה</span><strong>{totalHours.toFixed(1)}</strong><small>{targetHours?`מתוך ${targetHours} שעות יעד`:'מדידה שוטפת'}</small></div>
         </div>
       </div>
       <div className="detail-tabs">
@@ -599,34 +591,10 @@ export function ProjectWorkspace({
           </div>
         </div>
       )}
-      {tab === "overview" && canManage && (
-        <ProjectAttributesPanel
-          project={project}
-          updateProject={updateProject}
-          api={api}
-          setNotice={setNotice}
-        />
-      )}
-      {tab === "overview" && canManage && (
-        <GoogleAddressField
-          project={project}
-          api={api}
-          updateProject={updateProject}
-          setNotice={setNotice}
-        />
-      )}
-      {tab === "overview" && canEdit && (
-        <ProjectPhotoUpdate
-          project={project}
-          api={api}
-          setNotice={setNotice}
-          onDone={load}
-        />
-      )}
       {tab === "hours" && (
         <ProjectHoursPanel project={project} entries={workspace.timeEntries || []} professionals={professionals} api={api} setNotice={setNotice} onDone={load} canEdit={canEdit} openRequest={hoursReportRequest}/>
       )}
-      {tab === "governance" && <ProjectGovernancePanel project={project} api={api} user={user} setNotice={setNotice}/>}
+      {tab === "activity" && <ProjectGovernancePanel project={project} api={api} user={user} setNotice={setNotice}/>}
       {tab === "overview" && (
         <div className="detail-grid">
           <div className="detail-main">
@@ -726,6 +694,7 @@ export function ProjectWorkspace({
                   {project.email}
                 </a>
               )}
+              {workspace.team.slice(0,4).map((person)=><a key={`${person.professional_id}-${person.role_type_id}`} href={person.phone?`tel:${person.phone}`:undefined}><UserRound size={16}/><span><strong>{person.display_name}</strong> · {person.role_name}</span></a>)}
               <p>
                 <MapPin size={16} />
                 {project.address}
@@ -763,16 +732,6 @@ export function ProjectWorkspace({
               </div>
               <button onClick={() => setTab("finance")}>לפירוט תשלומים</button>
             </div>}
-            <form className="panel quick-notes" onSubmit={addUpdate}>
-              <div className="panel-head">
-                <div>
-                  <h3>עדכון מהיר לצוות</h3>
-                </div>
-              </div>
-              <SmartTextArea api={api} value={note} onChange={setNote} setNotice={setNotice} label="תוכן העדכון" textareaProps={{placeholder:"מה קרה, מה הוחלט ומה הפעולה הבאה?"}}/>
-              <VoiceNotes api={api} apiRoot={apiRoot} entityType="project_update_draft" entityId={updateVoiceContext} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/>
-              <button disabled={!note.trim()}>פרסום עדכון</button>
-            </form>
           </div>
         </div>
       )}
@@ -916,42 +875,7 @@ export function ProjectWorkspace({
         </section>
       )}
       {tab === "forms" && (
-        <div className="project-two-columns">
-          <section className="panel project-resource">
-            <div className="panel-head">
-              <div>
-                <h3>טפסי הפרויקט</h3>
-                <span>טיוטות, טפסים שהושלמו ואישורים</span>
-              </div>
-              <button onClick={() => setPage("forms")}>
-                <Plus size={15} />
-                טופס חדש
-              </button>
-            </div>
-            {workspace.forms.length ? (
-              workspace.forms.map((x) => (
-                <div className="resource-row" key={x.id}>
-                  <span className="resource-avatar equipment file-thumb">
-                    {x.mime_type?.startsWith('image/')?<img src={`${apiRoot}/documents/${x.id}/preview`} alt=""/>:<FileText size={17} />}
-                  </span>
-                  <div>
-                    <strong>{x.title}</strong>
-                    <small>
-                      {x.template_name} · {dateText(x.updated_at)}
-                    </small>
-                  </div>
-                  <span className={`resource-status ${x.status}`}>
-                    {x.status}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="inline-empty">
-                אין טפסים המשויכים לפרויקט. יצירה מתוך מאגר הטפסים תשייך אותם
-                אוטומטית.
-              </div>
-            )}
-          </section>
+        <div className="project-documents-only">
           <section className="panel project-resource">
             <div className="panel-head">
               <div>
@@ -998,8 +922,8 @@ export function ProjectWorkspace({
         </div>
       )}
       {tab === "reviews"&&<div className="project-two-columns execution-records">
-        <section className="panel project-resource"><div className="panel-head"><div><h3>ביקורות אתר</h3><span>פיקוח, ממצאים ועדכון תוכניות</span></div>{canEdit&&<button onClick={()=>setModal('review')}><Plus size={15}/>ביקורת</button>}</div>{workspace.reviews.length?workspace.reviews.map(x=><article className="execution-card" key={x.id}><header><strong>{dateText(x.review_date)} · {x.supervision_type||'פיקוח אתר'}</strong><small>{x.performed_by_name||x.created_by_name||'לא צוין'}</small></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}{x.plan_update_required&&<b>נדרש עדכון תכנית</b>}<VoiceNotesToggle api={api} apiRoot={apiRoot} entityType="site_review" entityId={x.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></article>):<div className="inline-empty">טרם תועדו ביקורות אתר.</div>}</section>
-        <section className="panel project-resource"><div className="panel-head"><div><h3>סיכומי פגישות</h3><span>נוכחים, החלטות והמשך טיפול</span></div>{canEdit&&<button onClick={()=>setModal('meeting')}><Plus size={15}/>פגישה</button>}</div>{workspace.meetings.length?workspace.meetings.map(x=><article className="execution-card" key={x.id}><header><strong>{new Date(x.meeting_at).toLocaleString('he-IL')}</strong><small>{x.attendees||'לא צוינו נוכחים'}</small></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}<VoiceNotesToggle api={api} apiRoot={apiRoot} entityType="meeting" entityId={x.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></article>):<div className="inline-empty">טרם נשמרו סיכומי פגישות.</div>}</section>
+        <section className="panel project-resource"><div className="panel-head"><div><h3>ביקורות אתר</h3><span>פיקוח, ממצאים ועדכון תוכניות</span></div>{canEdit&&<button onClick={()=>{setEditingReview(null);setReviewDraft({summary:'',followUp:''});setModal('review')}}><Plus size={15}/>ביקורת</button>}</div>{workspace.reviews.length?workspace.reviews.map(x=><article className="execution-card" key={x.id}><header><div><strong>{dateText(x.review_date)} · {x.supervision_type||'פיקוח אתר'}</strong><small>{x.performed_by_name||x.created_by_name||'לא צוין'}</small></div><span className="execution-card-actions">{canEdit&&<button onClick={()=>{setEditingReview(x);setReviewDraft({summary:x.summary||'',followUp:x.follow_up||''});setModal('review')}} title="עריכה"><Pencil size={15}/></button>}{user.role==='admin'&&<button onClick={()=>deleteReview(x)} title="מחיקה"><Trash2 size={15}/></button>}</span></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}{x.plan_update_required&&<b>נדרש עדכון תכנית</b>}<VoiceNotesToggle api={api} apiRoot={apiRoot} entityType="site_review" entityId={x.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></article>):<div className="inline-empty">טרם תועדו ביקורות אתר.</div>}</section>
+        <section className="panel project-resource"><div className="panel-head"><div><h3>סיכומי פגישות</h3><span>נוכחים, החלטות והמשך טיפול</span></div>{canEdit&&<button onClick={()=>{setEditingMeeting(null);setModal('meeting')}}><Plus size={15}/>פגישה</button>}</div>{workspace.meetings.length?workspace.meetings.map(x=><article className="execution-card" key={x.id}><header><div><strong>{new Date(x.meeting_at).toLocaleString('he-IL')}</strong><small>{x.created_by_name||'לא צוין מי ביצע'} · {x.attendees||'לא צוינו נוכחים'}</small></div><span className="execution-card-actions">{canEdit&&<button onClick={()=>{setEditingMeeting(x);setModal('meeting')}} title="עריכה"><Pencil size={15}/></button>}{user.role==='admin'&&<button onClick={()=>deleteMeeting(x)} title="מחיקה"><Trash2 size={15}/></button>}</span></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}<VoiceNotesToggle api={api} apiRoot={apiRoot} entityType="meeting" entityId={x.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></article>):<div className="inline-empty">טרם נשמרו סיכומי פגישות.</div>}</section>
       </div>}
       {tab === "activity" && (
         <div className="project-two-columns activity-layout">
@@ -1058,8 +982,8 @@ export function ProjectWorkspace({
           </section>
         </div>
       )}
-      {modal==='review'&&<Modal title="ביקורת אתר חדשה" onClose={()=>setModal('')}><form className="work-form" onSubmit={addReview}><label>תאריך פיקוח<input type="date" name="reviewDate" required defaultValue={localDateValue()}/></label><label>סוג פיקוח<input name="supervisionType" placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy"><option value="">בחירה מהמאגר</option>{professionals.filter(x=>x.active).map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.25" placeholder="0"/></label><label className="wide">ממצאים וסיכום<textarea name="summary" required rows="5"/></label><label className="wide">המשך טיפול<textarea name="followUp" rows="3"/></label><div className="wide"><VoiceNotes api={api} apiRoot={apiRoot} entityType="site_review_draft" entityId={reviewVoiceContext} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></div><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired"/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">שמירת ביקורת</button></div></form></Modal>}
-      {modal==='meeting'&&<MeetingSummaryForm api={api} apiRoot={apiRoot} project={project} professionals={professionals} setNotice={setNotice} onClose={()=>setModal('')} onSubmit={addMeeting}/>}
+      {modal==='review'&&<Modal title={editingReview?'עריכת ביקורת אתר':'ביקורת אתר חדשה'} onClose={()=>{setEditingReview(null);setModal('')}}><form className="work-form" onSubmit={addReview}><label>תאריך פיקוח<input type="date" name="reviewDate" required defaultValue={String(editingReview?.review_date||localDateValue()).slice(0,10)}/></label><label>סוג פיקוח<input name="supervisionType" defaultValue={editingReview?.supervision_type||''} placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy" defaultValue={editingReview?.performed_by||''}><option value="">בחירת עובד חברה</option>{professionals.filter(x=>x.active&&x.affiliation==='company').map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.5" placeholder="0"/></label><div className="wide"><SmartTextArea api={api} value={reviewDraft.summary} onChange={(summary)=>setReviewDraft((current)=>({...current,summary}))} setNotice={setNotice} label="ממצאים וסיכום" textareaProps={{name:'summary',required:true,rows:5}}/></div><div className="wide"><SmartTextArea api={api} value={reviewDraft.followUp} onChange={(followUp)=>setReviewDraft((current)=>({...current,followUp}))} setNotice={setNotice} label="המשך טיפול" textareaProps={{name:'followUp',rows:3}}/></div><div className="wide"><VoiceNotes api={api} apiRoot={apiRoot} entityType="site_review_draft" entityId={reviewVoiceContext} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></div><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired" defaultChecked={Boolean(editingReview?.plan_update_required)}/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">{editingReview?'שמירת שינויים':'שמירת ביקורת'}</button></div></form></Modal>}
+      {modal==='meeting'&&<MeetingSummaryForm api={api} apiRoot={apiRoot} project={project} professionals={professionals} setNotice={setNotice} initial={editingMeeting} onClose={()=>{setEditingMeeting(null);setModal('')}} onSubmit={addMeeting}/>}
       {modal === "team" && (
         <Modal title="שיוך איש צוות" onClose={() => setModal("")}>
           <form className="work-form" onSubmit={addTeam}>

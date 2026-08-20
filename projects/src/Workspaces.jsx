@@ -169,7 +169,8 @@ export function TaskEditor({
       projectId: form.projectId || initial?.project_id,
       startDate: form.startDate || initial?.start_date,
       dueDate: form.dueDate || initial?.due_date,
-      assigneeProfessionalId: form.assigneeProfessionalId || null,
+      assigneeProfessionalId: (form.assigneeProfessionalIds || [form.assigneeProfessionalId]).filter(Boolean)[0] || null,
+      assigneeProfessionalIds: (form.assigneeProfessionalIds || [form.assigneeProfessionalId]).filter(Boolean),
       ownerProfessionalId: form.ownerProfessionalId || null,
       parentTaskId: form.parentTaskId || null,
     });
@@ -214,7 +215,7 @@ export function TaskEditor({
           />
         </label>
         {!isMilestone && (
-          <label>
+          <label className="task-schedule-field">
             תאריך התחלה
             <input
               required
@@ -227,32 +228,28 @@ export function TaskEditor({
             />
           </label>
         )}
-        {!isMilestone && <label>
+        <label className="task-schedule-field">
+          {isMilestone ? "תאריך יעד" : "תאריך סיום"}
+          <input
+            required
+            type="date"
+            min={!isMilestone ? String(form.startDate || form.start_date || "").slice(0, 10) : undefined}
+            value={String(form.dueDate || form.due_date || "").slice(0, 10)}
+            onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+          />
+        </label>
+        {!isMilestone && <label className="task-schedule-field">
           שעת התחלה
-          <input type="time" disabled={Boolean(form.allDay ?? form.all_day)} value={String(form.startTime || form.start_time || "").slice(0,5)} onChange={(e)=>setForm({...form,startTime:e.target.value})}/>
+          <input type="time" lang="he-IL" step="300" disabled={Boolean(form.allDay ?? form.all_day)} value={String(form.startTime || form.start_time || "").slice(0,5)} onChange={(e)=>setForm({...form,startTime:e.target.value})}/>
         </label>}
-        {!isMilestone && <label>
-          שעת סיום
-          <input type="time" disabled={Boolean(form.allDay ?? form.all_day)} value={String(form.endTime || form.end_time || "").slice(0,5)} onChange={(e)=>setForm({...form,endTime:e.target.value})}/>
+        {!isMilestone && <label className="task-schedule-field">
+          שעות משוערות
+          <input type="number" min="0" step="0.5" inputMode="decimal" value={form.durationHours ?? form.duration_hours ?? form.estimatedHours ?? form.estimated_hours ?? ""} onChange={(e)=>setForm({...form,durationHours:e.target.value,estimatedHours:e.target.value})}/>
         </label>}
         {!isMilestone && <label className="check-label task-all-day-toggle">
           <input type="checkbox" checked={Boolean(form.allDay ?? form.all_day)} onChange={(e)=>setForm({...form,allDay:e.target.checked,startTime:e.target.checked?"":form.startTime,endTime:e.target.checked?"":form.endTime})}/>
           יום שלם
         </label>}
-        <label>
-          {isMilestone ? "תאריך יעד" : "תאריך סיום"}
-          <input
-            required
-            type="date"
-            min={
-              !isMilestone
-                ? String(form.startDate || form.start_date || "").slice(0, 10)
-                : undefined
-            }
-            value={String(form.dueDate || form.due_date || "").slice(0, 10)}
-            onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-          />
-        </label>
         <label>
           סטטוס
           <select
@@ -310,13 +307,10 @@ export function TaskEditor({
           </label>
         ) : (
           <>
-            <label>
-              מבצע
-              <select value={form.assigneeProfessionalId || form.assignee_professional_id || ""} onChange={(e) => setForm({ ...form, assigneeProfessionalId: e.target.value })}>
-                <option value="">ללא מבצע</option>
-                {professionals.filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.displayName} · {p.jobTitle || p.roles?.[0]?.name || "איש מקצוע"}</option>)}
-              </select>
-            </label>
+            <fieldset className="task-assignees wide">
+              <legend>מבצעים</legend>
+              <div>{professionals.filter((p) => p.active).map((p) => {const selected=(form.assigneeProfessionalIds || form.assignees?.map((item)=>String(item.id)) || [form.assigneeProfessionalId || form.assignee_professional_id]).map(String).includes(String(p.id));return <label key={p.id}><input type="checkbox" checked={selected} onChange={(event)=>{const current=(form.assigneeProfessionalIds || form.assignees?.map((item)=>String(item.id)) || [form.assigneeProfessionalId || form.assignee_professional_id]).filter(Boolean).map(String);setForm({...form,assigneeProfessionalIds:event.target.checked?[...new Set([...current,String(p.id)])]:current.filter((id)=>id!==String(p.id))})}}/><span style={{'--avatar-color':p.color||'#6957df'}}>{p.avatarImage?<img src={p.avatarImage} alt=""/>:(p.displayName||'א').slice(0,2)}</span><b>{p.displayName}</b><small>{p.jobTitle || p.roles?.[0]?.name || "איש מקצוע"}</small></label>})}</div>
+            </fieldset>
             <label>
               עדיפות
               <select
@@ -343,19 +337,10 @@ export function TaskEditor({
                 <option value="service">שירות</option>
                 <option value="procurement">רכש</option>
                 <option value="followup">מעקב</option>
+                <option value="supervision">פיקוח</option>
+                <option value="inspection">ביקורת</option>
+                <option value="meeting">פגישה</option>
               </select>
-            </label>
-            <label>
-              שעות משוערות
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                value={form.durationHours ?? form.duration_hours ?? form.estimatedHours ?? form.estimated_hours ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, durationHours: e.target.value, estimatedHours: e.target.value })
-                }
-              />
             </label>
           </>
         )}
@@ -780,7 +765,7 @@ export function TasksWorkspace({
                 <UserRound size={15} />
                 <span><small>{tab === "tasks" ? "אחראי" : "בעלים"}</small>{item.owner_name || "לא הוקצה"}</span>
               </span>
-              {tab === "tasks" && <span className="work-assignee"><UserRound size={15}/><span><small>מבצע</small>{item.assignee_name || "לא הוקצה"}</span></span>}
+              {tab === "tasks" && <span className="work-assignee"><UserRound size={15}/><span><small>מבצעים</small>{item.assignees?.length?item.assignees.map((person)=>person.displayName).join(', '):(item.assignee_name || "לא הוקצה")}</span></span>}
               {tab === "tasks" && <span className="work-manager">
                 <FolderKanban size={15}/>
                 {item.project_manager_name || "לא הוקצה"}
@@ -825,6 +810,7 @@ export function TasksWorkspace({
                   ).slice(0, 10),
                   dueDate: String(editor.item.due_date || "").slice(0, 10),
                   assigneeProfessionalId: editor.item.assignee_professional_id,
+                  assigneeProfessionalIds: (editor.item.assignees || []).map((item)=>String(item.id)),
                   ownerProfessionalId: editor.item.owner_professional_id,
                   parentTaskId: editor.item.parent_task_id,
                   taskType: editor.item.task_type,

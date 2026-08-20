@@ -186,7 +186,8 @@ export function createProductivityRouter({ pool, authenticate, requireRoles, aud
       SELECT t.*,p.name project_name,COALESCE(assignee.display_name,u.display_name) assignee_name,owner.display_name owner_name,
       dependency.title dependency_title,
       CASE
-        WHEN t.assignee_id IN (SELECT id FROM identity_ids) OR assignee.linked_user_id IN (SELECT id FROM identity_ids) THEN 'assignee'
+        WHEN t.assignee_id IN (SELECT id FROM identity_ids) OR assignee.linked_user_id IN (SELECT id FROM identity_ids)
+          OR EXISTS(SELECT 1 FROM task_assignees ta JOIN professionals tap ON tap.id=ta.professional_id WHERE ta.task_id=t.id AND tap.linked_user_id IN (SELECT id FROM identity_ids)) THEN 'assignee'
         WHEN owner.linked_user_id IN (SELECT id FROM identity_ids) THEN 'owner'
         WHEN manager.linked_user_id IN (SELECT id FROM identity_ids) THEN 'manager'
         ELSE 'related'
@@ -196,6 +197,7 @@ export function createProductivityRouter({ pool, authenticate, requireRoles, aud
       LEFT JOIN professionals manager ON manager.id=p.manager_professional_id
       WHERE t.status IN ${ACTIVE_TASKS} AND (t.assignee_id IN (SELECT id FROM identity_ids)
         OR assignee.linked_user_id IN (SELECT id FROM identity_ids)
+        OR EXISTS(SELECT 1 FROM task_assignees ta JOIN professionals tap ON tap.id=ta.professional_id WHERE ta.task_id=t.id AND tap.linked_user_id IN (SELECT id FROM identity_ids))
         OR owner.linked_user_id IN (SELECT id FROM identity_ids)
         OR manager.linked_user_id IN (SELECT id FROM identity_ids))
       ORDER BY t.critical DESC,(t.due_date<CURRENT_DATE) DESC,t.due_date,t.priority DESC LIMIT 250`,[request.user.id]);

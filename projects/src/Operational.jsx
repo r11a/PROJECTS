@@ -216,7 +216,8 @@ export function InsightsTile({ insights, onNavigate, refreshing, onRefresh }) {
             {insights.ai?.status === "ready" ? "AI" : insights.ai?.status === "fallback" || insights.ai?.status === "disabled" || insights.ai?.status === "unconfigured" ? "מקומי" : "LIVE"}
           </em>
           <button type="button" onClick={onRefresh} disabled={refreshing} title="רענון ניתוח חכם">
-            <RefreshCw className={refreshing ? "spin" : ""} size={15} />
+            <Sparkles className={refreshing ? "spin" : ""} size={15} />
+            {refreshing ? "מייצר…" : "תובנות AI"}
           </button>
         </div>
       </header>
@@ -351,6 +352,8 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
   const [lastUpdated, setLastUpdated] = useState(null);
   const [projects, setProjects] = useState([]);
   const [projectFilter, setProjectFilter] = useState("");
+  const [userFilter, setUserFilter] = useState("");
+  const [calendarUsers, setCalendarUsers] = useState([]);
   const [calendarFeed, setCalendarFeed] = useState(null);
   const [workCalendar, setWorkCalendar] = useState({ includeFriday: false, includeSaturday: false });
   const canCreate = ["admin", "manager"].includes(user.role);
@@ -365,7 +368,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
         weekStart.getMonth(),
         weekStart.getDate() + index,
       ),
-  );
+  ).filter((day)=>![5,6].includes(day.getDay()));
   const rangeTitle =
     view === "year"
       ? String(year)
@@ -381,7 +384,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
               month: "long",
               year: "numeric",
             })
-          : `${weekDays[0].toLocaleDateString("he-IL", { day: "numeric", month: "short" })} – ${weekDays[6].toLocaleDateString("he-IL", { day: "numeric", month: "short", year: "numeric" })}`;
+          : `${weekDays[0].toLocaleDateString("he-IL", { day: "numeric", month: "short" })} – ${weekDays[weekDays.length - 1].toLocaleDateString("he-IL", { day: "numeric", month: "short", year: "numeric" })}`;
   const localKey = (date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   const isNonWorkingDay = (date) =>
@@ -410,7 +413,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
               );
     try {
       const result = await api(
-        `/calendar?from=${encodeURIComponent(fromDate.toISOString())}&to=${encodeURIComponent(toDate.toISOString())}&projectId=${encodeURIComponent(projectFilter)}`,
+        `/calendar?from=${encodeURIComponent(fromDate.toISOString())}&to=${encodeURIComponent(toDate.toISOString())}&projectId=${encodeURIComponent(projectFilter)}&assigneeId=${encodeURIComponent(userFilter)}`,
       );
       setEvents(result.events);
       setProjects(result.projects || []);
@@ -431,7 +434,8 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [year, month, cursor.getDate(), view, projectFilter]);
+  }, [year, month, cursor.getDate(), view, projectFilter, userFilter]);
+  useEffect(() => { api("/calendar-options").then((result)=>setCalendarUsers(result.users||[])).catch(()=>{}); }, []);
   useEffect(() => {
     api("/calendar-feed")
       .then(setCalendarFeed)
@@ -453,7 +457,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
     };
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);
-  }, [year, month, cursor.getDate(), view, projectFilter]);
+  }, [year, month, cursor.getDate(), view, projectFilter, userFilter]);
   const createCalendarFeed = async () => {
     try {
       const result = await api("/calendar-feed", {
@@ -497,7 +501,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
         gridStart.getMonth(),
         gridStart.getDate() + index,
       ),
-  );
+  ).filter((day)=>![5,6].includes(day.getDay()));
   const monthDays = Array.from(
     { length: new Date(year, month + 1, 0).getDate() },
     (_, index) => new Date(year, month, index + 1),
@@ -572,13 +576,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
       </time>
     </article>
   );
-  const viewChoices = [
-    ["day", "1", "יום"],
-    ["week", "7", "שבוע"],
-    ["month", "30", "חודש"],
-    ["monthDetail", "31", "חודש מפורט"],
-    ["year", "365", "שנה"],
-  ];
+  const viewChoices = [["day","יום"],["week","שבוע"],["month","חודש"],["year","שנה"]];
   const navigationUnit =
     view === "day"
       ? "יום"
@@ -593,8 +591,6 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
     ["שלישי", "ג׳"],
     ["רביעי", "ד׳"],
     ["חמישי", "ה׳"],
-    ["שישי", "ו׳"],
-    ["שבת", "ש׳"],
   ];
   return (
     <div
@@ -679,17 +675,11 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
                 </option>
               ))}
             </select>
-            {viewChoices.map(([id, label, title]) => (
-              <button
-                key={id}
-                className={view === id ? "active" : ""}
-                onClick={() => setView(id)}
-                title={title}
-                aria-label={`תצוגת ${title}`}
-              >
-                {label}
-              </button>
-            ))}
+            <select value={userFilter} onChange={(event)=>setUserFilter(event.target.value)} aria-label="סינון לפי אחראי או מבצע">
+              <option value="">כל המשתמשים</option>
+              {calendarUsers.map((item)=><option key={item.id} value={item.id}>{item.displayName}</option>)}
+            </select>
+            <label className="calendar-view-picker"><CalendarDays size={16}/><select value={view} onChange={(event)=>setView(event.target.value)} aria-label="תצוגת לוח שנה">{viewChoices.map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
             <button onClick={load} aria-label="רענון">
               <RefreshCw size={15} />
             </button>

@@ -19,6 +19,15 @@
   }
 }
 
+.execution-card-actions{display:flex;gap:5px}.execution-card-actions button{width:32px;height:32px;border:1px solid var(--line,#e1e4eb);border-radius:9px;background:var(--surface,#fff);display:grid;place-items:center;color:var(--muted,#70788a)}
+.project-documents-only{display:grid;grid-template-columns:1fr}.project-documents-only>.project-resource{min-width:0}
+.risk-center>.risk-expand{width:calc(100% - 24px);margin:8px 12px 12px;justify-content:center;border:1px solid color-mix(in srgb,var(--primary,#6957df) 30%,transparent);color:var(--primary,#6957df);background:color-mix(in srgb,var(--primary,#6957df) 7%,var(--surface,#fff))}
+.my-work-page .focus-task.overdue{background:#fff6f7;border-color:#f1c9cf}
+.archive-switch button{font-weight:650!important;min-height:38px}
+.project-hero .hero-metrics{grid-template-columns:repeat(auto-fit,minmax(135px,1fr))}
+@media(min-width:1280px) and (min-height:820px){.dashboard-page .welcome-row{margin-bottom:12px}.dashboard-page .kpi-grid{margin-bottom:10px}.dashboard-page .kpi-card{min-height:98px;padding:14px}.dashboard-page .dashboard-grid{margin-bottom:10px}.dashboard-page .panel-head{min-height:56px;padding:12px 15px}.dashboard-page .risk-center>button:not(.risk-expand){padding-block:7px}.dashboard-page .stage-chart-wrap{min-height:190px}.dashboard-page .cash-panel .recharts-responsive-container{max-height:210px}}
+@media(max-width:620px){.execution-card header{align-items:flex-start}.execution-card-actions{flex:none}.project-documents-only{display:block}.calendar-view-picker{flex:none}.calendar-view-switch>select{min-width:135px}.project-hero .hero-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 @media (max-width: 1100px) {
   .main-area :is(button, input, select, textarea) {
     min-height: 44px;

@@ -2170,7 +2170,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
       <InsightsTile insights={insights} onNavigate={setPage} refreshing={insightsRefreshing} onRefresh={onRefreshInsights} />
       <RiskCenter api={api} projects={projects} openProject={openProject}/>
       <section className="dashboard-grid top">
-        <div className="panel portfolio-panel">
+        {projects.some((p) => p.flag) && <div className="panel portfolio-panel">
           <PanelHead
             title="פרויקטים שדורשים תשומת לב"
             subtitle={canViewFinance ? "לפי סיכון, חריגה ותשלומים" : "לפי סיכון וחריגה תפעולית"}
@@ -2225,7 +2225,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
               </div>
             )}
           </div>
-        </div>
+        </div>}
         <div className="panel stage-panel">
           <PanelHead title="התפלגות לפי שלב" subtitle="כלל הפרויקטים" />
           <div className="stage-chart-wrap">
@@ -2341,39 +2341,6 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
                 </div>
               );
             })}
-          </div>
-        </div>
-        <div className="panel activity-panel">
-          <PanelHead
-            title="פעילות אחרונה"
-            action="Audit Log"
-            onAction={() =>
-              setPage(user.role === "admin" ? "settings" : "tasks")
-            }
-          />
-          <div className="activity-list">
-            {(insights?.recentActivities || []).map((item) => (
-              <div className="activity-item" key={item.id}>
-                <div className="mini-avatar">
-                  {(item.userName || "מערכת").slice(0, 2)}
-                </div>
-                <div>
-                  <p>
-                    {item.userName || "מערכת"} ·{" "}
-                    {actionNamesForDashboard[item.action] || item.action}
-                  </p>
-                  <strong>
-                    {item.entityType} {item.entityId || ""}
-                  </strong>
-                  <span>
-                    {new Date(item.createdAt).toLocaleString("he-IL")}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {!(insights?.recentActivities || []).length && (
-              <div className="inline-empty">אין פעילות חדשה להצגה.</div>
-            )}
           </div>
         </div>
       </section>
@@ -2501,7 +2468,8 @@ function ProjectsPage({
   );
   const visibleProjects = useMemo(() => {
     const stageOrder=Object.keys(stageMeta);
-    const value=(project,key)=>key==="name"?(project.name||""):key==="stage"?stageOrder.indexOf(project.stage):key==="progress"?Number(project.progress||0):key==="manager"?(project.manager||""):key==="milestone"?new Date(project.due||"9999-12-31").getTime():key==="balance"&&canViewFinance?Number(project.value||0)-Number(project.paid||0):"";
+    const contractorOrder=['waiting','infrastructure_paving','drywall_paint','carpentry','finishing','stopped'];
+    const value=(project,key)=>key==="name"?(project.name||""):key==="stage"?stageOrder.indexOf(project.stage):key==="contractor"?contractorOrder.indexOf(project.contractorProgress||'waiting'):key==="progress"?Number(project.progress||0):key==="manager"?(project.manager||""):key==="milestone"?new Date(project.due||"9999-12-31").getTime():key==="balance"&&canViewFinance?Number(project.value||0)-Number(project.paid||0):"";
     const direction=projectSort.direction==="asc"?1:-1;
     return [...filteredProjects].sort((a,b)=>{const left=value(a,projectSort.key),right=value(b,projectSort.key);return (typeof left==="string"?left.localeCompare(right,"he"):(left-right))*direction;});
   },[filteredProjects,projectSort,canViewFinance]);
@@ -2667,10 +2635,10 @@ function ProjectsPage({
               <tr>
                 <th><button className={projectSort.key==="name"?"active":""} onClick={()=>toggleProjectSort("name")}>פרויקט<ArrowUpDown size={13}/></button></th>
                 <th><button className={projectSort.key==="stage"?"active":""} onClick={()=>toggleProjectSort("stage")}>שלב נוכחי<ArrowUpDown size={13}/></button></th>
-                <th>התקדמות קבלן</th>
+                <th><button className={projectSort.key==="contractor"?"active":""} onClick={()=>toggleProjectSort("contractor")}>התקדמות קבלן<ArrowUpDown size={13}/></button></th>
                 <th><button className={projectSort.key==="progress"?"active":""} onClick={()=>toggleProjectSort("progress")}>התקדמות<ArrowUpDown size={13}/></button></th>
                 <th><button className={projectSort.key==="manager"?"active":""} onClick={()=>toggleProjectSort("manager")}>מנהל פרויקט<ArrowUpDown size={13}/></button></th>
-                <th><button className={projectSort.key==="milestone"?"active":""} onClick={()=>toggleProjectSort("milestone")}>אבן דרך הבאה<ArrowUpDown size={13}/></button></th>
+                <th><button className={projectSort.key==="milestone"?"active":""} onClick={()=>toggleProjectSort("milestone")}>משימה הבאה<ArrowUpDown size={13}/></button></th>
                 {canViewFinance&&<th><button className={projectSort.key==="balance"?"active":""} onClick={()=>toggleProjectSort("balance")}>יתרה לגבייה<ArrowUpDown size={13}/></button></th>}
                 <th />
               </tr>
@@ -2725,10 +2693,10 @@ function ProjectsPage({
                   </td>
                   <td>
                     <div className="milestone-cell">
-                      <strong>{project.nextMilestone || "לא הוגדר"}</strong>
+                      <strong>{project.nextMilestone || "לא הוגדרה משימה"}</strong>
                       <span>
                         <CalendarDays size={13} />
-                        {project.due || "ללא תאריך"}
+                        {project.due || "ללא תאריך"}{project.nextTaskAssignee?` · ${project.nextTaskAssignee}`:''}
                       </span>
                     </div>
                   </td>
@@ -2957,6 +2925,7 @@ function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
               >
                 פתח תיק פרויקט <ArrowLeft size={15} />
               </button>
+              <button className="open-project navigation" onClick={()=>window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(selected.address||selected.location||selected.name)}`,'_blank','noopener,noreferrer')}><MapPin size={15}/>נווט ליעד</button>
             </div>
           )}
         </div>

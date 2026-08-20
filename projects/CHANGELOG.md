@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.0
+- Rebuilt task creation around 24-hour scheduling, adjacent start/end dates, half-hour estimates, all-day work and multiple performers.
+- Added supervision, inspection and meeting task types with backward-compatible task-assignee migration.
+- Added AI-assisted site-review text, company-only inspector selection, and edit/delete flows for reviews and meeting summaries.
+- Simplified the dashboard with on-demand AI insights, top-three Risk Center results, conditional attention panels and no recent-activity duplication.
+- Added calendar user filtering, user-color events, compact day/week/month/year selection and removed Friday/Saturday from operational views.
+- Simplified project overview, made contractor progress editable in the header, added project hours/targets and related team contacts.
+- Consolidated activity with change governance, renamed project media to files/documents, and removed project-form duplication.
+- Protected the system ADMIN account from deactivation, demotion or deletion.
+
 ## 0.27.6
 - Fixed add-on release visibility issue by synchronizing all version metadata in manifest/package/Dockerfile/lockfile.
 - Rebuilt compatibility metadata to force clean re-detection of updates from GitHub.

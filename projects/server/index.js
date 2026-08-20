@@ -881,6 +881,12 @@ app.post('/api/users', authenticate, requireRoles('admin'), async (request, resp
 });
 
 app.patch('/api/users/:id', authenticate, requireRoles('admin'), async (request, response) => {
+  const protectedUser = await pool.query('SELECT username,role FROM users WHERE id=$1', [request.params.id]);
+  if (!protectedUser.rowCount) return response.status(404).json({ error: 'User not found' });
+  const isSystemAdministrator = protectedUser.rows[0].username === 'admin';
+  if (isSystemAdministrator && (request.body.active === false || (request.body.role && request.body.role !== 'admin'))) {
+    return response.status(409).json({ error: 'משתמש ADMIN הוא חשבון מערכת מוגן ותמיד חייב להישאר פעיל כמנהל מערכת' });
+  }
   const updates = [];
   const values = [];
   if (request.body.displayName) { values.push(request.body.displayName); updates.push(`display_name = $${values.length}`); }
@@ -1015,6 +1021,8 @@ app.get('/api/users/:id/avatar', authenticate, async (request, response) => {
 
 app.delete('/api/users/:id', authenticate, requireRoles('admin'), async (request, response) => {
   if (String(request.user.id) === String(request.params.id)) return response.status(409).json({ error: 'לא ניתן למחוק את המשתמש המחובר' });
+  const protectedUser = await pool.query('SELECT username FROM users WHERE id=$1', [request.params.id]);
+  if (protectedUser.rows[0]?.username === 'admin') return response.status(409).json({ error: 'לא ניתן למחוק את משתמש ADMIN המוגן' });
   const result = await pool.query('DELETE FROM users WHERE id=$1 RETURNING id,display_name', [request.params.id]);
   if (!result.rowCount) return response.status(404).json({ error: 'User not found' });
   await audit(request, 'delete', 'user', request.params.id, { displayName: result.rows[0].display_name });
