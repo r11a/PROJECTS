@@ -202,10 +202,20 @@ export function createProductivityRouter({ pool, authenticate, requireRoles, aud
         OR manager.linked_user_id IN (SELECT id FROM identity_ids))
       ORDER BY t.critical DESC,(t.due_date<CURRENT_DATE) DESC,t.due_date,t.priority DESC LIMIT 250`,[request.user.id]);
     const messages=await pool.query(`SELECT m.id,m.subject,m.body,m.linked_url,m.created_at,s.display_name sender_name FROM user_messages m JOIN users s ON s.id=m.sender_id WHERE m.recipient_id=$1 AND m.read_at IS NULL AND NOT ($1=ANY(m.hidden_for)) ORDER BY m.created_at DESC LIMIT 20`,[request.user.id]);
+    const followUps=await pool.query(`WITH identity_ids AS (SELECT id FROM users WHERE id=$1 OR merged_into_user_id=$1)
+      SELECT source.id,source.project_id,source.kind,source.event_at,source.follow_up,p.name project_name
+      FROM (
+        SELECT r.id,r.project_id,'site_review' kind,r.review_date::timestamp event_at,r.follow_up,r.performed_by FROM project_site_reviews r
+        UNION ALL
+        SELECT m.id,m.project_id,'meeting' kind,m.meeting_at event_at,m.follow_up,NULL::bigint performed_by FROM project_meeting_summaries m
+      ) source JOIN projects p ON p.id=source.project_id LEFT JOIN professionals performer ON performer.id=source.performed_by LEFT JOIN professionals manager ON manager.id=p.manager_professional_id
+      WHERE btrim(COALESCE(source.follow_up,''))<>'' AND (performer.linked_user_id IN (SELECT id FROM identity_ids) OR manager.linked_user_id IN (SELECT id FROM identity_ids))
+      ORDER BY source.event_at DESC LIMIT 30`,[request.user.id]);
+    const attention=await pool.query(`SELECT p.id,p.name,p.flag,p.health FROM projects p LEFT JOIN professionals manager ON manager.id=p.manager_professional_id WHERE p.archived_at IS NULL AND p.completed_at IS NULL AND manager.linked_user_id=$1 AND (btrim(COALESCE(p.flag,''))<>'' OR p.health<70) ORDER BY p.health,p.updated_at DESC LIMIT 20`,[request.user.id]);
     const today=new Date().toISOString().slice(0,10);
     const sections={ overdue:[],today:[],upcoming:[],waiting:[] };
     for(const task of tasks.rows){const due=String(task.due_date).slice(0,10);if(task.dependency_task_id)sections.waiting.push(task);else if(due<today)sections.overdue.push(task);else if(due===today)sections.today.push(task);else sections.upcoming.push(task);}
-    response.json({ sections, messages:messages.rows, stats:{ total:tasks.rowCount,overdue:sections.overdue.length,today:sections.today.length,waiting:sections.waiting.length } });
+    response.json({ sections, messages:messages.rows, followUps:followUps.rows, attention:attention.rows, stats:{ total:tasks.rowCount,overdue:sections.overdue.length,today:sections.today.length,waiting:sections.waiting.length,critical:tasks.rows.filter((task)=>task.critical).length } });
   });
 
   router.get('/saved-views',async(request,response)=>{const workspace=String(request.query.workspace||'tasks');const result=await pool.query('SELECT * FROM saved_views WHERE user_id=$1 AND workspace=$2 ORDER BY sort_order,created_at',[request.user.id,workspace]);response.json({views:result.rows});});

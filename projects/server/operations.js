@@ -100,7 +100,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const projectId = String(request.query.projectId || '');
     const result = await pool.query(`SELECT t.*,p.name project_name,c.name client_name,dependency.title dependency_title,
       COALESCE(pr.display_name,u.display_name) assignee_name,pr.color assignee_color,
-      COALESCE((SELECT json_agg(json_build_object('id',tap.id,'displayName',tap.display_name,'color',tap.color,'avatarImage',tap.avatar_image) ORDER BY tap.display_name)
+      COALESCE((SELECT json_agg(json_build_object('id',tap.id,'displayName',tap.display_name,'color',tap.color,'linkedUserId',tap.linked_user_id) ORDER BY tap.display_name)
         FROM task_assignees ta JOIN professionals tap ON tap.id=ta.professional_id WHERE ta.task_id=t.id),'[]'::json) assignees,
       owner.display_name owner_name,owner.color owner_color,
       p.manager_professional_id project_manager_id,manager.display_name project_manager_name,

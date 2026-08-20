@@ -192,15 +192,10 @@ function DynamicIcon({ name, size = 16 }) {
 }
 
 export function InsightsTile({ insights, onNavigate, refreshing, onRefresh }) {
-  if (!insights)
-    return (
-      <section className="insights-tile panel loading">
-        <RefreshCw className="spin" size={20} />
-        מחשב תובנות...
-      </section>
-    );
+  const [revealed,setRevealed]=useState(false);
+  const generate=async()=>{await onRefresh?.();setRevealed(true)};
   return (
-    <section className="insights-tile panel">
+    <section className={`insights-tile panel ${revealed?'revealed':'insights-launcher'}`}>
       <header>
         <div>
           <span>
@@ -208,21 +203,21 @@ export function InsightsTile({ insights, onNavigate, refreshing, onRefresh }) {
           </span>
           <div>
             <h3>תובנות אוטומטיות</h3>
-            <p>{insights.summary || "PROJECTS מנתח משימות, גבייה ובריאות פרויקטים"}</p>
+            <p>{revealed&&insights?.summary ? insights.summary : "לחצו לקבלת 3–5 תובנות עדכניות מנתוני המערכת"}</p>
           </div>
         </div>
         <div className="insight-status">
-          <em className={insights.ai?.status || "local"}>
-            {insights.ai?.status === "ready" ? "AI" : insights.ai?.status === "fallback" || insights.ai?.status === "disabled" || insights.ai?.status === "unconfigured" ? "מקומי" : "LIVE"}
+          <em className={insights?.ai?.status || "local"}>
+            {insights?.ai?.status === "ready" ? "AI" : "חכם"}
           </em>
-          <button type="button" onClick={onRefresh} disabled={refreshing} title="רענון ניתוח חכם">
+          <button type="button" onClick={generate} disabled={refreshing} title="יצירת תובנות מנתוני המערכת">
             <Sparkles className={refreshing ? "spin" : ""} size={15} />
             {refreshing ? "מייצר…" : "תובנות AI"}
           </button>
         </div>
       </header>
-      <div className="insight-results">
-        {insights.suggestions.slice(0, 4).map((item, index) => (
+      {revealed&&insights&&<div className="insight-results">
+        {insights.suggestions.slice(0, 5).map((item, index) => (
           <button
             key={`${item.title}-${index}`}
             className={item.tone}
@@ -250,7 +245,7 @@ export function InsightsTile({ insights, onNavigate, refreshing, onRefresh }) {
           <span>{insights.ai?.providerName || "מנוע תובנות מקומי"}{insights.ai?.model ? ` · ${insights.ai.model}` : ""}</span>
           <small>{insights.ai?.error || `${insights.ai?.cached ? "ניתוח שמור" : "מתעדכן אוטומטית ברקע"}${insights.ai?.generatedAt ? ` · ${new Date(insights.ai.generatedAt).toLocaleTimeString("he-IL", { hour:"2-digit", minute:"2-digit" })}` : ""}`}</small>
         </footer>
-      </div>
+      </div>}
     </section>
   );
 }
@@ -505,7 +500,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
   const monthDays = Array.from(
     { length: new Date(year, month + 1, 0).getDate() },
     (_, index) => new Date(year, month, index + 1),
-  );
+  ).filter((day)=>![5,6].includes(day.getDay()));
   const eventMap = useMemo(
     () =>
       events.reduce((map, event) => {
@@ -576,7 +571,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
       </time>
     </article>
   );
-  const viewChoices = [["day","יום"],["week","שבוע"],["month","חודש"],["year","שנה"]];
+  const viewChoices = [["day","יום"],["week","שבוע"],["month","חודש"],["monthDetail","חודש מפורט"],["year","שנה"]];
   const navigationUnit =
     view === "day"
       ? "יום"

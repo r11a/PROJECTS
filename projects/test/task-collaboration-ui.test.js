@@ -25,7 +25,7 @@ test('calendar and project dashboard use the requested compact operational contr
     read('../src/ProjectWorkspace.jsx'),
   ]);
   assert.match(calendar,/כל המשתמשים/);
-  assert.doesNotMatch(calendar,/\["monthDetail"/);
+  assert.match(calendar,/\["monthDetail","חודש מפורט"\]/);
   assert.match(risk,/slice\(0,expanded\?visible\.length:3\)/);
   assert.match(project,/פעילות, שינויים ובקרה/);
   assert.match(project,/קבצים ומסמכים/);

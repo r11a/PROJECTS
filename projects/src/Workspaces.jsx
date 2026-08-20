@@ -157,6 +157,11 @@ export function TaskEditor({
   onSave,
   fixedProjectId = "",
 }) {
+  const timeChoices = Array.from({ length: 48 }, (_, index) => {
+    const hour = String(Math.floor(index / 2)).padStart(2, "0");
+    const minute = index % 2 ? "30" : "00";
+    return `${hour}:${minute}`;
+  });
   const isMilestone = kind === "milestone";
   const [form, setForm] = useState(
     initial ||
@@ -238,9 +243,12 @@ export function TaskEditor({
             onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
           />
         </label>
-        {!isMilestone && <label className="task-schedule-field">
+        {!isMilestone && <label className="task-schedule-field task-start-time">
           שעת התחלה
-          <input type="time" lang="he-IL" step="300" disabled={Boolean(form.allDay ?? form.all_day)} value={String(form.startTime || form.start_time || "").slice(0,5)} onChange={(e)=>setForm({...form,startTime:e.target.value})}/>
+          <select disabled={Boolean(form.allDay ?? form.all_day)} value={String(form.startTime || form.start_time || "").slice(0,5)} onChange={(e)=>setForm({...form,startTime:e.target.value})}>
+            <option value="">ללא שעה</option>
+            {timeChoices.map((time)=><option key={time} value={time}>{time}</option>)}
+          </select>
         </label>}
         {!isMilestone && <label className="task-schedule-field">
           שעות משוערות

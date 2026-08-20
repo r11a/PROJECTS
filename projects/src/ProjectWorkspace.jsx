@@ -172,6 +172,7 @@ export function ProjectWorkspace({
   const [reviewDraft,setReviewDraft]=useState({summary:'',followUp:''});
   const [editingReview,setEditingReview]=useState(null);
   const [editingMeeting,setEditingMeeting]=useState(null);
+  const [selectedExecution,setSelectedExecution]=useState(null);
   const [modal, setModal] = useState("");
   const [hoursReportRequest, setHoursReportRequest] = useState(0);
   const [previewFile,setPreviewFile]=useState(null);
@@ -426,6 +427,7 @@ export function ProjectWorkspace({
                   {project.flag}
                 </span>
               )}
+              {canManage&&<span className="project-title-actions"><button type="button" onClick={openProjectEdit} title="עריכת פרטי הפרויקט"><Pencil size={16}/></button><button type="button" onClick={toggleArchive} title={project.archived?'שחזור מהארכיון':'העברה לארכיון'}>{project.archived?<RotateCcw size={16}/>:<Archive size={16}/>}</button></span>}
             </div>
             <p>
               <UserRound size={15} />
@@ -542,59 +544,30 @@ export function ProjectWorkspace({
           <button
             className={tab === id ? "active" : ""}
             key={id}
-            onClick={() => setTab(id)}
+            onClick={() => {setTab(id);if(id==='hours')setHoursReportRequest((value)=>value+1)}}
           >
             {label}
             {id === "tasks" && <em>{workspace.tasks.length}</em>}
           </button>
         ))}
       </div>
-      {tab === "overview" && canManage && (
-        <div className="project-management-bar panel">
-          <div>
-            {project.archived ? (
-              <>
-                <Archive size={18} />
-                <span>
-                  <strong>הפרויקט נמצא בארכיון</strong>
-                  <small>
-                    כל הנתונים נשמרו וניתן לשחזר אותו לרשימה הפעילה.
-                  </small>
-                </span>
-              </>
-            ) : (
-              <>
-                <Pencil size={18} />
-                <span>
-                  <strong>ניהול פרטי הפרויקט</strong>
-                  <small>עריכת הפרויקט והלקוח המקושר נשמרת מיד במאגר.</small>
-                </span>
-              </>
-            )}
-          </div>
-          <div>
-            <button className="secondary-button" onClick={openProjectEdit}>
-              <Pencil size={16} />
-              עריכת פרויקט
-            </button>
-            <button
-              className={`secondary-button archive-action ${project.archived ? "restore" : ""}`}
-              onClick={toggleArchive}
-            >
-              {project.archived ? (
-                <RotateCcw size={16} />
-              ) : (
-                <Archive size={16} />
-              )}{" "}
-              {project.archived ? "שחזור פרויקט" : "העברה לארכיון"}
-            </button>
-          </div>
-        </div>
-      )}
       {tab === "hours" && (
         <ProjectHoursPanel project={project} entries={workspace.timeEntries || []} professionals={professionals} api={api} setNotice={setNotice} onDone={load} canEdit={canEdit} openRequest={hoursReportRequest}/>
       )}
       {tab === "activity" && <ProjectGovernancePanel project={project} api={api} user={user} setNotice={setNotice}/>}
+      {tab === "overview"&&<div className="project-overview-snapshot">
+        <section className="panel overview-summary-table"><header><div><h3>תמונת מצב הפרויקט</h3><span>נתוני ביצוע מרכזיים, ללא פעולות עריכה</span></div></header><div className="overview-data-grid">
+          <div><span>סיווג</span><strong>{project.projectCategory==='other'?(project.projectCategoryCustom||'אחר'):'בית חכם'} · {project.projectClassification||'בית פרטי'}</strong></div>
+          <div><span>כתובת</span><strong>{project.address||'לא הוגדרה'}</strong></div>
+          <div><span>שלב נוכחי</span><strong>{stageOptions.find((item)=>(item.metadata?.key||item.name)===project.stage)?.name||project.stage}</strong></div>
+          <div><span>התקדמות קבלן</span><strong>{({waiting:'בהמתנה',infrastructure_paving:'סלילת תשתיות',drywall_paint:'עבודות גבס וצבע',carpentry:'הרכבות נגרות',finishing:'עבודות גמר',stopped:'בעצירה'})[project.contractorProgress]||'בהמתנה'}</strong></div>
+          <div><span>מנהל פרויקט</span><strong>{project.manager||'לא הוקצה'}</strong></div>
+          <div><span>משימות</span><strong>{completed} הושלמו מתוך {workspace.tasks.length}</strong></div>
+          <div><span>שעות עבודה</span><strong>{totalHours.toFixed(1)}{targetHours?` מתוך ${targetHours}`:''}</strong></div>
+          {user.financeAccess!==false&&<div><span>קצב גבייה</span><strong>{project.value?Math.round(project.paid/project.value*100):0}% · {money.format(due)} יתרה</strong></div>}
+        </div></section>
+        <section className="panel overview-contacts-table"><header><h3>אנשי קשר וצוות</h3><span>{1+workspace.team.length} אנשי קשר משויכים</span></header><div className="overview-contact-rows"><div><span className="resource-avatar">{project.client?.slice(0,2)}</span><strong>{project.client}</strong><small>לקוח</small>{project.phone?<a href={`tel:${project.phone}`}>{project.phone}</a>:<i>—</i>}{project.email?<a href={`mailto:${project.email}`}>{project.email}</a>:<i>—</i>}</div>{workspace.team.map((person)=><div key={`${person.professional_id}-${person.role_type_id}`}><span className="resource-avatar" style={{background:person.color}}>{person.display_name?.slice(0,2)}</span><strong>{person.display_name}</strong><small>{person.role_name}</small>{person.phone?<a href={`tel:${person.phone}`}>{person.phone}</a>:<i>—</i>}{person.email?<a href={`mailto:${person.email}`}>{person.email}</a>:<i>—</i>}</div>)}</div></section>
+      </div>}
       {tab === "overview" && (
         <div className="detail-grid">
           <div className="detail-main">
@@ -922,8 +895,8 @@ export function ProjectWorkspace({
         </div>
       )}
       {tab === "reviews"&&<div className="project-two-columns execution-records">
-        <section className="panel project-resource"><div className="panel-head"><div><h3>ביקורות אתר</h3><span>פיקוח, ממצאים ועדכון תוכניות</span></div>{canEdit&&<button onClick={()=>{setEditingReview(null);setReviewDraft({summary:'',followUp:''});setModal('review')}}><Plus size={15}/>ביקורת</button>}</div>{workspace.reviews.length?workspace.reviews.map(x=><article className="execution-card" key={x.id}><header><div><strong>{dateText(x.review_date)} · {x.supervision_type||'פיקוח אתר'}</strong><small>{x.performed_by_name||x.created_by_name||'לא צוין'}</small></div><span className="execution-card-actions">{canEdit&&<button onClick={()=>{setEditingReview(x);setReviewDraft({summary:x.summary||'',followUp:x.follow_up||''});setModal('review')}} title="עריכה"><Pencil size={15}/></button>}{user.role==='admin'&&<button onClick={()=>deleteReview(x)} title="מחיקה"><Trash2 size={15}/></button>}</span></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}{x.plan_update_required&&<b>נדרש עדכון תכנית</b>}<VoiceNotesToggle api={api} apiRoot={apiRoot} entityType="site_review" entityId={x.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></article>):<div className="inline-empty">טרם תועדו ביקורות אתר.</div>}</section>
-        <section className="panel project-resource"><div className="panel-head"><div><h3>סיכומי פגישות</h3><span>נוכחים, החלטות והמשך טיפול</span></div>{canEdit&&<button onClick={()=>{setEditingMeeting(null);setModal('meeting')}}><Plus size={15}/>פגישה</button>}</div>{workspace.meetings.length?workspace.meetings.map(x=><article className="execution-card" key={x.id}><header><div><strong>{new Date(x.meeting_at).toLocaleString('he-IL')}</strong><small>{x.created_by_name||'לא צוין מי ביצע'} · {x.attendees||'לא צוינו נוכחים'}</small></div><span className="execution-card-actions">{canEdit&&<button onClick={()=>{setEditingMeeting(x);setModal('meeting')}} title="עריכה"><Pencil size={15}/></button>}{user.role==='admin'&&<button onClick={()=>deleteMeeting(x)} title="מחיקה"><Trash2 size={15}/></button>}</span></header><p>{x.summary}</p>{x.follow_up&&<footer>המשך טיפול: {x.follow_up}</footer>}<VoiceNotesToggle api={api} apiRoot={apiRoot} entityType="meeting" entityId={x.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></article>):<div className="inline-empty">טרם נשמרו סיכומי פגישות.</div>}</section>
+        <section className="panel project-resource"><div className="panel-head"><div><h3>ביקורות אתר</h3><span>תאריך, מבצע ותמצית — לחיצה פותחת את הרשומה המלאה</span></div>{canEdit&&<button onClick={()=>{setEditingReview(null);setReviewDraft({summary:'',followUp:''});setModal('review')}}><Plus size={15}/>ביקורת</button>}</div>{workspace.reviews.length?workspace.reviews.map(x=><ExecutionRecordRow key={x.id} title={`${dateText(x.review_date)} · ${x.supervision_type||'פיקוח אתר'}`} performer={x.performed_by_name||x.created_by_name||'לא צוין'} summary={x.summary} onOpen={()=>setSelectedExecution({...x,kind:'review'})} onEdit={canEdit?()=>{setEditingReview(x);setReviewDraft({summary:x.summary||'',followUp:x.follow_up||''});setModal('review')}:null} onDelete={user.role==='admin'?()=>deleteReview(x):null}/>):<div className="inline-empty">טרם תועדו ביקורות אתר.</div>}</section>
+        <section className="panel project-resource"><div className="panel-head"><div><h3>סיכומי פגישות</h3><span>תאריך, מי ביצע ותמצית — לחיצה פותחת את הסיכום המלא</span></div>{canEdit&&<button onClick={()=>{setEditingMeeting(null);setModal('meeting')}}><Plus size={15}/>פגישה</button>}</div>{workspace.meetings.length?workspace.meetings.map(x=><ExecutionRecordRow key={x.id} title={new Date(x.meeting_at).toLocaleString('he-IL')} performer={`${x.created_by_name||'לא צוין מי ביצע'} · ${x.attendees||'לא צוינו נוכחים'}`} summary={x.summary} onOpen={()=>setSelectedExecution({...x,kind:'meeting'})} onEdit={canEdit?()=>{setEditingMeeting(x);setModal('meeting')}:null} onDelete={user.role==='admin'?()=>deleteMeeting(x):null}/>):<div className="inline-empty">טרם נשמרו סיכומי פגישות.</div>}</section>
       </div>}
       {tab === "activity" && (
         <div className="project-two-columns activity-layout">
@@ -984,6 +957,7 @@ export function ProjectWorkspace({
       )}
       {modal==='review'&&<Modal title={editingReview?'עריכת ביקורת אתר':'ביקורת אתר חדשה'} onClose={()=>{setEditingReview(null);setModal('')}}><form className="work-form" onSubmit={addReview}><label>תאריך פיקוח<input type="date" name="reviewDate" required defaultValue={String(editingReview?.review_date||localDateValue()).slice(0,10)}/></label><label>סוג פיקוח<input name="supervisionType" defaultValue={editingReview?.supervision_type||''} placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy" defaultValue={editingReview?.performed_by||''}><option value="">בחירת עובד חברה</option>{professionals.filter(x=>x.active&&x.affiliation==='company').map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.5" placeholder="0"/></label><div className="wide"><SmartTextArea api={api} value={reviewDraft.summary} onChange={(summary)=>setReviewDraft((current)=>({...current,summary}))} setNotice={setNotice} label="ממצאים וסיכום" textareaProps={{name:'summary',required:true,rows:5}}/></div><div className="wide"><SmartTextArea api={api} value={reviewDraft.followUp} onChange={(followUp)=>setReviewDraft((current)=>({...current,followUp}))} setNotice={setNotice} label="המשך טיפול" textareaProps={{name:'followUp',rows:3}}/></div><div className="wide"><VoiceNotes api={api} apiRoot={apiRoot} entityType="site_review_draft" entityId={reviewVoiceContext} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></div><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired" defaultChecked={Boolean(editingReview?.plan_update_required)}/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">{editingReview?'שמירת שינויים':'שמירת ביקורת'}</button></div></form></Modal>}
       {modal==='meeting'&&<MeetingSummaryForm api={api} apiRoot={apiRoot} project={project} professionals={professionals} setNotice={setNotice} initial={editingMeeting} onClose={()=>{setEditingMeeting(null);setModal('')}} onSubmit={addMeeting}/>}
+      {selectedExecution&&<Modal title={selectedExecution.kind==='meeting'?'סיכום פגישה':'ביקורת אתר'} subtitle={selectedExecution.kind==='meeting'?new Date(selectedExecution.meeting_at).toLocaleString('he-IL'):dateText(selectedExecution.review_date)} onClose={()=>setSelectedExecution(null)}><div className="execution-detail"><header><strong>{selectedExecution.performed_by_name||selectedExecution.created_by_name||'לא צוין מי ביצע'}</strong>{selectedExecution.attendees&&<span>נוכחים: {selectedExecution.attendees}</span>}</header><section><h3>סיכום</h3><p>{selectedExecution.summary}</p></section>{selectedExecution.follow_up&&<section><h3>המשך טיפול</h3><p>{selectedExecution.follow_up}</p></section>}<VoiceNotesToggle api={api} apiRoot={apiRoot} entityType={selectedExecution.kind==='meeting'?'meeting':'site_review'} entityId={selectedExecution.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></div></Modal>}
       {modal === "team" && (
         <Modal title="שיוך איש צוות" onClose={() => setModal("")}>
           <form className="work-form" onSubmit={addTeam}>
@@ -1696,6 +1670,8 @@ function CommercialProjectGantt({ tasks, milestones, project, projects, professi
     </>
   );
 }
+
+function ExecutionRecordRow({title,performer,summary,onOpen,onEdit,onDelete}){return <article className="execution-record-row" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event)=>{if(event.key==='Enter'||event.key===' ')onOpen()}}><div><strong>{title}</strong><small>{performer}</small></div><p>{summary}</p><span>{onEdit&&<button type="button" onClick={(event)=>{event.stopPropagation();onEdit()}} title="עריכה"><Pencil size={15}/></button>}{onDelete&&<button type="button" onClick={(event)=>{event.stopPropagation();onDelete()}} title="מחיקה"><Trash2 size={15}/></button>}</span></article>}
 
 const timeActivityLabels={planning:'תכנון',supervision:'פיקוח',technician:'זמן טכנאים',installation:'התקנה',threading:'השחלות',programming:'תכנות',training:'הדרכה'};
 

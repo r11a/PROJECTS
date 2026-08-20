@@ -138,6 +138,8 @@ function projectFromRow(row) {
     projectClassification: row.project_classification || 'private_house',
     projectCategory: row.project_category || 'smart_home', projectCategoryCustom: row.project_category_custom || '', projectProfile: row.project_profile && typeof row.project_profile==='object' ? row.project_profile : {},
     projectIcon: row.project_icon || '', projectColor: row.project_color || '#6957df', installationLeadId: row.installation_lead_professional_id,
+    managerUserId: row.manager_user_id || null, managerAvatarColor: row.manager_avatar_color || row.manager_color || '#6957df',
+    nextTaskTitle: row.next_task_title || row.next_milestone || '', nextTaskDate: row.next_task_date || row.due || '', nextTaskAssignee: row.next_task_assignee || '',
     completed: Boolean(row.completed_at), completedAt: row.completed_at, completedBy: row.completed_by,
     financeMode: row.finance_mode || 'total', paymentTerms: row.payment_terms || '', depositAmount:Number(row.deposit_amount||0), depositPaid:Boolean(row.deposit_paid), financeBreakdown:Array.isArray(row.finance_breakdown) ? row.finance_breakdown : [],
   };
@@ -542,8 +544,16 @@ app.get('/api/live', authenticate, (request, response) => {
 app.get('/api/projects', authenticate, async (request, response) => {
   const scope = ['active', 'completed', 'archived', 'all'].includes(request.query.scope) ? request.query.scope : 'active';
   const where = scope === 'all' ? '' : scope === 'archived' ? 'WHERE p.archived_at IS NOT NULL' : scope === 'completed' ? 'WHERE p.archived_at IS NULL AND p.completed_at IS NOT NULL' : 'WHERE p.archived_at IS NULL AND p.completed_at IS NULL';
-  const result = await pool.query(`SELECT p.*,COALESCE(pr.display_name,p.manager) manager
+  const result = await pool.query(`SELECT p.*,COALESCE(pr.display_name,p.manager) manager,pr.linked_user_id manager_user_id,pr.color manager_color,manager_user.avatar_color manager_avatar_color,
+    next_task.title next_task_title,next_task.due_date next_task_date,next_task.assignee_name next_task_assignee
     FROM projects p LEFT JOIN professionals pr ON pr.id=p.manager_professional_id
+    LEFT JOIN users manager_user ON manager_user.id=pr.linked_user_id
+    LEFT JOIN LATERAL (
+      SELECT t.title,t.due_date,COALESCE(ap.display_name,au.display_name,'') assignee_name
+      FROM tasks t LEFT JOIN professionals ap ON ap.id=t.assignee_professional_id LEFT JOIN users au ON au.id=t.assignee_id
+      WHERE t.project_id=p.id AND t.status IN ('open','in_progress','blocked')
+      ORDER BY t.due_date NULLS LAST,t.critical DESC,t.created_at LIMIT 1
+    ) next_task ON TRUE
     ${where}
     ORDER BY p.created_at DESC,p.id DESC`);
   const healthById=new Map((await loadProjectHealth(pool,request.user.financeAccess!==false)).map((item)=>[String(item.id),item]));

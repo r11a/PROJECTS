@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.28.1
+
+- Fixed the My Work runtime crash and expanded the personal workspace with overdue styling, unread messages, follow-ups and attention items.
+- Corrected task assignee serialization, added an explicit 24-hour time selector and preserved multiple performers, half-hour estimates and extended task types.
+- Restored the detailed month calendar as `חודש מפורט`, retained day/week/month/year views, excluded Friday/Saturday, added user filtering and personal event colors.
+- Changed dashboard insights to an on-demand AI action, kept the Risk Center focused on the three highest risks and removed duplicate empty attention content.
+- Added real next-task data and performer details to project lists, manager avatars, contractor sorting/status styling and a navigation-app chooser on the project map.
+- Reworked the project overview into a compact, read-only operational snapshot with project, collection, hours and linked-contact tables; moved edit/archive controls into the project header.
+- Made site reviews and meeting summaries compact and drillable, retained edit/delete controls, hardened meeting attachment layout and added a local fallback for task/email suggestions.
+- Protected the built-in ADMIN account from deactivation, role/finance changes and deletion in both UI and API flows.
+- Added regression coverage and verified server syntax, production build and all unit tests.
+
 ## 0.28.0
 - Rebuilt task creation around 24-hour scheduling, adjacent start/end dates, half-hour estimates, all-day work and multiple performers.
 - Added supervision, inspection and meeting task types with backward-compatible task-assignee migration.

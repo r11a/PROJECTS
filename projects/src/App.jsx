@@ -1742,7 +1742,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                   </span>
                   {item.isLocked ? <span className="admin-lock-badge">ננעל</span> : null}
                   <label className="admin-switch" title={item.active ? "החשבון פעיל" : "החשבון מושבת"}>
-                    <input type="checkbox" checked={item.active} onChange={(e) => updateUser(item.id, { active: e.target.checked })} />
+                    <input type="checkbox" checked={item.active} disabled={item.username==='admin'} onChange={(e) => updateUser(item.id, { active: e.target.checked })} />
                     <span aria-hidden="true" />
                     <b>{item.active ? "פעיל" : "מושבת"}</b>
                   </label>
@@ -1774,12 +1774,12 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                   </div>
                   <label className="user-control-field admin-icon-field">
                     <span>תפקיד והרשאה</span>
-                    <select value={item.role} onChange={(e) => updateUser(item.id, { role: e.target.value })}>
+                    <select value={item.role} disabled={item.username==='admin'} onChange={(e) => updateUser(item.id, { role: e.target.value })}>
                       {Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </label>
                   <label className="admin-checkbox-option" title="שליטה נפרדת בחשיפת נתונים כספיים">
-                    <input type="checkbox" checked={item.financeAccess !== false} onChange={(event) => updateUser(item.id, { financeAccess: event.target.checked })} />
+                    <input type="checkbox" checked={item.financeAccess !== false} disabled={item.username==='admin'} onChange={(event) => updateUser(item.id, { financeAccess: event.target.checked })} />
                     <span><b>גישה לנתונים כספיים</b><small>{item.financeAccess !== false ? "מוצגים למשתמש" : "מוסתרים מהמשתמש"}</small></span>
                   </label>
                   <label className="user-control-field user-color-field">
@@ -1797,7 +1797,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
                     <input type="file" accept="image/*" onChange={(event) => { uploadAvatar(item.id, event.target.files?.[0]); event.target.value = ""; }} />
                   </label>
                   {item.avatarImage && <button type="button" className="admin-secondary-action" onClick={() => removeAvatar(item.id)}>הסרת תמונה</button>}
-                  <button type="button" className="admin-delete-action" disabled={String(item.id) === String(currentUser.id)} onClick={() => deleteUser(item)} title="מחיקת משתמש"><Trash2 size={15} /><span>מחיקה</span></button>
+                  <button type="button" className="admin-delete-action" disabled={item.username==='admin'||String(item.id) === String(currentUser.id)} onClick={() => deleteUser(item)} title={item.username==='admin'?'משתמש ADMIN מוגן ואינו ניתן למחיקה':'מחיקת משתמש'}><Trash2 size={15} /><span>מחיקה</span></button>
                   {passwordActions[item.id]?.open ? (
                     <div className="admin-password-editor">
                       <h5>איפוס סיסמה למשתמש</h5>
@@ -2314,14 +2314,14 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
         </div>}
         <div className="panel milestones-panel">
           <PanelHead
-            title="אבני דרך קרובות"
-            subtitle="היעדים הבאים בפרויקטים הפעילים"
+            title="משימות קרובות"
+            subtitle="המשימה הבאה בכל פרויקט פעיל"
             action="ללוח השנה"
             onAction={() => setPage("calendar")}
           />
           <div className="milestone-list">
             {upcomingMilestones.map((item, index) => {
-              const dueParts = String(item.due || "").split(".");
+              const taskDate=String(item.nextTaskDate||item.due||'').slice(0,10);const dueParts=taskDate?/^\d{4}-\d{2}-\d{2}$/.test(taskDate)?new Date(`${taskDate}T00:00:00`).toLocaleDateString('he-IL').split('.'):taskDate.split('.'):[];
               return (
                 <div className="milestone-item" key={item.id}>
                   <div
@@ -2332,9 +2332,9 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
                   </div>
                   <div>
                     <strong>
-                      {item.nextMilestone || "טרם הוגדרה אבן דרך"}
+                      {item.nextTaskTitle || item.nextMilestone || "טרם הוגדרה משימה"}
                     </strong>
-                    <span>{item.name}</span>
+                    <span>{item.name}{item.nextTaskAssignee?` · ${item.nextTaskAssignee}`:''}</span>
                   </div>
                   {item.health < 70 && <em>בסיכון</em>}
                   <MoreHorizontal size={18} />
@@ -2687,16 +2687,16 @@ function ProjectsPage({
                   </td>
                   <td>
                     <div className="manager-cell">
-                      <span>{project.ownerInitials}</span>
+                      <span style={{background:project.managerAvatarColor||'#6957df'}}><b>{project.ownerInitials||project.manager?.slice(0,2)}</b>{project.managerUserId&&<img src={`${apiRoot}/users/${project.managerUserId}/avatar`} alt="" onError={(event)=>{event.currentTarget.style.display='none'}}/>}</span>
                       {project.manager || "לא הוקצה"}
                     </div>
                   </td>
                   <td>
                     <div className="milestone-cell">
-                      <strong>{project.nextMilestone || "לא הוגדרה משימה"}</strong>
+                      <strong>{project.nextTaskTitle || project.nextMilestone || "לא הוגדרה משימה"}</strong>
                       <span>
                         <CalendarDays size={13} />
-                        {project.due || "ללא תאריך"}{project.nextTaskAssignee?` · ${project.nextTaskAssignee}`:''}
+                        {project.nextTaskDate ? new Date(`${String(project.nextTaskDate).slice(0,10)}T00:00:00`).toLocaleDateString('he-IL') : project.due || "ללא תאריך"}{project.nextTaskAssignee?` · ${project.nextTaskAssignee}`:''}
                       </span>
                     </div>
                   </td>
@@ -2811,6 +2811,7 @@ function BoardView({ projects, openProject }) {
 
 function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
   const [selected, setSelected] = useState(null);
+  const [navigationTarget,setNavigationTarget]=useState(null);
   const [query, setQuery] = useState("");
   const visible = projects.filter((p) =>
     `${p.name} ${p.client} ${p.address} ${p.location}`
@@ -2925,11 +2926,12 @@ function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
               >
                 פתח תיק פרויקט <ArrowLeft size={15} />
               </button>
-              <button className="open-project navigation" onClick={()=>window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(selected.address||selected.location||selected.name)}`,'_blank','noopener,noreferrer')}><MapPin size={15}/>נווט ליעד</button>
+              <button className="open-project navigation" onClick={()=>setNavigationTarget(selected)}><MapPin size={17}/>נווט ליעד</button>
             </div>
           )}
         </div>
       </div>
+      {navigationTarget&&<AppModal title="בחירת אפליקציית ניווט" subtitle={navigationTarget.address||navigationTarget.location} className="navigation-selector-modal" onClose={()=>setNavigationTarget(null)}><div className="navigation-selector-body"><div className="navigation-provider-list">{NAVIGATION_OPTIONS.map((option)=><button type="button" className="navigation-provider" key={option.key} onClick={()=>{openNavigation(navigationTarget,option.key);setNavigationTarget(null)}}><span className="navigation-provider-icon" style={{background:option.color}}>{option.icon}</span><span>{option.label}</span></button>)}</div></div></AppModal>}
     </div>
   );
 }
