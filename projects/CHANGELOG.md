@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.28.3
+
+- תוקנה טעינת לוח השנה כאשר מסנן המשתמשים מוגדר לכולם.
+- תוקנה שגיאת SQL שמנעה הצגת אירועים ומעבר תקין בין חודשים.
+- נוספה בדיקת רגרסיה למסלול השרת של לוח השנה.
+
 ## 0.28.2
 
 - Removed the AI insight tile from the dashboard and replaced it with one compact `הפק תובנות` action; generated insights now open in a focused modal.

@@ -524,15 +524,15 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     const assigneeId = String(request.query.assigneeId || '');
     const [result, projects] = await Promise.all([
       pool.query(`SELECT h.*,COALESCE(u.display_name,task_user.display_name) assignee_name,
-        CASE WHEN h.user_id=$5 OR task_user.id=$5 OR EXISTS(SELECT 1 FROM task_assignees own_ta JOIN professionals own_person ON own_person.id=own_ta.professional_id WHERE own_ta.task_id=calendar_task.id AND own_person.linked_user_id=$5) THEN current_user.avatar_color ELSE COALESCE(task_user.avatar_color,u.avatar_color,h.color) END assignee_color,
+        CASE WHEN h.user_id=$5 OR task_user.id=$5 OR EXISTS(SELECT 1 FROM task_assignees own_ta JOIN professionals own_person ON own_person.id=own_ta.professional_id WHERE own_ta.task_id=calendar_task.id AND own_person.linked_user_id=$5) THEN calendar_viewer.avatar_color ELSE COALESCE(task_user.avatar_color,u.avatar_color,h.color) END assignee_color,
         COALESCE(task_user.avatar_icon,u.avatar_icon,h.icon) assignee_icon,p.name project_name
         FROM calendar_history h LEFT JOIN users u ON u.id=h.user_id LEFT JOIN projects p ON p.id=h.project_id
-        LEFT JOIN users current_user ON current_user.id=$5
+        LEFT JOIN users calendar_viewer ON calendar_viewer.id=$5
         LEFT JOIN tasks calendar_task ON h.source_type='task' AND calendar_task.id::text=h.source_id
         LEFT JOIN professionals task_professional ON task_professional.id=calendar_task.assignee_professional_id
         LEFT JOIN users task_user ON task_user.id=task_professional.linked_user_id
         WHERE h.event_at >= $1::timestamptz AND h.event_at < $2::timestamptz AND ($3='' OR h.project_id=$3)
-          AND ($4='' OR h.user_id=$4 OR task_user.id=$4 OR EXISTS(SELECT 1 FROM task_assignees ta JOIN professionals tap ON tap.id=ta.professional_id WHERE ta.task_id=calendar_task.id AND tap.linked_user_id=$4))
+          AND ($4::text='' OR h.user_id=NULLIF($4::text,'')::bigint OR task_user.id=NULLIF($4::text,'')::bigint OR EXISTS(SELECT 1 FROM task_assignees ta JOIN professionals tap ON tap.id=ta.professional_id WHERE ta.task_id=calendar_task.id AND tap.linked_user_id=NULLIF($4::text,'')::bigint))
         ORDER BY h.event_at`, [from, to, projectId, assigneeId,request.user.id]),
       pool.query('SELECT id,name FROM projects ORDER BY name'),
     ]);

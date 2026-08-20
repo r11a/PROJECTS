@@ -19,14 +19,17 @@ test('tasks support multiple performers, half-hour planning and the extended tas
 });
 
 test('calendar and project dashboard use the requested compact operational controls',async()=>{
-  const [calendar,risk,project,dashboard]=await Promise.all([
+  const [calendar,risk,project,dashboard,calendarServer]=await Promise.all([
     read('../src/Operational.jsx'),
     read('../src/features/risk-center/RiskCenter.jsx'),
     read('../src/ProjectWorkspace.jsx'),
     read('../src/App.jsx'),
+    read('../server/operational.js'),
   ]);
   assert.match(calendar,/כל המשתמשים/);
   assert.match(calendar,/\["monthDetail","חודש מפורט"\]/);
+  assert.doesNotMatch(calendarServer,/current_user\.avatar_color/);
+  assert.match(calendarServer,/NULLIF\(\$4::text,''\)::bigint/);
   assert.match(risk,/slice\(0,expanded\?visible\.length:3\)/);
   assert.match(risk,/'הרחב'/);
   assert.doesNotMatch(risk,/הצג את כל הפרויקטים/);
