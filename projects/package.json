@@ -2,7 +2,7 @@
   "name": "projects-home-assistant-app",
   "private": true,
   "license": "UNLICENSED",
-  "version": "0.28.3",
+  "version": "0.29.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -10,7 +10,7 @@
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "test:e2e": "playwright test",
     "audit:production": "npm audit --omit=dev --audit-level=critical",
-    "check": "node --check server/index.js && node --check server/ai.js && node --check server/aiKnowledge.js && node --check server/insights.js && node --check server/backup.js && node --check server/geocoder.js && node --check server/operational.js && node --check server/forms.js && node --check server/management.js && node --check server/operations.js && node --check server/productivity.js && node --check server/priorityWorkbook.js && node --check server/priorityOrders.js && node --check server/projectIntelligence.js",
+    "check": "node --check server/index.js && node --check server/ai.js && node --check server/aiKnowledge.js && node --check server/insights.js && node --check server/backup.js && node --check server/geocoder.js && node --check server/operational.js && node --check server/forms.js && node --check server/management.js && node --check server/operations.js && node --check server/productivity.js && node --check server/priorityWorkbook.js && node --check server/priorityOrders.js && node --check server/projectIntelligence.js && node --check server/pushNotifications.js",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
@@ -31,7 +31,8 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-leaflet": "5.0.0",
-    "recharts": "3.10.1"
+    "recharts": "3.10.1",
+    "web-push": "3.6.7"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",

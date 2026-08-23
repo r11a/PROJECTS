@@ -1,0 +1,15 @@
+{
+  "name": "PROJECTS — Smart Project Management",
+  "short_name": "PROJECTS",
+  "description": "מערכת מסחרית לניהול פרויקטים",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f6fa",
+  "theme_color": "#101426",
+  "icons": [
+    { "src": "./icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

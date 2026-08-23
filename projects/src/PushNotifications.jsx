@@ -1,0 +1,70 @@
+import {useCallback,useEffect,useMemo,useState} from 'react';
+import {BellRing,CalendarClock,Check,Clock3,Link2,ListPlus,LoaderCircle,MessageSquareText,Send,ShieldCheck,Smartphone,Trash2,Users,WalletCards,Workflow,Zap} from 'lucide-react';
+import './push-notifications.css';
+
+const categoryLabels={tasks:'משימות',finance:'כספים וגבייה',projects:'פרויקטים',messages:'הודעות פנימיות',insights:'תובנות',system:'הודעות מערכת'};
+const categoryIcons={tasks:Check,finance:WalletCards,projects:Workflow,messages:MessageSquareText,insights:Zap,system:ShieldCheck};
+const base64ToBytes=(value)=>{const padding='='.repeat((4-value.length%4)%4);const raw=atob((value+padding).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from([...raw].map(char=>char.charCodeAt(0)));};
+const localDateTime=()=>{const value=new Date(Date.now()+60000);value.setMinutes(value.getMinutes()-value.getTimezoneOffset());return value.toISOString().slice(0,16);};
+
+export function PushNotificationSettings({api,apiRoot,user,setNotice}){
+  const [config,setConfig]=useState(null);
+  const [admin,setAdmin]=useState(null);
+  const [projects,setProjects]=useState([]);
+  const [busy,setBusy]=useState(false);
+  const [currentEnabled,setCurrentEnabled]=useState(false);
+  const [selectedUsers,setSelectedUsers]=useState([]);
+  const [listForm,setListForm]=useState({name:'',userIds:[]});
+  const [campaign,setCampaign]=useState({title:'',body:'',category:'system',audienceType:'all',listId:'',projectId:'',targetUrl:'',scheduledAt:localDateTime(),smart:false});
+  const supported=typeof window!=='undefined'&&window.isSecureContext&&'serviceWorker'in navigator&&'PushManager'in window&&'Notification'in window;
+  const installed=window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
+  const isIos=/iPad|iPhone|iPod/.test(navigator.userAgent);
+  const load=useCallback(async()=>{
+    try{
+      const requests=[api('/push/config')];
+      if(user.role==='admin')requests.push(api('/push/admin'),api('/projects'));
+      const [nextConfig,nextAdmin,projectData]=await Promise.all(requests);
+      setConfig(nextConfig);if(nextAdmin)setAdmin(nextAdmin);if(projectData)setProjects(projectData.projects||projectData||[]);
+    }catch(error){setNotice(error.message)}
+  },[api,user.role,setNotice]);
+  useEffect(()=>{load()},[load]);
+  useEffect(()=>{if(!supported)return;const base=apiRoot.replace(/\/api$/,'');navigator.serviceWorker.getRegistration(`${base}/`).then(async registration=>setCurrentEnabled(Boolean(await registration?.pushManager.getSubscription()))).catch(()=>setCurrentEnabled(false))},[apiRoot,supported,config?.devices?.length]);
+  const subscription=async()=>{if(!supported)return null;const base=apiRoot.replace(/\/api$/,'');const registration=await navigator.serviceWorker.register(`${base}/sw.js`,{scope:`${base}/`});await navigator.serviceWorker.ready;return registration.pushManager.getSubscription();};
+  const enableDevice=async()=>{
+    if(!supported)return setNotice('הדפדפן במכשיר זה אינו תומך בהתראות Push');
+    if(isIos&&!installed)return setNotice('באייפון יש להוסיף תחילה את PROJECTS למסך הבית ולפתוח משם');
+    setBusy(true);try{
+      const permission=await Notification.requestPermission();if(permission!=='granted')throw new Error('הרשאת ההתראות לא אושרה במכשיר');
+      const base=apiRoot.replace(/\/api$/,'');const registration=await navigator.serviceWorker.register(`${base}/sw.js`,{scope:`${base}/`});
+      let current=await registration.pushManager.getSubscription();if(!current)current=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64ToBytes(config.publicKey)});
+      await api('/push/subscriptions',{method:'POST',body:JSON.stringify({subscription:current.toJSON(),deviceLabel:isIos?'iPhone / iPad':/Android/i.test(navigator.userAgent)?'Android':'דפדפן נוכחי'})});
+      setCurrentEnabled(true);setNotice('התראות הדחיפה הופעלו במכשיר');await load();
+    }catch(error){setNotice(error.message)}finally{setBusy(false)}
+  };
+  const disableDevice=async()=>{setBusy(true);try{const current=await subscription();if(current){await api('/push/subscriptions',{method:'DELETE',body:JSON.stringify({endpoint:current.endpoint})});await current.unsubscribe();}setCurrentEnabled(false);setNotice('ההתראות הושבתו במכשיר');await load();}catch(error){setNotice(error.message)}finally{setBusy(false)}};
+  const savePreferences=async(next)=>{setConfig({...config,preferences:next});try{await api('/push/preferences',{method:'PATCH',body:JSON.stringify(next)});setNotice('העדפות ההתראות נשמרו')}catch(error){setNotice(error.message)}};
+  const savePolicy=async(next)=>{setAdmin({...admin,policy:next});try{await api('/push/admin/policy',{method:'PATCH',body:JSON.stringify(next)});setNotice('מדיניות ההתראות נשמרה')}catch(error){setNotice(error.message)}};
+  const sendCampaign=async(event)=>{event.preventDefault();setBusy(true);try{const audience=campaign.audienceType==='selected'?{userIds:selectedUsers}:campaign.audienceType==='list'?{listId:Number(campaign.listId)}:campaign.audienceType==='relevant'?{projectId:Number(campaign.projectId)}:{};await api('/push/campaigns',{method:'POST',body:JSON.stringify({...campaign,audience})});setCampaign({...campaign,title:'',body:'',scheduledAt:localDateTime()});setSelectedUsers([]);setNotice(new Date(campaign.scheduledAt)<=new Date()?'ההודעה נשלחת כעת':'ההודעה תוזמנה');await load();}catch(error){setNotice(error.message)}finally{setBusy(false)}};
+  const createList=async(event)=>{event.preventDefault();try{await api('/push/lists',{method:'POST',body:JSON.stringify(listForm)});setListForm({name:'',userIds:[]});setNotice('רשימת התפוצה נוצרה');await load()}catch(error){setNotice(error.message)}};
+  const deleteList=async(id)=>{if(!confirm('למחוק את רשימת התפוצה?'))return;await api(`/push/lists/${id}`,{method:'DELETE'});await load()};
+  const activeDevice=useMemo(()=>currentEnabled,[currentEnabled]);
+  if(!config)return <div className="push-loading"><LoaderCircle className="spin"/> טוען הגדרות התראה...</div>;
+  return <div className="push-settings">
+    <section className="push-device-card panel">
+      <div className="push-device-icon"><Smartphone/></div><div><span className="ops-eyebrow">המכשיר הנוכחי</span><h3>{activeDevice?'התראות פעילות':'הפעלת התראות Push'}</h3><p>{isIos?'באייפון ההתראות פועלות מה־PWA המותקן במסך הבית.':'ההתראות יגיעו גם כשהאפליקציה ברקע או המסך כבוי.'}</p></div>
+      <button className={activeDevice?'push-secondary':'ops-primary'} disabled={busy} onClick={activeDevice?disableDevice:enableDevice}>{busy?<LoaderCircle className="spin" size={17}/>:activeDevice?<BellRing size={17}/>:<Smartphone size={17}/>} {activeDevice?'כיבוי במכשיר':'הפעלה במכשיר'}</button>
+      {!supported&&<small className="push-warning">הדפדפן הנוכחי אינו תומך ב־Web Push.</small>}
+    </section>
+    <section className="push-category-card panel"><header><div><BellRing size={19}/><div><h3>אילו התראות לקבל?</h3><p>העדפה אישית למשתמש ולכל המכשירים שלו</p></div></div><label className="setting-toggle"><input type="checkbox" checked={config.preferences.enabled} onChange={event=>savePreferences({...config.preferences,enabled:event.target.checked})}/><span/></label></header><div className="push-category-grid">{Object.entries(categoryLabels).map(([key,label])=>{const Icon=categoryIcons[key];return <label key={key}><Icon size={18}/><span>{label}</span><input type="checkbox" checked={config.preferences.categories[key]!==false} disabled={!config.preferences.enabled} onChange={event=>savePreferences({...config.preferences,categories:{...config.preferences.categories,[key]:event.target.checked}})}/></label>})}</div></section>
+    {user.role==='admin'&&admin&&<>
+      <section className="panel push-admin-policy"><header><div><ShieldCheck size={20}/><div><h3>מדיניות מערכת</h3><p>שליטה גורפת בסוגי ההתראות ובהודעות החכמות</p></div></div><label className="setting-toggle"><input type="checkbox" checked={admin.policy.enabled} onChange={event=>savePolicy({...admin.policy,enabled:event.target.checked})}/><span/></label></header><div className="push-policy-columns"><div><strong>קטגוריות פעילות</strong>{Object.entries(categoryLabels).map(([key,label])=><label key={key}><span>{label}</span><input type="checkbox" checked={admin.policy.categories[key]!==false} onChange={event=>savePolicy({...admin.policy,categories:{...admin.policy.categories,[key]:event.target.checked}})}/></label>)}</div><div><strong>התראות חכמות</strong>{[['overdueTasks','משימות באיחור'],['paymentDue','גבייה שהגיעה למועד'],['projectRisk','פרויקט בסיכון']].map(([key,label])=><label key={key}><span>{label}</span><input type="checkbox" checked={admin.policy.smart[key]!==false} onChange={event=>savePolicy({...admin.policy,smart:{...admin.policy.smart,[key]:event.target.checked}})}/></label>)}</div></div></section>
+      <section className="panel push-composer"><header><Send size={20}/><div><h3>יצירת הודעת דחיפה</h3><p>כותרת ממוקדת ופנייה אישית לכל נמען; הזיהוי נעשה באמצעות לוגו האפליקציה בלבד</p></div></header><form onSubmit={sendCampaign}><div className="push-form-grid"><label>כותרת ברורה<input required maxLength="160" placeholder="לדוגמה: משימה חדשה שובצה עבורך" value={campaign.title} onChange={event=>setCampaign({...campaign,title:event.target.value})}/></label><label>קטגוריה<select value={campaign.category} onChange={event=>setCampaign({...campaign,category:event.target.value})}>{Object.entries(categoryLabels).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select></label><label className="push-body">מידע רלוונטי וממוקד<textarea required maxLength="1000" rows="3" placeholder="המערכת תוסיף אוטומטית את שמו הפרטי של כל נמען. אפשר גם לכתוב {{שם}} במקום הרצוי." value={campaign.body} onChange={event=>setCampaign({...campaign,body:event.target.value})}/></label><label>נמענים<select value={campaign.audienceType} onChange={event=>setCampaign({...campaign,audienceType:event.target.value})}><option value="all">כל המשתמשים הפעילים</option><option value="selected">משתמשים בודדים</option><option value="list">רשימת תפוצה</option><option value="relevant">המשתמשים הרלוונטיים לפרויקט</option></select></label><label><CalendarClock size={15}/> מועד שליחה<input type="datetime-local" value={campaign.scheduledAt} onChange={event=>setCampaign({...campaign,scheduledAt:event.target.value})}/></label><label><Link2 size={15}/> קישור פנימי<input placeholder="לדוגמה: ?page=tasks" value={campaign.targetUrl} onChange={event=>setCampaign({...campaign,targetUrl:event.target.value})}/></label></div>
+      {campaign.audienceType==='selected'&&<UserPicker users={admin.users} selected={selectedUsers} setSelected={setSelectedUsers}/>} {campaign.audienceType==='list'&&<select className="push-inline-select" required value={campaign.listId} onChange={event=>setCampaign({...campaign,listId:event.target.value})}><option value="">בחירת רשימת תפוצה</option>{admin.lists.map(list=><option key={list.id} value={list.id}>{list.name} · {list.members.length} משתמשים</option>)}</select>} {campaign.audienceType==='relevant'&&<select className="push-inline-select" required value={campaign.projectId} onChange={event=>setCampaign({...campaign,projectId:event.target.value})}><option value="">בחירת פרויקט</option>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select>}
+      <footer><label className="push-smart"><input type="checkbox" checked={campaign.smart} onChange={event=>setCampaign({...campaign,smart:event.target.checked})}/><Zap size={16}/> הודעה חכמה</label><button className="ops-primary" disabled={busy}><Send size={17}/> {new Date(campaign.scheduledAt)>new Date()?'תזמון הודעה':'שליחה עכשיו'}</button></footer></form></section>
+      <div className="push-admin-grid"><section className="panel push-lists"><header><ListPlus size={19}/><div><h3>רשימות תפוצה</h3><p>קבוצות קבועות לשליחה מהירה</p></div></header><form onSubmit={createList}><input required placeholder="שם הרשימה" value={listForm.name} onChange={event=>setListForm({...listForm,name:event.target.value})}/><UserPicker users={admin.users} selected={listForm.userIds} setSelected={userIds=>setListForm({...listForm,userIds})}/><button className="ops-primary small"><ListPlus size={15}/> יצירת רשימה</button></form>{admin.lists.map(list=><div className="push-list-row" key={list.id}><span><strong>{list.name}</strong><small>{list.members.length} משתמשים</small></span><button onClick={()=>deleteList(list.id)} aria-label="מחיקה"><Trash2 size={15}/></button></div>)}</section><CampaignHistory campaigns={admin.campaigns} api={api} reload={load}/></div>
+    </>}
+  </div>;
+}
+
+function UserPicker({users,selected,setSelected}){return <div className="push-user-picker">{users.filter(user=>user.active).map(user=><label key={user.id}><input type="checkbox" checked={selected.includes(Number(user.id))} onChange={event=>setSelected(event.target.checked?[...selected,Number(user.id)]:selected.filter(id=>id!==Number(user.id)))}/><span>{user.display_name}</span><small>{user.role}</small></label>)}</div>}
+function CampaignHistory({campaigns,api,reload}){const status={scheduled:'מתוזמנת',sending:'נשלחת',sent:'נשלחה',cancelled:'בוטלה',failed:'נכשלה'};return <section className="panel push-history"><header><Clock3 size={19}/><div><h3>הודעות אחרונות</h3><p>סטטוס ומעקב מסירה</p></div></header><div>{campaigns.length?campaigns.map(item=><article key={item.id}><i className={item.status}/><span><strong>{item.title}</strong><small>{categoryLabels[item.category]} · {new Date(item.scheduled_at).toLocaleString('he-IL')}</small></span><b>{status[item.status]||item.status}</b><em>{item.sent_count||0} נמסרו</em>{item.status==='scheduled'&&<button onClick={async()=>{await api(`/push/campaigns/${item.id}/cancel`,{method:'POST'});reload()}}>ביטול</button>}</article>):<p className="push-empty">עדיין לא נשלחו הודעות Push.</p>}</div></section>}

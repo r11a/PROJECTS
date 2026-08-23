@@ -18,6 +18,7 @@ import { createAiRouter } from './ai.js';
 import { createProductivityRouter, executeAutomations, startAutomationScheduler } from './productivity.js';
 import { createPriorityOrdersRouter } from './priorityOrders.js';
 import { createProjectIntelligenceRouter, loadProjectHealth } from './projectIntelligence.js';
+import { createPushService, startPushScheduler } from './pushNotifications.js';
 import { imageFileFilter } from './uploadPolicy.js';
 import { installPostgresDateOnlyParser } from './dateOnly.js';
 
@@ -1039,7 +1040,9 @@ app.delete('/api/users/:id', authenticate, requireRoles('admin'), async (request
   response.status(204).end();
 });
 
-app.use('/api', await createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR, geocoder }));
+const pushService=await createPushService({pool,authenticate,requireRoles,audit});
+app.use('/api',pushService.router);
+app.use('/api', await createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR, geocoder, pushService }));
 app.use('/api', await createAiRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR }));
 app.use('/api', createFormsRouter({ pool, authenticate, requireRoles, audit }));
 app.use('/api', await createManagementRouter({ pool, authenticate, requireRoles, audit, dataDir: DATA_DIR }));
@@ -1050,6 +1053,7 @@ app.use('/api', createProductivityRouter({ pool, authenticate, requireRoles, aud
 app.use('/api', await createBackupRouter({ pool, authenticate, requireRoles, audit, dataDir:DATA_DIR, appVersion:APP_VERSION }));
 
 startAutomationScheduler({ pool });
+startPushScheduler(pushService);
 
 app.use('/api', (_request, response) => response.status(404).json({ error: 'Not found' }));
 app.use((error, _request, response, _next) => {

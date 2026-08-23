@@ -7,6 +7,7 @@ RUN npm ci
 COPY index.html ./
 COPY vite.config.js ./
 COPY icon.png ./
+COPY public ./public
 COPY src ./src
 RUN npm run build
 
@@ -31,7 +32,7 @@ RUN chmod +x /etc/services.d/nginx/run /etc/services.d/postgresql/run /etc/servi
     && rm -f /etc/nginx/http.d/default.conf
 
 LABEL \
-  io.hass.version="0.28.3" \
+  io.hass.version="0.29.0" \
   io.hass.type="app" \
   io.hass.arch="amd64"
 

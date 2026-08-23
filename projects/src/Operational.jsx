@@ -5,6 +5,7 @@ import {
   Archive,
   ArrowLeft,
   BriefcaseBusiness,
+  BellRing,
   Building2,
   CalendarDays,
   Camera,
@@ -62,6 +63,7 @@ import { themeOptions } from "./features/appearance/themeOptions";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ModalPortal } from "./AppModal";
 import { ProductivitySettings } from "./ProductivityWorkspace";
+import { PushNotificationSettings } from "./PushNotifications";
 import { formatDateIL, localDateValue } from "./dateTime";
 
 const roleNames = {
@@ -2968,6 +2970,7 @@ export function OperationalSettings({
   ];
   const tabs = [
     ["appearance", "מראה", Palette],
+    ["pushNotifications", "התראות Push", BellRing],
     ["calendarShare", "Outlook", CalendarDays],
     ...(user.role === "admin" ? adminTabs : []),
   ];
@@ -3060,6 +3063,7 @@ export function OperationalSettings({
           onClear={clearAudit}
         />
       )}
+      {tab === "pushNotifications" && <PushNotificationSettings api={api} apiRoot={apiRoot} user={user} setNotice={setNotice} />}
       {tab === "recycleBin" && (
         <RecycleBinSettings api={api} setNotice={setNotice} />
       )}
