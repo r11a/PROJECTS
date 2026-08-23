@@ -8,6 +8,9 @@ test('PWA push notifications persist devices, preferences, lists, campaigns and 
   const [migration,server]=await Promise.all([read('../migrations/038_web_push_notifications.sql'),read('../server/pushNotifications.js')]);
   for(const table of ['push_subscriptions','user_push_preferences','notification_lists','notification_list_members','notification_campaigns','notification_deliveries'])assert.match(migration,new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
   assert.match(server,/webpush\.setVapidDetails/);
+  assert.match(server,/https:\/\/github\.com\/r11a\/PROJECTS/);
+  assert.doesNotMatch(server,/@projects\.local/);
+  assert.match(server,/BadJwtToken/);
   assert.match(server,/router\.use\(authenticate\)/);
   assert.match(server,/requireRoles\('admin'\)/);
   assert.match(server,/subscription_id=\$2 AND dedupe_key=\$3/);

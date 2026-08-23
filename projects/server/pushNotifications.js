@@ -7,6 +7,7 @@ const DEFAULT_POLICY = { enabled:true, categories:DEFAULT_CATEGORIES, smart:{ove
 const cleanText=(value,max)=>String(value||'').trim().slice(0,max);
 const validCategory=(value)=>CATEGORIES.includes(value)?value:'system';
 const validTime=(value,fallback)=>/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value||''))?String(value):fallback;
+const pushErrorMessage=(error)=>{let reason='';try{reason=typeof error.body==='string'?JSON.parse(error.body)?.reason:error.body?.reason}catch{}if(reason==='BadJwtToken')return 'Apple דחתה את אימות ההתראות. יש לעדכן את גרסת PROJECTS ולנסות שוב';if([404,410].includes(error.statusCode))return 'מנוי המכשיר פג תוקף. יש לכבות ולהפעיל מחדש את ההתראות במכשיר';if(error.statusCode===403)return 'ספק ההתראות דחה את בקשת האימות';return cleanText(typeof error.body==='string'?error.body:error.message,500);};
 const inQuietHours=(quiet,now=new Date())=>{if(!quiet?.enabled)return false;const parts=new Intl.DateTimeFormat('en-GB',{timeZone:quiet.timezone||'Asia/Jerusalem',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(now);const current=parts.replace(':',''),start=validTime(quiet.start,'22:00').replace(':',''),end=validTime(quiet.end,'07:00').replace(':','');return start===end||start<end?(current>=start&&current<end):(current>=start||current<end);};
 
 export async function createPushService({pool,authenticate,requireRoles,audit}) {
@@ -16,7 +17,7 @@ export async function createPushService({pool,authenticate,requireRoles,audit}) 
     keys=webpush.generateVAPIDKeys();
     await pool.query("INSERT INTO app_settings(key,value) VALUES('pushVapid',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[JSON.stringify(keys)]);
   }
-  webpush.setVapidDetails('mailto:admin@projects.local',keys.publicKey,keys.privateKey);
+  webpush.setVapidDetails('https://github.com/r11a/PROJECTS',keys.publicKey,keys.privateKey);
 
   const policy=async()=>{
     const row=await pool.query("SELECT value FROM app_settings WHERE key='pushNotifications'");
@@ -57,7 +58,7 @@ export async function createPushService({pool,authenticate,requireRoles,audit}) 
         sent++;await pool.query('UPDATE push_subscriptions SET last_success_at=NOW(),last_error=\'\',updated_at=NOW() WHERE id=$1',[item.id]);
         await pool.query('INSERT INTO notification_deliveries(campaign_id,user_id,subscription_id,category,dedupe_key,status) VALUES($1,$2,$3,$4,$5,\'sent\')',[campaignId,item.user_id,item.id,category,dedupeKey]);
       }catch(error){
-        failed++;const expired=[404,410].includes(error.statusCode);const errorMessage=cleanText(error.body||error.message,500);errors.push({deviceId:item.id,statusCode:error.statusCode||0,message:errorMessage});await pool.query('UPDATE push_subscriptions SET active=CASE WHEN $2 THEN FALSE ELSE active END,last_error=$3,updated_at=NOW() WHERE id=$1',[item.id,expired,errorMessage]);
+        failed++;const expired=[404,410].includes(error.statusCode);const errorMessage=pushErrorMessage(error);errors.push({deviceId:item.id,statusCode:error.statusCode||0,message:errorMessage});await pool.query('UPDATE push_subscriptions SET active=CASE WHEN $2 THEN FALSE ELSE active END,last_error=$3,updated_at=NOW() WHERE id=$1',[item.id,expired,errorMessage]);
         await pool.query('INSERT INTO notification_deliveries(campaign_id,user_id,subscription_id,category,dedupe_key,status,error) VALUES($1,$2,$3,$4,$5,\'failed\',$6) ON CONFLICT DO NOTHING',[campaignId,item.user_id,item.id,category,dedupeKey,cleanText(error.message,500)]);
       }
     }
