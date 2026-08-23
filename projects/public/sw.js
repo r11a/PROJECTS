@@ -12,6 +12,7 @@ self.addEventListener('push',(event)=>{
     lang:'he',
     tag:data.tag||`projects-${Date.now()}`,
     renotify:Boolean(data.renotify),
+    silent:Boolean(data.silent),
     data:{url:data.url||'./',category:data.category||'system'},
     actions:[{action:'open',title:'פתיחה'},{action:'dismiss',title:'סגירה'}],
   };

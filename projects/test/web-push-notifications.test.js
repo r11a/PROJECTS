@@ -12,6 +12,10 @@ test('PWA push notifications persist devices, preferences, lists, campaigns and 
   assert.match(server,/requireRoles\('admin'\)/);
   assert.match(server,/subscription_id=\$2 AND dedupe_key=\$3/);
   assert.match(server,/u\.finance_access=TRUE/);
+  assert.match(server,/router\.post\('\/push\/test'/);
+  assert.match(server,/result\.sent>0\?'sent':'failed'/);
+  assert.match(server,/inQuietHours/);
+  assert.match(server,/personalized\.silent/);
 });
 
 test('push service worker opens contextual links and the UI supports personal scheduled audiences',async()=>{
@@ -23,6 +27,9 @@ test('push service worker opens contextual links and the UI supports personal sc
   assert.match(ui,/רשימת תפוצה/);
   assert.match(ui,/המשתמשים הרלוונטיים לפרויקט/);
   assert.match(ui,/\{\{שם\}\}/);
+  assert.match(ui,/שליחת בדיקה/);
+  assert.match(ui,/failure_count/);
+  assert.match(ui,/שעות שקט אישיות/);
   assert.doesNotMatch(operational,/הודעה מאת.*PROJECTS/);
 });
 
