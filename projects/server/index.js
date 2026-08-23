@@ -19,6 +19,7 @@ import { createProductivityRouter, executeAutomations, startAutomationScheduler 
 import { createPriorityOrdersRouter } from './priorityOrders.js';
 import { createProjectIntelligenceRouter, loadProjectHealth } from './projectIntelligence.js';
 import { createPushService, startPushScheduler } from './pushNotifications.js';
+import { offlineIdempotency } from './offlineIdempotency.js';
 import { imageFileFilter } from './uploadPolicy.js';
 import { installPostgresDateOnlyParser } from './dateOnly.js';
 
@@ -461,6 +462,9 @@ function requireRoles(...roles) {
     return permitted?next():response.status(403).json({ error: 'Insufficient permissions' });
   };
 }
+
+const offlineReceipt=offlineIdempotency(pool);
+app.use('/api',(request,response,next)=>request.get('X-Offline-Operation-Id')?authenticate(request,response,()=>offlineReceipt(request,response,next)):next());
 
 async function audit(request, action, entityType, entityId, details = {}) {
   await pool.query(

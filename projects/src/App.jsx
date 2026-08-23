@@ -87,6 +87,7 @@ import { MasterDataWorkspace } from "./MasterDataWorkspace";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { AppModal, ModalPortal } from "./AppModal";
 import packageJson from "../package.json";
+import { cacheApiResponse, cachedApiResponse, discardOfflineFailure, flushOfflineQueue, initializeOfflineSync, offlineEntries, offlineStatus, queueOfflineMutation, retryOfflineFailures } from "./offlineQueue";
 import {
   FinanceWorkspace,
   ReportsWorkspace,
@@ -272,14 +273,17 @@ export const apiRoot = `${applicationBase}/api`;
 
 export async function api(path, options = {}) {
   const isFormData = options.body instanceof FormData;
-  const response = await fetch(`${apiRoot}${path}`, {
-    credentials: "same-origin",
-    cache: "no-store",
-    ...options,
-    headers: isFormData
-      ? { ...options.headers }
-      : { "Content-Type": "application/json", ...options.headers },
-  });
+  const method=String(options.method||"GET").toUpperCase();
+  let response;
+  try{response=await fetch(`${apiRoot}${path}`, {
+      credentials: "same-origin",cache: "no-store",...options,
+      headers:isFormData?{...options.headers}:{"Content-Type":"application/json",...options.headers},
+    });}
+  catch(error){
+    if(method==="GET"){const cached=await cachedApiResponse(path);if(cached!==null)return cached}
+    const queued=await queueOfflineMutation(path,{...options,method});if(queued)return queued;
+    throw new Error(navigator.onLine?`לא ניתן להגיע לשרת: ${error.message}`:"אין חיבור לרשת והפעולה הזו אינה זמינה במצב Offline");
+  }
   const rawBody = response.status === 204 ? "" : await response.text();
   let body = null;
   if (rawBody) {
@@ -287,6 +291,10 @@ export async function api(path, options = {}) {
     catch { body = { error: rawBody.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 260) }; }
   }
   if (!response.ok) {
+    if([502,503,504].includes(response.status)){
+      if(method==="GET"){const cached=await cachedApiResponse(path);if(cached!==null)return cached}
+      const queued=await queueOfflineMutation(path,{...options,method});if(queued)return queued;
+    }
     const error = new Error(
       body?.error || `הבקשה נכשלה (HTTP ${response.status})`,
     );
@@ -295,6 +303,7 @@ export async function api(path, options = {}) {
     error.code = body?.code;
     throw error;
   }
+  if(method==="GET")await cacheApiResponse(path,body);
   if (
     options.method &&
     options.method !== "GET" &&
@@ -424,6 +433,8 @@ function App() {
   const newestIncomingMessageId = useRef(null);
   const messageListInitialized = useRef(false);
   const [openTasksCount, setOpenTasksCount] = useState(0);
+  const [offlineState,setOfflineState]=useState({online:navigator.onLine,pending:0,failed:0,syncing:false});
+  const [offlinePanel,setOfflinePanel]=useState(null);
   const [configuration, setConfiguration] = useState({
     settings: {},
     catalogs: [],
@@ -1105,6 +1116,11 @@ function App() {
             </div>
           </div>
           <div className="topbar-actions">
+            <button type="button" className={`offline-indicator ${offlineState.online?offlineState.pending||offlineState.failed?'pending':'online':'offline'} ${offlineState.syncing?'syncing':''}`} onClick={async()=>setOfflinePanel(await offlineEntries())} title={offlineState.online?offlineState.pending?`${offlineState.pending} פעולות ממתינות לסנכרון`:'מחובר ומסונכרן':`${offlineState.pending} פעולות נשמרו במכשיר`}>
+              <span/>
+              <b>{offlineState.online?(offlineState.pending?`מסנכרן ${offlineState.pending}`:'מסונכרן'):`Offline · ${offlineState.pending}`}</b>
+              {offlineState.failed>0&&<em>{offlineState.failed}</em>}
+            </button>
             <div
               className="global-search-shell"
               onBlur={(event) => {
@@ -1384,6 +1400,7 @@ function App() {
           <button type="button" onClick={() => setNotice("")} aria-label="סגירת ההודעה">×</button>
         </div>
       )}
+      {offlinePanel&&<AppModal title="סנכרון עבודה Offline" subtitle={offlineState.online?"המכשיר מחובר לרשת":"השינויים שמורים בבטחה במכשיר"} onClose={()=>setOfflinePanel(null)} className="offline-sync-modal"><div className="offline-sync-summary"><span className={offlineState.online?'online':'offline'}><i/>{offlineState.online?'מחובר':'מצב Offline'}</span><b>{offlinePanel.length} פעולות בתור</b></div><div className="offline-sync-list">{offlinePanel.map(item=><article key={item.id}><span><strong>{offlineActionLabel(item.path,item.method)}</strong><small>{new Date(item.createdAt).toLocaleString('he-IL')}</small></span><em className={item.status}>{item.status==='failed'?'דורש טיפול':item.status==='syncing'?'מסתנכרן':'ממתין'}</em>{item.error&&<p>{item.error}</p>}{item.status==='failed'&&<button type="button" onClick={async()=>{await discardOfflineFailure(item.id);setOfflinePanel(await offlineEntries())}}><Trash2 size={14}/>ביטול פעולה</button>}</article>)}{!offlinePanel.length&&<div className="inline-empty"><CheckCircle2 size={24}/>כל הנתונים מסונכרנים</div>}</div><footer>{offlineState.failed>0&&<button type="button" className="secondary-button" onClick={async()=>{await retryOfflineFailures();setOfflinePanel(await offlineEntries())}}>ניסיון חוזר</button>}<button type="button" className="primary-button" disabled={!offlineState.online||!offlinePanel.length} onClick={async()=>{await flushOfflineQueue(apiRoot);setOfflinePanel(await offlineEntries())}}>סנכרון עכשיו</button></footer></AppModal>}
     </div>
   );
 }
@@ -2941,7 +2958,11 @@ function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
       {navigationTarget&&<AppModal title="בחירת אפליקציית ניווט" subtitle={navigationTarget.address||navigationTarget.location} className="navigation-selector-modal" onClose={()=>setNavigationTarget(null)}><div className="navigation-selector-body"><div className="navigation-provider-list">{NAVIGATION_OPTIONS.map((option)=><button type="button" className="navigation-provider" key={option.key} onClick={()=>{openNavigation(navigationTarget,option.key);setNavigationTarget(null)}}><span className="navigation-provider-icon" style={{background:option.color}}>{option.icon}</span><span>{option.label}</span></button>)}</div></div></AppModal>}
     </div>
   );
+  useEffect(()=>{let disposed=false;offlineStatus().then(value=>!disposed&&setOfflineState(value));const changed=event=>setOfflineState(current=>({...current,...event.detail}));window.addEventListener("projects:offline-status",changed);return()=>{disposed=true;window.removeEventListener("projects:offline-status",changed)}},[]);
+  useEffect(()=>{if(!user?.id)return;return initializeOfflineSync(apiRoot)},[user?.id]);
 }
+
+function offlineActionLabel(path,method){const action=method==='PATCH'?'עדכון':'יצירה';if(path.includes('/tasks'))return `${action} משימה`;if(path.includes('/time-entries'))return `${action} דיווח שעות`;if(path.includes('/site-reviews'))return `${action} ביקורת אתר`;if(path.includes('/meetings'))return `${action} סיכום פגישה`;if(path.includes('/updates'))return `${action} עדכון לפרויקט`;if(path==='/messages')return 'שליחת הודעה פנימית';if(path==='/documents')return 'העלאת תמונה או מסמך';if(path.includes('/form-records'))return `${action} טופס`;return 'עדכון נתונים'}
 
 function ClientsPage() {
   return (

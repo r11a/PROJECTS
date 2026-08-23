@@ -5,6 +5,10 @@ import './styles.css';
 import './execution.css';
 import App from './App';
 
+const pwaBundlePath=new URL(import.meta.url).pathname;
+const pwaBase=pwaBundlePath.includes('/assets/')?pwaBundlePath.replace(/\/assets\/[^/]+$/,'').replace(/\/$/,''):'';
+if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register(`${pwaBase}/sw.js`,{scope:`${pwaBase}/`}).catch(error=>console.warn('PWA service worker registration failed',error)));
+
 function reportRootUiFailure(error, info) {
   const bundlePath = new URL(import.meta.url).pathname;
   const applicationBase = bundlePath.includes('/assets/')

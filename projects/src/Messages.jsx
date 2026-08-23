@@ -50,7 +50,7 @@ export function MessageCenter({
       setForm({ recipientId: "", subject: "", body: "", parentId:null, linkedUrl:"" });
       setVoiceContext(newVoiceContext());
       setCompose(false);
-      setNotice(`✓ ההודעה נשלחה${result.notification?.sent?" והתראת Push נמסרה למכשיר היעד":" · היא זמינה מיד בתיבת ההודעות"}`);
+      setNotice(result.offlineQueued?'✓ ההודעה נשמרה במכשיר ותישלח אוטומטית בחזרת החיבור':`✓ ההודעה נשלחה${result.notification?.sent?" והתראת Push נמסרה למכשיר היעד":" · היא זמינה מיד בתיבת ההודעות"}`);
       load();
     } catch (error) {
       setNotice(error.message);

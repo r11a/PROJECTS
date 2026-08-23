@@ -569,7 +569,7 @@ export function TasksWorkspace({
       });
       setEditor(null);
       const delivered = Number(result.notification?.sent || 0);
-      setNotice(kind === "task" && !editor.item?.id
+      setNotice(result.offlineQueued?"✓ נשמר במכשיר · הפעולה תסתנכרן אוטומטית בחזרת החיבור":kind === "task" && !editor.item?.id
         ? `✓ המשימה נוצרה בהצלחה${delivered ? ` · נשלחה התראה ל־${delivered} מכשירים` : " · ההתראה זמינה באפליקציה; Push לא נמסר כי אין מכשיר פעיל או שההעדפות חוסמות אותו"}`
         : "✓ השינויים נשמרו בהצלחה");
       load({ silent: true });
