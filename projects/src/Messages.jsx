@@ -46,11 +46,11 @@ export function MessageCenter({
   const send = async (event) => {
     event.preventDefault();
     try {
-      await api("/messages", { method: "POST", body: JSON.stringify({...form,voiceContextId:voiceContext}) });
+      const result=await api("/messages", { method: "POST", body: JSON.stringify({...form,voiceContextId:voiceContext}) });
       setForm({ recipientId: "", subject: "", body: "", parentId:null, linkedUrl:"" });
       setVoiceContext(newVoiceContext());
       setCompose(false);
-      setNotice("ההודעה נשלחה");
+      setNotice(`✓ ההודעה נשלחה${result.notification?.sent?" והתראת Push נמסרה למכשיר היעד":" · היא זמינה מיד בתיבת ההודעות"}`);
       load();
     } catch (error) {
       setNotice(error.message);

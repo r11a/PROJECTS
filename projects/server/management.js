@@ -396,7 +396,7 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
          AND ($3='' OR f.client_id::text=$3) AND ($4='' OR f.project_id=$4)
        ORDER BY f.created_at DESC`, [String(request.query.q || ''), `%${String(request.query.q || '')}%`, String(request.query.clientId || ''), String(request.query.projectId || '')],
     );
-    response.json({ documents: result.rows.map((row) => ({ id: row.id, clientId: row.client_id, projectId: row.project_id, formRecordId: row.form_record_id, title: row.title || row.original_name, originalName: row.original_name, mimeType: row.mime_type, sizeBytes: Number(row.size_bytes), category: row.category, description: row.description, tags: row.tags || [], version: row.version, clientName: row.client_name, projectName: row.project_name, uploadedByName: row.uploaded_by_name, createdAt: row.created_at })) });
+    response.json({ documents: result.rows.map((row) => ({ id: row.id, clientId: row.client_id, projectId: row.project_id, formRecordId: row.form_record_id, relatedEntityType:row.related_entity_type,relatedEntityId:row.related_entity_id,title: row.title || row.original_name, originalName: row.original_name, mimeType: row.mime_type, sizeBytes: Number(row.size_bytes), category: row.category, description: row.description, tags: row.tags || [], version: row.version, clientName: row.client_name, projectName: row.project_name, uploadedByName: row.uploaded_by_name, createdAt: row.created_at })) });
   });
 
   router.post('/documents', requireRoles('admin', 'manager', 'technician'), upload.single('file'), async (request, response) => {
@@ -421,9 +421,9 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
       }
     }
     const result = await pool.query(
-      `INSERT INTO client_files(client_id,project_id,form_record_id,title,original_name,stored_name,mime_type,size_bytes,category,description,tags,version,storage_area,storage_path,uploaded_by)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
-      [clientId, projectId, formRecordId, request.body.title || request.file.originalname, request.file.originalname, request.file.filename, request.file.mimetype, request.file.size, request.body.category || 'אחר', request.body.description || '', JSON.stringify(tags), Number(request.body.version) || 1, storage.mode, storagePath, request.user.id],
+      `INSERT INTO client_files(client_id,project_id,form_record_id,title,original_name,stored_name,mime_type,size_bytes,category,description,tags,version,storage_area,storage_path,uploaded_by,related_entity_type,related_entity_id)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+      [clientId, projectId, formRecordId, request.body.title || request.file.originalname, request.file.originalname, request.file.filename, request.file.mimetype, request.file.size, request.body.category || 'אחר', request.body.description || '', JSON.stringify(tags), Number(request.body.version) || 1, storage.mode, storagePath, request.user.id,String(request.body.relatedEntityType||'').slice(0,50),String(request.body.relatedEntityId||'').slice(0,100)],
     );
     await audit(request, 'upload', 'document', String(result.rows[0].id), { originalName: request.file.originalname, clientId, projectId });
     response.status(201).json({ document: result.rows[0] });

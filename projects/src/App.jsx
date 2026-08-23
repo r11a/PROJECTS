@@ -624,7 +624,7 @@ function App() {
   }, [user?.id]);
   useEffect(() => {
     if (!notice) return;
-    const timer = setTimeout(() => setNotice(""), 2600);
+    const timer = setTimeout(() => setNotice(""), 5200);
     return () => clearTimeout(timer);
   }, [notice]);
   useEffect(() => {
@@ -1378,9 +1378,10 @@ function App() {
       )}
       {aiChatOpen && <AiChatBoundary onClose={() => setAiChatOpen(false)}><AiChat apiRoot={apiRoot} onClose={() => setAiChatOpen(false)} onNavigate={(target)=>{setAiChatOpen(false);setSelectedProject(null);setPage(target);setSidebarOpen(false)}} /></AiChatBoundary>}
       {notice && (
-        <div className="toast">
+        <div className="toast" role="status" aria-live="polite">
           <CheckCircle2 size={19} />
-          {notice}
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice("")} aria-label="סגירת ההודעה">×</button>
         </div>
       )}
     </div>

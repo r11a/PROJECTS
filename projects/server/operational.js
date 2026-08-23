@@ -46,6 +46,7 @@ function contactFromRow(row) {
 
 export async function createOperationalRouter({ pool, authenticate, requireRoles, audit, dataDir, geocoder, pushService }) {
   const router = express.Router();
+  const sendPushSafely=async(...args)=>{try{return await pushService?.sendToUsers(...args)}catch(error){console.error('Message push failed:',error.message);return {sent:0,failed:1,skipped:0,errors:[{message:error.message}]}}};
   const uploadDir = path.join(dataDir, 'uploads', 'clients');
   const brandingDir = path.join(dataDir, 'branding');
   await Promise.all([mkdir(uploadDir, { recursive: true }), mkdir(brandingDir, { recursive: true })]);
@@ -109,9 +110,10 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     const team=await pool.query('SELECT id,username,display_name FROM users WHERE active=TRUE AND id<>$1',[request.user.id]);
     const normalized=body.toLocaleLowerCase('he-IL');const mentioned=team.rows.filter(item=>normalized.includes(`@${String(item.display_name).toLocaleLowerCase('he-IL')}`)||normalized.includes(`@${String(item.username||'').toLocaleLowerCase('he-IL')}`)).filter(item=>Number(item.id)!==recipientId);
     for(const item of mentioned)await pool.query('INSERT INTO user_messages(sender_id,recipient_id,subject,body,parent_message_id,linked_url,mention) VALUES($1,$2,$3,$4,$5,$6,TRUE)',[request.user.id,item.id,subject||'תויגת בהודעה',body,result.rows[0].id,linkedUrl]);
-    await pushService?.sendToUsers([recipientId],{title:subject||`הודעה חדשה מאת ${request.user.displayName||request.user.username||'משתמש'}`,body,url:linkedUrl||'?page=messages',tag:`message-${result.rows[0].id}`},{category:'messages',dedupeKey:`message:${result.rows[0].id}`});
-    if(mentioned.length)await pushService?.sendToUsers(mentioned.map(item=>Number(item.id)),{title:subject||'תויגת בהודעה',body,url:linkedUrl||'?page=messages',tag:`mention-${result.rows[0].id}`},{category:'messages',dedupeKey:`mention:${result.rows[0].id}`});
-    await audit(request,'create','message',String(result.rows[0].id),{recipientId,mentions:mentioned.map(item=>item.id)});response.status(201).json({message:result.rows[0],mentions:mentioned.length});
+    const senderName=request.user.displayName||request.user.username||'משתמש';
+    const notification=await sendPushSafely([recipientId],{title:`יש לך הודעה פנימית מ־${senderName}`,body:`${subject?`${subject} · `:''}${body}`,url:linkedUrl||'?page=messages',tag:`message-${result.rows[0].id}`},{category:'messages',dedupeKey:`message:${result.rows[0].id}`});
+    if(mentioned.length)await sendPushSafely(mentioned.map(item=>Number(item.id)),{title:subject||'תויגת בהודעה',body,url:linkedUrl||'?page=messages',tag:`mention-${result.rows[0].id}`},{category:'messages',dedupeKey:`mention:${result.rows[0].id}`});
+    await audit(request,'create','message',String(result.rows[0].id),{recipientId,mentions:mentioned.map(item=>item.id),pushSent:notification?.sent||0});response.status(201).json({message:result.rows[0],mentions:mentioned.length,notification});
   });
   router.patch('/messages/:id/read', async (request,response) => { const result=await pool.query('UPDATE user_messages SET delivered_at=COALESCE(delivered_at,NOW()),read_at=COALESCE(read_at,NOW()) WHERE id=$1 AND recipient_id=$2 RETURNING *',[request.params.id,request.user.id]);if(!result.rowCount)return response.status(404).json({error:'ההודעה לא נמצאה'});response.json({message:result.rows[0]}); });
   router.delete('/messages', async (request,response) => {
@@ -126,7 +128,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     const body=String(request.body.body||'').trim();if(!userIds.length||!body)return response.status(400).json({error:'יש לבחור משתמש ולצרף תוכן לתיוג'});
     const subject=String(request.body.subject||'תויגת ב-PROJECTS').slice(0,200);const linkedUrl=String(request.body.linkedUrl||'').slice(0,500);
     const result=await pool.query(`INSERT INTO user_messages(sender_id,recipient_id,subject,body,linked_url,mention) SELECT $1,id,$2,$3,$4,TRUE FROM users WHERE id=ANY($5::bigint[]) AND active=TRUE RETURNING id,recipient_id`,[request.user.id,subject,body,linkedUrl,userIds]);
-    await pushService?.sendToUsers(result.rows.map(row=>Number(row.recipient_id)),{title:subject,body,url:linkedUrl||'?page=messages',tag:`mentions-${result.rows.map(row=>row.id).join('-')}`},{category:'messages',dedupeKey:`mentions:${result.rows.map(row=>row.id).join(',')}`});
+    await sendPushSafely(result.rows.map(row=>Number(row.recipient_id)),{title:subject,body,url:linkedUrl||'?page=messages',tag:`mentions-${result.rows.map(row=>row.id).join('-')}`},{category:'messages',dedupeKey:`mentions:${result.rows.map(row=>row.id).join(',')}`});
     await audit(request,'create','mentions',result.rows.map(row=>row.id).join(','),{recipients:result.rows.map(row=>row.recipient_id)});response.status(201).json({created:result.rowCount});
   });
 

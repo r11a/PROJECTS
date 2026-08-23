@@ -21,7 +21,7 @@ export function MeetingSummaryForm({ api,onClose,onSubmit,setNotice,project,prof
     <form className="work-form meeting-summary-form" onSubmit={submit}>
       <label>תאריך ושעה<input type="datetime-local" name="meetingAt" required defaultValue={meetingDateValue(initial?.meeting_at)}/></label>
       <label>נוכחים<input name="attendees" defaultValue={initial?.attendees||''} placeholder="שמות מופרדים בפסיק"/></label>
-      <label>שעות תכנון / ישיבה<input type="number" name="hours" min="0" max="24" step="0.5" placeholder="0"/></label>
+      <label>שעות תכנון / ישיבה<input type="number" name="hours" min="0" max="24" step="0.5" placeholder="0" defaultValue={initial?.work_hours||''}/></label>
       <div className="wide"><SmartTextArea api={api} value={summary} onChange={setSummary} setNotice={setNotice} label="סיכום והחלטות" textareaProps={{name:'summary',required:true,rows:9,placeholder:'החלטות, תובנות ונושאים שעלו…'}}/></div>
       <div className="wide"><SmartTextArea api={api} value={followUp} onChange={setFollowUp} setNotice={setNotice} label="המשך טיפול" textareaProps={{name:'followUp',rows:4}}/></div>
       <div className="wide meeting-ai-actions"><button type="button" onClick={analyze} disabled={busy}><Sparkles size={16}/>{busy?'מנתח…':'הצע משימות וטיוטת מייל'}</button></div>

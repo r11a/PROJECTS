@@ -136,6 +136,7 @@ export function createFormsRouter({ pool, authenticate, requireRoles, audit }) {
   });
 
   router.delete('/form-records/:id', requireRoles('admin'), async (request, response) => {
+    await pool.query("DELETE FROM project_time_entries WHERE source_type='form_record' AND source_id=$1", [String(request.params.id)]);
     const result = await pool.query('DELETE FROM form_records WHERE id=$1 RETURNING id,title', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'הטופס לא נמצא' });
     await audit(request, 'delete', 'form_record', request.params.id, { title: result.rows[0].title });

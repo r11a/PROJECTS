@@ -563,12 +563,15 @@ export function TasksWorkspace({
       const kind = editor.kind;
       const base =
         kind === "task" ? "/operations/tasks" : "/operations/milestones";
-      await api(editor.item?.id ? `${base}/${editor.item.id}` : base, {
+      const result = await api(editor.item?.id ? `${base}/${editor.item.id}` : base, {
         method: editor.item?.id ? "PATCH" : "POST",
         body: JSON.stringify(value),
       });
       setEditor(null);
-      setNotice("הפריט נשמר בהצלחה");
+      const delivered = Number(result.notification?.sent || 0);
+      setNotice(kind === "task" && !editor.item?.id
+        ? `✓ המשימה נוצרה בהצלחה${delivered ? ` · נשלחה התראה ל־${delivered} מכשירים` : " · ההתראה זמינה באפליקציה; Push לא נמסר כי אין מכשיר פעיל או שההעדפות חוסמות אותו"}`
+        : "✓ השינויים נשמרו בהצלחה");
       load({ silent: true });
       if (typeof onDataChanged === "function") onDataChanged();
     } catch (e) {
