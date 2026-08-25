@@ -2,11 +2,9 @@
   <defs>
     <linearGradient id="bg" x1="74" y1="54" x2="438" y2="458" gradientUnits="userSpaceOnUse"><stop stop-color="#A897FF"/><stop offset=".5" stop-color="#6C58E3"/><stop offset="1" stop-color="#31217A"/></linearGradient>
     <linearGradient id="p" x1="154" y1="133" x2="335" y2="371" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E4DFFF"/></linearGradient>
-    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%"><feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#160E35" flood-opacity=".34"/></filter>
   </defs>
-  <rect width="512" height="512" rx="128" fill="#111528"/>
-  <rect x="48" y="48" width="416" height="416" rx="116" fill="url(#bg)" filter="url(#shadow)"/>
-  <rect x="70" y="70" width="372" height="372" rx="96" fill="none" stroke="#FFF" stroke-opacity=".14" stroke-width="3"/>
+  <rect x="10" y="10" width="492" height="492" rx="128" fill="url(#bg)"/>
+  <rect x="32" y="32" width="448" height="448" rx="108" fill="none" stroke="#FFF" stroke-opacity=".14" stroke-width="3"/>
   <path d="M151 374V139h112c77 0 122 38 122 101 0 65-49 104-128 104h-31v30h-75Zm75-95h36c31 0 49-14 49-39 0-24-18-36-49-36h-36v75Z" fill="url(#p)"/>
   <path d="M340 294v54m0-27h42" stroke="#FFF" stroke-width="11" stroke-linecap="round" opacity=".92"/>
   <circle cx="340" cy="283" r="10" fill="#B8F5DF"/><circle cx="393" cy="321" r="10" fill="#FFD79C"/><circle cx="340" cy="359" r="10" fill="#FFB5CB"/>

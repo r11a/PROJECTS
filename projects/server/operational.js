@@ -62,6 +62,14 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
 
   const icsText = (value) => String(value || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
   const icsDate = (value) => new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const calendarPublicBaseUrl = (value) => {
+    const raw=String(value||'').trim().replace(/\/+$/,'');
+    if(!raw)return '';
+    let parsed;try{parsed=new URL(raw)}catch{throw Object.assign(new Error('כתובת הגישה הציבורית אינה תקינה'),{statusCode:400})}
+    if(!['http:','https:'].includes(parsed.protocol)||parsed.username||parsed.password||parsed.search||parsed.hash)throw Object.assign(new Error('יש להזין כתובת HTTP/HTTPS ללא שם משתמש, סיסמה או פרמטרים'),{statusCode:400});
+    if(parsed.pathname.includes('/api/hassio_ingress/'))throw Object.assign(new Error('זו כתובת Ingress של Home Assistant. יש להזין את כתובת ה-Web הישירה של PROJECTS'),{statusCode:400});
+    return raw;
+  };
   router.get('/calendar-feed/:token.ics', async (request, response) => {
     const token = await pool.query('SELECT user_id FROM calendar_feed_tokens WHERE token=$1', [request.params.token]);
     if (!token.rowCount) return response.status(404).type('text/plain').send('Calendar feed not found');
@@ -81,14 +89,20 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
   router.use(authenticate);
 
   router.get('/calendar-feed', async (request, response) => {
-    const result = await pool.query('SELECT token,created_at,last_used_at FROM calendar_feed_tokens WHERE user_id=$1', [request.user.id]);
-    response.json({ active:Boolean(result.rowCount), token:result.rows[0]?.token || null, createdAt:result.rows[0]?.created_at || null, lastUsedAt:result.rows[0]?.last_used_at || null });
+    const result = await pool.query('SELECT token,public_base_url,created_at,last_used_at FROM calendar_feed_tokens WHERE user_id=$1', [request.user.id]);
+    const row=result.rows[0],ingress=String(request.get('X-Projects-Ingress')||'').toLowerCase()==='true';
+    const directBase=ingress?'':`${request.protocol}://${request.get('host')}`;
+    const publicBaseUrl=row?.public_base_url||directBase;
+    response.json({ active:Boolean(result.rowCount), token:row?.token || null, publicBaseUrl, feedUrl:row?.token&&publicBaseUrl?`${publicBaseUrl}/api/calendar-feed/${row.token}.ics`:'', requiresPublicUrl:ingress&&!row?.public_base_url, ingress, createdAt:row?.created_at || null, lastUsedAt:row?.last_used_at || null });
   });
   router.post('/calendar-feed', async (request, response) => {
+    const ingress=String(request.get('X-Projects-Ingress')||'').toLowerCase()==='true';
+    const publicBaseUrl=calendarPublicBaseUrl(request.body.publicBaseUrl||(!ingress?`${request.protocol}://${request.get('host')}`:''));
+    if(!publicBaseUrl)return response.status(400).json({error:'בגישה דרך Home Assistant יש להזין את כתובת ה-Web העצמאית של PROJECTS'});
     const token = `${randomUUID()}${randomUUID().replace(/-/g,'')}`;
-    await pool.query(`INSERT INTO calendar_feed_tokens(user_id,token) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET token=EXCLUDED.token,created_at=NOW(),last_used_at=NULL`, [request.user.id, token]);
+    await pool.query(`INSERT INTO calendar_feed_tokens(user_id,token,public_base_url) VALUES($1,$2,$3) ON CONFLICT(user_id) DO UPDATE SET token=EXCLUDED.token,public_base_url=EXCLUDED.public_base_url,created_at=NOW(),last_used_at=NULL`, [request.user.id, token, publicBaseUrl]);
     await audit(request, 'create', 'calendar_feed', String(request.user.id));
-    response.status(201).json({ token });
+    response.status(201).json({ token,publicBaseUrl,feedUrl:`${publicBaseUrl}/api/calendar-feed/${token}.ics`,requiresPublicUrl:false,ingress });
   });
   router.delete('/calendar-feed', async (request, response) => {
     await pool.query('DELETE FROM calendar_feed_tokens WHERE user_id=$1', [request.user.id]);

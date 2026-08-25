@@ -65,6 +65,7 @@ import { ModalPortal } from "./AppModal";
 import { ProductivitySettings } from "./ProductivityWorkspace";
 import { PushNotificationSettings } from "./PushNotifications";
 import { formatDateIL, localDateValue } from "./dateTime";
+import "./outlook-share.css";
 
 const roleNames = {
   architect: "אדריכל",
@@ -467,9 +468,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
       setNotice(error.message);
     }
   };
-  const calendarFeedUrl = calendarFeed?.token
-    ? `${window.location.origin}${apiRoot}/calendar-feed/${calendarFeed.token}.ics`
-    : "";
+  const calendarFeedUrl = calendarFeed?.feedUrl || "";
   const copyCalendarFeed = async () => {
     try {
       await navigator.clipboard.writeText(calendarFeedUrl);
@@ -3316,28 +3315,27 @@ function AiSettings({ api, user, setNotice }) {
   );
 }
 
-function OutlookCalendarShare({ api, apiRoot, setNotice }) {
+function OutlookCalendarShare({ api, setNotice }) {
   const [feed, setFeed] = useState(null);
+  const [publicBaseUrl,setPublicBaseUrl]=useState('');
   const [busy, setBusy] = useState(false);
   const load = () =>
     api("/calendar-feed")
-      .then(setFeed)
+      .then((result)=>{setFeed(result);setPublicBaseUrl(result.publicBaseUrl||'')})
       .catch((error) => setNotice(error.message));
   useEffect(() => {
     load();
   }, []);
-  const url = feed?.token
-    ? `${window.location.origin}${apiRoot}/calendar-feed/${feed.token}.ics`
-    : "";
+  const url = feed?.feedUrl || "";
   const create = async () => {
     setBusy(true);
     try {
       const result = await api("/calendar-feed", {
         method: "POST",
-        body: "{}",
+        body: JSON.stringify({publicBaseUrl}),
       });
-      setFeed({ active: true, token: result.token });
-      setNotice("קישור Outlook לקריאה בלבד נוצר");
+      setFeed({ active: true, ...result });
+      setNotice("קישור Outlook חדש וללא התחברות נוצר. כעת יש להחליף את המנוי הישן ב-Outlook.");
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -3381,15 +3379,22 @@ function OutlookCalendarShare({ api, apiRoot, setNotice }) {
       </header>
       {feed?.active ? (
         <>
+          {feed.requiresPublicUrl&&<div className="outlook-auth-warning"><strong>נדרש להחליף את המנוי הישן</strong><span>קישור שנוצר מכתובת Ingress גורם ל-Outlook לבקש שם משתמש וסיסמה. הסירו את לוח PROJECTS הישן מתוך Outlook, הגדירו כאן כתובת Web ישירה וצרו קישור חדש.</span></div>}
+          <label>
+            כתובת Web ישירה של PROJECTS
+            <input dir="ltr" inputMode="url" placeholder="https://projects.example.com" value={publicBaseUrl} onChange={(event)=>setPublicBaseUrl(event.target.value)} />
+            <small>לא כתובת Ingress של Home Assistant. השתמשו בכתובת HTTPS ישירה, או בכתובת המקומית עם הפורט העצמאי בתוך הרשת.</small>
+          </label>
           <label>
             קישור המנוי
-            <input readOnly dir="ltr" value={url} />
+            <input readOnly dir="ltr" value={url||'יש ליצור קישור חדש עם כתובת Web ישירה'} />
           </label>
           <div className="outlook-share-actions">
-            <button className="ops-primary" onClick={copy}>
+            <button className="ops-primary" onClick={copy} disabled={!url}>
               <Copy size={16} />
               העתקת קישור
             </button>
+            <button type="button" onClick={create} disabled={busy||!publicBaseUrl.trim()}><RefreshCw size={16}/> יצירת קישור חדש</button>
             <button className="ops-danger" onClick={revoke} disabled={busy}>
               ביטול הקישור
             </button>
@@ -3400,10 +3405,7 @@ function OutlookCalendarShare({ api, apiRoot, setNotice }) {
           </small>
         </>
       ) : (
-        <button className="ops-primary" onClick={create} disabled={busy}>
-          <Link2 size={16} />
-          {busy ? "יוצר קישור..." : "יצירת קישור Outlook"}
-        </button>
+        <><label>כתובת Web ישירה של PROJECTS<input dir="ltr" inputMode="url" placeholder="https://projects.example.com" value={publicBaseUrl} onChange={(event)=>setPublicBaseUrl(event.target.value)}/><small>בכניסה דרך Ingress יש להזין כתובת עצמאית שנגישה ל-Outlook ללא מסך התחברות של Home Assistant.</small></label><button className="ops-primary" onClick={create} disabled={busy||!publicBaseUrl.trim()}><Link2 size={16} />{busy ? "יוצר קישור..." : "יצירת קישור Outlook"}</button></>
       )}
     </section>
   );

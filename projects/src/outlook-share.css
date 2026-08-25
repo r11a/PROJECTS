@@ -1,0 +1,7 @@
+.outlook-auth-warning{padding:13px 15px;display:grid;gap:4px;border:1px solid #efc06d;border-radius:12px;background:#fff8e8;color:#704814}
+.outlook-auth-warning span{font-size:12px;line-height:1.6}
+.outlook-share label small{color:#7d8495;font-weight:400;line-height:1.55}
+.outlook-share-actions button{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.theme-dark .outlook-auth-warning{border-color:#765d32;background:#332b1e;color:#ffe0a6}
+@media(max-width:760px){.outlook-share{padding:17px}.outlook-share input{width:100%}}
+

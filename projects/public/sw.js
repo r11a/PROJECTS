@@ -1,5 +1,5 @@
-const CACHE='projects-shell-v2';
-self.addEventListener('install',(event)=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(['./','./manifest.webmanifest','./icon.png'])).catch(()=>{}).then(()=>self.skipWaiting())));
+const CACHE='projects-shell-v3';
+self.addEventListener('install',(event)=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(['./','./manifest.webmanifest','./icon-512.png','./icon-maskable.png','./apple-touch-icon.png'])).catch(()=>{}).then(()=>self.skipWaiting())));
 self.addEventListener('activate',(event)=>event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key))))])));
 self.addEventListener('fetch',(event)=>{
   const request=event.request,url=new URL(request.url);if(request.method!=='GET'||url.origin!==self.location.origin||url.pathname.includes('/api/'))return;
@@ -14,8 +14,8 @@ self.addEventListener('push',(event)=>{
   try{data=event.data?.json()||{}}catch{data={body:event.data?.text()||''}}
   const options={
     body:data.body||'',
-    icon:'./icon.png',
-    badge:'./icon.png',
+    icon:'./icon-512.png',
+    badge:'./icon-512.png',
     dir:'rtl',
     lang:'he',
     tag:data.tag||`projects-${Date.now()}`,
