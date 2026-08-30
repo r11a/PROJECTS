@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.7
+
+- Rebuilt systems management on phones as touch-friendly system and subitem cards.
+- Added visible field labels, readable descriptions, compact summaries and full-width status controls.
+- Removed mobile table squeezing from both project systems and the master equipment catalog.
+
 ## 0.32.6
 
 - Category color changes now cascade to every subitem in the system.

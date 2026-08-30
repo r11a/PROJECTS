@@ -27,14 +27,27 @@
 .equipment-board-table{min-width:0;width:100%}
 .equipment-subhead,.equipment-subrow{width:100%;min-width:0}
 .equipment-subrow>input:first-child{white-space:normal;text-overflow:ellipsis}
+.equipment-mobile-field{min-width:0;margin-inline:5px;display:block}
+.equipment-mobile-field>small{display:none}
+.equipment-mobile-field>input,.equipment-mobile-field>select{width:100%;margin:0}
 @media(max-width:680px){
   .equipment-board-table{min-width:0}
   .equipment-board-head{display:none}
-  .equipment-parent-row{grid-template-columns:38px minmax(0,1fr) 96px 48px 48px 48px 74px;padding-inline:8px}
+  .equipment-parent{margin:8px;border:1px solid #e2e5ec;border-radius:13px;overflow:hidden}
+  .equipment-parent-row{grid-template-columns:36px minmax(0,1fr) 74px;gap:7px;padding:9px}
+  .equipment-parent-row>select{grid-column:2/3}
+  .equipment-parent-row>b{min-height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f5f6f9;font-size:12px}
+  .equipment-parent-row>b::before{margin-inline-end:3px;color:#8b92a2;font-size:10px}.equipment-parent-row>b:nth-of-type(1)::before{content:'סה״כ'}.equipment-parent-row>b:nth-of-type(2)::before{content:'הותקן'}.equipment-parent-row>b:nth-of-type(3)::before{content:'יתרה'}
+  .equipment-parent-row>b:nth-of-type(1){grid-column:1/2}.equipment-parent-row>b:nth-of-type(2){grid-column:2/3}.equipment-parent-row>b:nth-of-type(3){grid-column:3/4}
+  .equipment-parent-row>.equipment-row-actions{grid-column:3/4;grid-row:1/3}
   .equipment-subtable{max-width:none;margin:0 8px 12px}
   .equipment-subhead{display:none}
   .equipment-subrow{display:grid;grid-template-columns:minmax(0,1fr) 78px 78px!important;gap:7px;margin:8px;padding:9px;border:1px solid #e3e6ed;border-radius:10px}
   .equipment-subrow>*{width:100%;margin:0}
-  .equipment-subrow>input:first-child{grid-column:1/-1}
+  .equipment-mobile-field{min-height:58px;margin:0;padding:6px 8px;display:flex;flex-direction:column;justify-content:center;border:1px solid #e5e7ed;border-radius:9px;background:#fafbfc}
+  .equipment-mobile-field>small{display:block;margin-bottom:3px;color:#858d9e;font-size:10px;font-weight:750}
+  .equipment-mobile-field>input,.equipment-mobile-field>select{height:32px;padding:0;border:0;background:transparent;font-size:13px}
+  .equipment-mobile-field.item-name,.equipment-mobile-field.status{grid-column:1/-1}
+  .equipment-mobile-field.item-name input{font-size:14px;font-weight:750}
   .equipment-row-actions{grid-column:1/-1;justify-content:flex-start}
 }

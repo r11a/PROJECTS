@@ -36,3 +36,13 @@ test('system colors cascade to subitems while individual color overrides remain 
   assert.match(server,/SET row_color='',updated_at=NOW\(\)/);
   assert.match(server,/hasOwnProperty\.call\(request\.body,'rowColor'\)/);
 });
+
+test('systems boards expose labelled touch-friendly mobile subitem cards',async()=>{
+  const [projectUi,projectCss,masterUi,masterCss]=await Promise.all([read('src/ProjectWorkspace.jsx'),read('src/project-systems-board.css'),read('src/MasterDataWorkspace.jsx'),read('src/master-data.css')]);
+  for(const label of ['מיקום','תיוג','כמות','הותקן','סטטוס'])assert.match(projectUi,new RegExp(`<small>${label}`));
+  assert.match(projectCss,/\.subitem-field>small/);
+  assert.match(projectCss,/grid-template-columns:minmax\(0,1fr\) 78px 78px!important/);
+  for(const label of ['פריט','מיקום','תיוג','מק״ט','כמות','סטטוס'])assert.match(masterUi,new RegExp(`<small>${label}`));
+  assert.match(masterCss,/\.equipment-mobile-field>small/);
+  assert.match(masterCss,/\.equipment-mobile-field\.item-name/);
+});
