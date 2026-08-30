@@ -710,7 +710,7 @@ function EquipmentTree({ items, apiRoot, api, refresh, setNotice, user, onEdit, 
   const persistColumns=(next)=>{setColumns(next);localStorage.setItem('projects:equipment-board-columns',JSON.stringify(next))};
   const addColumn=()=>{const label=newColumn.trim();if(!label)return;persistColumns([...columns,{key:`custom_${Date.now()}`,label}]);setNewColumn('')};
   const moveColumn=(from,to)=>{if(from===to)return;const next=[...columns];const [column]=next.splice(from,1);next.splice(to,0,column);persistColumns(next)};
-  const subitemGrid=`minmax(210px,1.4fr) 140px 125px 140px 82px 125px ${columns.map(()=>'135px').join(' ')} 92px`;
+  const subitemGrid=`minmax(280px,2.4fr) minmax(92px,.8fr) minmax(82px,.7fr) minmax(105px,.9fr) 68px minmax(98px,.85fr) ${columns.map(()=>'minmax(92px,.75fr)').join(' ')} 92px`;
   if (!items.length)
     return (
       <EmptyState

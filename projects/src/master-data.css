@@ -21,3 +21,20 @@
 .equipment-row-actions{overflow:visible;white-space:normal}
 .equipment-subtable{max-width:calc(100% - 72px)}
 @media(max-width:680px){.equipment-subtable{max-width:calc(100% - 52px)}.equipment-subhead,.equipment-subrow{font-size:12px}}
+
+/* Fluid equipment board: keep the full board visible without horizontal scrolling. */
+.equipment-board-scroll,.equipment-subtable{overflow-x:hidden}
+.equipment-board-table{min-width:0;width:100%}
+.equipment-subhead,.equipment-subrow{width:100%;min-width:0}
+.equipment-subrow>input:first-child{white-space:normal;text-overflow:ellipsis}
+@media(max-width:680px){
+  .equipment-board-table{min-width:0}
+  .equipment-board-head{display:none}
+  .equipment-parent-row{grid-template-columns:38px minmax(0,1fr) 96px 48px 48px 48px 74px;padding-inline:8px}
+  .equipment-subtable{max-width:none;margin:0 8px 12px}
+  .equipment-subhead{display:none}
+  .equipment-subrow{display:grid;grid-template-columns:minmax(0,1fr) 78px 78px!important;gap:7px;margin:8px;padding:9px;border:1px solid #e3e6ed;border-radius:10px}
+  .equipment-subrow>*{width:100%;margin:0}
+  .equipment-subrow>input:first-child{grid-column:1/-1}
+  .equipment-row-actions{grid-column:1/-1;justify-content:flex-start}
+}

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.5
+
+- Removed horizontal scrolling from the systems and components boards.
+- Made the component-description column fluid and allowed long descriptions to wrap cleanly.
+- Added a compact mobile card layout instead of squeezing the desktop table into the phone viewport.
+
 ## 0.32.4
 
 - Fixed the root cause of collapsed and overlapping SUBITEM columns when no custom columns exist.

@@ -39,3 +39,42 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
   .project-systems-board .project-subitem-head,
   .project-systems-board .project-subitem-row{font-size:12px}
 }
+
+/* Fluid desktop table: description gets the space, not a horizontal scrollbar. */
+.project-systems-scroll,.project-subitems{overflow-x:hidden}
+.project-systems-table{min-width:0;width:100%}
+.project-systems-board .project-subitem-head,
+.project-systems-board .project-subitem-row{width:100%;min-width:0}
+.project-systems-board .subitem-name{min-height:50px;height:auto;white-space:normal}
+.project-systems-board .subitem-name strong{
+  display:-webkit-box;
+  overflow:hidden;
+  white-space:normal;
+  line-height:1.45;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+}
+@media(max-width:760px){
+  .project-systems-scroll{overflow-x:hidden}
+  .project-systems-table{min-width:0}
+  .project-system-head{display:none}
+  .project-system-row{grid-template-columns:40px minmax(0,1fr) 96px 48px 48px 48px 44px;padding-inline:8px}
+  .project-subitems{max-width:none;margin:0 8px 12px}
+  .project-systems-board .project-subitem-head{display:none}
+  .project-systems-board .project-subitem-row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 78px 78px!important;
+    gap:7px;
+    min-height:0;
+    margin:8px;
+    padding:9px;
+    border:1px solid #e3e6ed;
+    border-inline-start:4px solid var(--row-color);
+    border-radius:10px;
+  }
+  .project-systems-board .project-subitem-row>*{width:100%;margin:0}
+  .project-systems-board .subitem-name{grid-column:1/-1;min-height:auto;padding:2px 0 7px}
+  .project-systems-board .sku-cell{grid-column:1/2;display:flex;align-items:center}
+  .project-systems-board .monday-status{grid-column:1/2}
+  .project-systems-board .project-subitem-actions{grid-column:1/-1;justify-content:flex-start}
+}
