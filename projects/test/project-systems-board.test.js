@@ -26,3 +26,13 @@ test('subitem grids remain valid when there are no custom columns',async()=>{
   assert.match(masterBoard,/equipment-subhead" style=\{\{gridTemplateColumns:subitemGrid\}\}/);
   assert.match(masterBoard,/equipment-subrow" key=\{child\.id\} style=\{\{gridTemplateColumns:subitemGrid\}\}/);
 });
+
+test('system colors cascade to subitems while individual color overrides remain reversible',async()=>{
+  const [ui,server]=await Promise.all([read('src/ProjectWorkspace.jsx'),read('server/operations.js')]);
+  assert.match(ui,/propagateColor:Object\.prototype\.hasOwnProperty/);
+  assert.match(ui,/חזרה לצבע המערכת/);
+  assert.match(ui,/save\(item,\{rowColor:''\}\)/);
+  assert.match(server,/request\.body\.propagateColor/);
+  assert.match(server,/SET row_color='',updated_at=NOW\(\)/);
+  assert.match(server,/hasOwnProperty\.call\(request\.body,'rowColor'\)/);
+});

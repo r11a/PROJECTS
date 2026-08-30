@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.6
+
+- Category color changes now cascade to every subitem in the system.
+- Each subitem can still keep an independent color override.
+- Added a one-click action to return a subitem to its inherited system color.
+
 ## 0.32.5
 
 - Removed horizontal scrolling from the systems and components boards.
