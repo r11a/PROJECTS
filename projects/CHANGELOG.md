@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.32.3
+
+- Rebuilt the project systems board around a stable commercial table hierarchy: system groups, compact component rows, aligned rollups and clear category identity.
+- Eliminated overlapping labels, uncontrolled row height, column drift and clipped content with one consistent responsive grid and deliberate horizontal overflow.
+- Replaced raw browser color inputs with compact palette controls that display the selected color while preserving the native accessible picker.
+- Added quieter inline editing, SKU truncation with full-value tooltips, clear status pills, system/component drag handles and consistent action buttons.
+- Added dedicated mobile and dark-mode layouts without changing the light theme elsewhere in PROJECTS.
+
 ## 0.32.2
 
 - Fixed the systems-board migration to use PROJECTS' existing text project identifiers, removing the startup failure that kept the API behind Cloudflare in a persistent 502 state.
