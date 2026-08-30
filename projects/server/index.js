@@ -68,7 +68,19 @@ const liveResponses = new Set();
 const liveListener = await pool.connect();
 await liveListener.query('LISTEN projects_live_change');
 liveListener.on('notification', (message) => {
-  for (const response of liveResponses) response.write(`event: change\ndata: ${message.payload || '{}'}\n\n`);
+  const payload = `event: change\ndata: ${message.payload || '{}'}\n\n`;
+  for (const response of liveResponses) {
+    if (response.destroyed || response.writableEnded) {
+      liveResponses.delete(response);
+      continue;
+    }
+    try {
+      response.write(payload);
+    } catch (error) {
+      liveResponses.delete(response);
+      console.warn('Removed unavailable live update client:', error.message);
+    }
+  }
 });
 liveListener.on('error', (error) => console.error('Live update listener error', error.message));
 
@@ -541,9 +553,17 @@ app.post('/api/auth/password', authenticate, async (request,response) => {
 
 app.get('/api/live', authenticate, (request, response) => {
   response.set({'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
+  let heartbeat;
+  const close=()=>{if(heartbeat)clearInterval(heartbeat);liveResponses.delete(response)};
+  response.on('error',close);
+  response.on('close',close);
+  request.on('aborted',close);
+  request.on('close',close);
   response.flushHeaders(); response.write('event: ready\ndata: {}\n\n'); liveResponses.add(response);
-  const heartbeat=setInterval(()=>response.write(': keepalive\n\n'),25000);
-  request.on('close',()=>{clearInterval(heartbeat);liveResponses.delete(response)});
+  heartbeat=setInterval(()=>{
+    if(response.destroyed||response.writableEnded)return close();
+    try{response.write(': keepalive\n\n')}catch(error){console.warn('Live update heartbeat failed:',error.message);close()}
+  },25000);
 });
 
 app.get('/api/projects', authenticate, async (request, response) => {

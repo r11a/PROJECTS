@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.1
+
+- Hardened live-update delivery so closing or navigating away from a systems screen cannot terminate the API through a stale SSE connection.
+- Added automatic API process recovery inside the add-on service to prevent a transient server failure from becoming a persistent Cloudflare 502 outage.
+- Preserved live, flicker-free updates while safely removing disconnected clients and handling heartbeat write failures.
+
 ## 0.32.0
 
 - פאנל מערכות הפרויקט שודרג ללוח תכנון מתקדם עם Drag & Drop נשמר עבור קבוצות, רכיבים ועמודות.

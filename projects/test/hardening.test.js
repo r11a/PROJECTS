@@ -31,6 +31,18 @@ test('stable add-on and CSP are explicit',async()=>{
   assert.match(nginx,/object-src 'none'/);
 });
 
+test('live update clients cannot crash the API after navigation',async()=>{
+  const [server,service]=await Promise.all([
+    read('server/index.js'),
+    read('rootfs/etc/services.d/api/run'),
+  ]);
+  assert.match(server,/response\.destroyed \|\| response\.writableEnded/);
+  assert.match(server,/response\.on\('error',close\)/);
+  assert.match(server,/request\.on\('aborted',close\)/);
+  assert.match(service,/API stopped unexpectedly/);
+  assert.doesNotMatch(service,/exit "\$\{exit_code:-1\}"/);
+});
+
 test('critical Playwright paths are included in CI',async()=>{
   const workflow=await read('../.github/workflows/validate.yml');
   const e2e=await read('e2e/critical-paths.spec.js');

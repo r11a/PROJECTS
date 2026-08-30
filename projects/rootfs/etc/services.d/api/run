@@ -66,5 +66,6 @@ while true; do
   if [ -s /data/restore.request ]; then
     continue
   fi
-  exit "${exit_code:-1}"
+  echo "PROJECTS API stopped unexpectedly (exit ${exit_code:-1}); restarting in 2 seconds"
+  sleep 2
 done
