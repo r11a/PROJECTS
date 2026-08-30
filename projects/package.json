@@ -2,7 +2,7 @@
   "name": "projects-home-assistant-app",
   "private": true,
   "license": "UNLICENSED",
-  "version": "0.32.3",
+  "version": "0.32.4",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",

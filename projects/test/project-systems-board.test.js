@@ -16,3 +16,13 @@ test('project systems board foreign keys use the existing text project identity'
   assert.match(migration,/project_id TEXT NOT NULL REFERENCES projects\(id\)/);
   assert.doesNotMatch(migration,/project_id BIGINT NOT NULL REFERENCES projects\(id\)/);
 });
+
+test('subitem grids remain valid when there are no custom columns',async()=>{
+  const [projectBoard,masterBoard]=await Promise.all([read('src/ProjectWorkspace.jsx'),read('src/MasterDataWorkspace.jsx')]);
+  assert.match(projectBoard,/const subitemGrid=.*columns\.map/);
+  assert.match(projectBoard,/project-subitem-head" style=\{\{gridTemplateColumns:subitemGrid\}\}/);
+  assert.match(projectBoard,/project-subitem-row" key=\{item\.id\} style=\{\{[^}]*gridTemplateColumns:subitemGrid/);
+  assert.match(masterBoard,/const subitemGrid=.*columns\.map/);
+  assert.match(masterBoard,/equipment-subhead" style=\{\{gridTemplateColumns:subitemGrid\}\}/);
+  assert.match(masterBoard,/equipment-subrow" key=\{child\.id\} style=\{\{gridTemplateColumns:subitemGrid\}\}/);
+});

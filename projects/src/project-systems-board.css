@@ -8,3 +8,34 @@
 .project-subitem-actions{display:flex;align-items:center;justify-content:center;gap:5px}.project-subitem-actions>button{width:30px;height:30px;display:grid;place-items:center;border:1px solid #dfe2e9;border-radius:8px;background:#fff;color:#697184;cursor:pointer}.project-subitem-actions>button:hover{border-color:#bdb5eb;color:#604dcc;background:#f5f2ff}.project-subitem-actions>button.danger:hover{border-color:#f1b7c0;color:#c13e50;background:#fff0f2}.project-add-subitem{min-height:44px;margin:4px 10px;padding:0 10px;display:flex;align-items:center;gap:6px;border:0;background:transparent;color:#6552d2;font-size:12px;font-weight:800;cursor:pointer}.project-add-subitem:hover{color:#4f3bbb}
 html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-systems-board-title,html[data-theme="dark"] .project-system-item,html[data-theme="dark"] .project-subitems{border-color:#393c43;background:#202226}html[data-theme="dark"] .project-system-head,html[data-theme="dark"] .project-subitem-head{border-color:#3a3d44;background:#292c31;color:#c2c6cf}html[data-theme="dark"] .project-system-row{background:linear-gradient(90deg,color-mix(in srgb,var(--system-color) 15%,#202226),#202226 48%)}html[data-theme="dark"] .system-identity input,html[data-theme="dark"] .project-system-row>b,html[data-theme="dark"] .subitem-name strong,html[data-theme="dark"] .sku-cell,html[data-theme="dark"] .project-subitem-row input,html[data-theme="dark"] .project-subitem-row select{color:#f1f2f4}html[data-theme="dark"] .project-systems-board .project-subitem-row{border-color:#393c43;background:#222428}html[data-theme="dark"] .project-systems-board .project-subitem-row:hover{background:#292c31}html[data-theme="dark"] .color-control,html[data-theme="dark"] .project-subitem-actions>button{border-color:#44474e;background:#292c31}
 @media(max-width:760px){.project-systems-board-title{padding:14px;align-items:stretch;flex-direction:column}.systems-board-heading{min-width:0}.systems-board-heading small{white-space:normal}.systems-board-actions{justify-content:stretch}.add-column-control{min-width:100%}.add-column-control input{min-width:0;flex:1}.systems-board-actions .primary-button{flex:1}.project-systems-table{min-width:820px}.project-system-head,.project-system-row{grid-template-columns:40px minmax(220px,1fr) 135px 72px 72px 72px 52px}.project-subitems{margin-inline:44px 7px}.project-systems-board .project-subitem-head,.project-systems-board .project-subitem-row{grid-template-columns:210px 135px 115px 125px 74px 74px 118px repeat(var(--project-custom-columns),125px) 104px}.project-systems-board .project-subitem-row{min-height:50px}}
+
+/* The column template is supplied inline so an empty custom-column list remains valid. */
+.project-systems-board .project-subitem-head,
+.project-systems-board .project-subitem-row{
+  min-height:46px;
+  font-size:13px;
+  line-height:1.35;
+}
+.project-systems-board .project-subitem-head{height:42px;font-size:12px}
+.project-systems-board .project-subitem-head>span,
+.project-systems-board .project-subitem-row>span,
+.project-systems-board .project-subitem-row>input,
+.project-systems-board .project-subitem-row>select{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.project-systems-board .project-subitem-row>span,
+.project-systems-board .project-subitem-row>input,
+.project-systems-board .project-subitem-row>select{align-self:center}
+.project-systems-board .project-subitem-row input,
+.project-systems-board .project-subitem-row select{font-size:13px}
+.project-systems-board .subitem-name{height:46px;padding-inline:10px}
+.project-systems-board .project-subitem-actions{overflow:visible;white-space:normal}
+.project-systems-board .project-subitems{max-width:calc(100% - 70px)}
+@media(max-width:760px){
+  .project-systems-board .project-subitems{max-width:calc(100% - 52px)}
+  .project-systems-board .project-subitem-head,
+  .project-systems-board .project-subitem-row{font-size:12px}
+}

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.4
+
+- Fixed the root cause of collapsed and overlapping SUBITEM columns when no custom columns exist.
+- Rebuilt subitem grid sizing in both the project board and the master systems catalog.
+- Improved table typography, row density, truncation and responsive horizontal scrolling.
+
 ## 0.32.3
 
 - Rebuilt the project systems board around a stable commercial table hierarchy: system groups, compact component rows, aligned rollups and clear category identity.
