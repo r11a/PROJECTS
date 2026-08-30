@@ -59,8 +59,12 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
   -webkit-line-clamp:2;
 }
 @media(max-width:760px){
+  .project-systems-board{width:100%;max-width:100%;min-width:0;contain:inline-size;overflow:hidden}
+  .project-systems-board-title,.systems-board-actions,.add-column-control{width:100%;max-width:100%;min-width:0}
+  .add-column-control{display:grid;grid-template-columns:minmax(0,1fr) auto}
+  .add-column-control input{width:100%}
   .project-systems-scroll{overflow-x:hidden}
-  .project-systems-table{min-width:0}
+  .project-systems-scroll,.project-systems-table,.project-system-item,.project-subitems{width:100%;max-width:100%;min-width:0}
   .project-system-head{display:none}
   .project-system-item{margin:9px;border:1px solid #e2e5ec;border-radius:14px;overflow:hidden}
   .project-system-row{grid-template-columns:38px minmax(0,1fr) 38px;gap:7px;min-height:0;padding:10px;border-inline-start:4px solid var(--system-color)}
@@ -100,12 +104,4 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
   .project-systems-board .status-field select{padding-inline:8px}
   .project-systems-board .project-subitem-actions{display:none}
   .mobile-subitem-menu{position:relative;grid-column:1/-1;display:block;width:100%;margin:0}
-  .mobile-subitem-menu>summary{width:100%;height:42px;display:flex;align-items:center;justify-content:center;border:1px solid #e1e4ea;border-radius:10px;background:#fff;color:#6655d3;list-style:none;cursor:pointer}
-  .mobile-subitem-menu>summary::-webkit-details-marker{display:none}
-  .mobile-subitem-menu[open]>summary{border-color:#cfc8f2;background:#f5f2ff}
-  .mobile-subitem-menu>div{margin-top:8px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:7px;border:1px solid #e3e5eb;border-radius:11px;background:#f8f9fb}
-  .mobile-subitem-menu button,.mobile-menu-action{position:relative;min-height:42px;padding:0 10px;display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid #dfe2e9;border-radius:9px;background:#fff;color:#4e5668;font:inherit;font-size:12px;font-weight:750}
-  .mobile-menu-action input[type=color]{position:absolute;inset:0;width:100%;height:100%;opacity:0}
-  .mobile-menu-action.color{box-shadow:inset 0 -4px 0 var(--selected-color)}
-  .mobile-subitem-menu .danger{color:#c34152}
 }

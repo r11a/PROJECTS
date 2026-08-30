@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.9
+
+- Removed the remaining inherited minimum widths that caused phone-side horizontal scrolling.
+- Replaced clipped inline action panels with a real portal-based contextual menu above the app shell.
+- Added viewport-aware menu placement, RTL layout, outside-click closing and dark-mode styling.
+
 ## 0.32.8
 
 - Redesigned phone system cards around a fixed 100% viewport width with no horizontal overflow.

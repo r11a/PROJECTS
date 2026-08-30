@@ -1,0 +1,10 @@
+.mobile-action-trigger{display:none}
+.mobile-action-popover{position:fixed;z-index:100000;width:min(252px,calc(100vw - 24px));max-height:min(320px,calc(100dvh - 24px));overflow-y:auto;padding:7px;border:1px solid #dddfe7;border-radius:14px;background:rgba(255,255,255,.98);box-shadow:0 18px 50px rgba(23,27,42,.22),0 2px 8px rgba(23,27,42,.1);backdrop-filter:blur(18px);animation:mobile-menu-in .14s ease-out}
+.mobile-action-popover button,.mobile-action-popover label{position:relative;width:100%;min-height:44px;padding:0 11px;display:flex;align-items:center;gap:10px;border:0;border-radius:9px;background:transparent;color:#303646;font:inherit;font-size:14px;font-weight:650;text-align:right;cursor:pointer}
+.mobile-action-popover button:hover,.mobile-action-popover label:hover{background:#f0edff;color:#5d49cc}
+.mobile-action-popover .danger{color:#c44052}.mobile-action-popover .danger:hover{background:#fff0f2;color:#b92f43}
+.mobile-action-popover input[type=color]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.mobile-action-popover .menu-color-dot{width:16px;height:16px;flex:none;border:2px solid #fff;border-radius:50%;background:var(--selected-color);box-shadow:0 0 0 1px #cfd2da}
+html[data-theme="dark"] .mobile-action-popover{border-color:#44474e;background:rgba(38,40,45,.98)}html[data-theme="dark"] .mobile-action-popover button,html[data-theme="dark"] .mobile-action-popover label{color:#f0f1f4}
+@keyframes mobile-menu-in{from{opacity:0;transform:translateY(-5px) scale(.97)}to{opacity:1;transform:none}}
+@media(max-width:760px){.mobile-action-trigger{width:100%;height:42px;display:flex;align-items:center;justify-content:center;border:1px solid #dedfea;border-radius:10px;background:#fff;color:#6653d4}}

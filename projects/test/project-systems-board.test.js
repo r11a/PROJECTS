@@ -38,7 +38,7 @@ test('system colors cascade to subitems while individual color overrides remain 
 });
 
 test('systems boards expose labelled touch-friendly mobile subitem cards',async()=>{
-  const [projectUi,projectCss,masterUi,masterCss]=await Promise.all([read('src/ProjectWorkspace.jsx'),read('src/project-systems-board.css'),read('src/MasterDataWorkspace.jsx'),read('src/master-data.css')]);
+  const [projectUi,projectCss,masterUi,masterCss,mobileMenu]=await Promise.all([read('src/ProjectWorkspace.jsx'),read('src/project-systems-board.css'),read('src/MasterDataWorkspace.jsx'),read('src/master-data.css'),read('src/MobileActionMenu.jsx')]);
   for(const label of ['מיקום','תיוג','כמות','הותקן','סטטוס'])assert.match(projectUi,new RegExp(`<small>${label}`));
   assert.match(projectCss,/\.subitem-field>small/);
   assert.match(projectCss,/grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)!important/);
@@ -46,8 +46,10 @@ test('systems boards expose labelled touch-friendly mobile subitem cards',async(
   assert.match(masterCss,/\.equipment-mobile-field>small/);
   assert.match(masterCss,/\.equipment-mobile-field\.item-name/);
   assert.match(projectUi,/mobile-subitem-menu/);
-  assert.match(projectUi,/MoreHorizontal/);
+  assert.match(mobileMenu,/createPortal/);
+  assert.match(mobileMenu,/MoreHorizontal/);
   assert.match(projectCss,/grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)!important/);
   assert.match(masterUi,/equipment-mobile-menu/);
-  assert.match(masterCss,/\.equipment-mobile-menu>summary/);
+  assert.match(masterCss,/\.equipment-mobile-menu/);
+  assert.match(masterUi,/MobileActionMenu label="פעולות מערכת"/);
 });
