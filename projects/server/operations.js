@@ -309,17 +309,19 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
 
   router.get('/projects/:id/workspace', async (request, response) => {
     const id = request.params.id;
-    const [tasks, milestones, payments, team, equipment, forms, files, updates, activity,reviews,meetings,timeEntries,priorityOrders] = await Promise.all([
+    const [tasks, milestones, payments, team, equipment, forms, files, updates, activity,reviews,meetings,timeEntries,priorityOrders,systemColumns] = await Promise.all([
       pool.query(`SELECT t.*,pr.display_name assignee_name,pr.color assignee_color,dependency.title dependency_title FROM tasks t LEFT JOIN professionals pr ON pr.id=t.assignee_professional_id LEFT JOIN tasks dependency ON dependency.id=t.dependency_task_id WHERE t.project_id=$1 ORDER BY (t.status='done'),t.due_date`, [id]),
       pool.query(`SELECT m.*,pr.display_name owner_name FROM project_milestones m LEFT JOIN professionals pr ON pr.id=m.owner_professional_id WHERE m.project_id=$1 ORDER BY (m.status='completed'),m.due_date`, [id]),
       pool.query('SELECT * FROM project_payments WHERE project_id=$1 ORDER BY due_date NULLS LAST,created_at DESC', [id]),
       pool.query(`SELECT pp.*,p.display_name,p.phone,p.email,p.color,p.icon,r.name role_name,r.role_key FROM project_professionals pp JOIN professionals p ON p.id=pp.professional_id JOIN professional_role_types r ON r.id=pp.role_type_id WHERE pp.project_id=$1 ORDER BY pp.is_primary DESC,r.sort_order,p.display_name`, [id]),
       pool.query(`SELECT pe.*,e.name,e.item_type,e.manufacturer,e.model,e.unit,e.color,e.icon,e.code,e.priority_sku,
-        COALESCE(pe.project_system_id,e.parent_id) system_id,s.name system_name,s.color system_color,s.parent_id system_type_id,st.name system_type_name
+        COALESCE(pe.project_system_id,e.parent_id) system_id,COALESCE(NULLIF(psb.title,''),s.name) system_name,
+        COALESCE(NULLIF(psb.color,''),s.color,e.color,'#6957df') system_color,COALESCE(psb.sort_order,0) system_sort_order,s.parent_id system_type_id,st.name system_type_name
         FROM project_equipment pe JOIN equipment_catalog e ON e.id=pe.catalog_item_id
         LEFT JOIN equipment_catalog s ON s.id=COALESCE(pe.project_system_id,e.parent_id)
         LEFT JOIN equipment_catalog st ON st.id=s.parent_id
-        WHERE pe.project_id=$1 ORDER BY st.name,s.name,e.name`, [id]),
+        LEFT JOIN project_system_board psb ON psb.project_id=pe.project_id AND psb.system_id=COALESCE(pe.project_system_id,e.parent_id)
+        WHERE pe.project_id=$1 ORDER BY COALESCE(psb.sort_order,0),st.name,s.name,pe.board_order,pe.id`, [id]),
       pool.query(`SELECT fr.*,ft.name template_name FROM form_records fr JOIN form_templates ft ON ft.id=fr.template_id WHERE fr.project_id=$1 ORDER BY fr.updated_at DESC`, [id]),
       pool.query(`SELECT f.*,COALESCE(u.display_name,u.username,'מערכת') uploaded_by_name FROM client_files f LEFT JOIN users u ON u.id=f.uploaded_by WHERE f.project_id=$1 AND f.deleted_at IS NULL ORDER BY f.created_at DESC`, [id]),
       pool.query('SELECT pu.*,u.display_name created_by_name,u.avatar_color FROM project_updates pu LEFT JOIN users u ON u.id=pu.created_by WHERE pu.project_id=$1 ORDER BY pu.created_at DESC', [id]),
@@ -331,9 +333,10 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
         COUNT(l.id)::int line_count,COUNT(l.id) FILTER (WHERE l.include_in_project)::int selected_count
         FROM priority_orders o LEFT JOIN priority_order_lines l ON l.priority_order_id=o.id WHERE o.project_id=$1
         GROUP BY o.id ORDER BY o.created_at DESC`,[id]),
+      pool.query('SELECT id,column_key,label,sort_order FROM project_system_columns WHERE project_id=$1 ORDER BY sort_order,id',[id]),
     ]);
     response.json({ tasks: tasks.rows, milestones: milestones.rows, payments: request.user.financeAccess === false ? [] : payments.rows, team: team.rows, equipment: equipment.rows, forms: forms.rows, files: files.rows, updates: updates.rows, activity: activity.rows,reviews:reviews.rows,meetings:meetings.rows,timeEntries:timeEntries.rows,
-      priorityOrders:priorityOrders.rows.map((row)=>({id:row.id,priorityOrderNumber:row.priority_order_number,customerName:row.customer_name,orderStatus:row.order_status,orderDate:row.order_date,lineCount:Number(row.line_count),selectedCount:Number(row.selected_count),createdAt:row.created_at,...(request.user.financeAccess===false?{}:{totalAmount:Number(row.total_amount||0)})})) });
+      systemColumns:systemColumns.rows,priorityOrders:priorityOrders.rows.map((row)=>({id:row.id,priorityOrderNumber:row.priority_order_number,customerName:row.customer_name,orderStatus:row.order_status,orderDate:row.order_date,lineCount:Number(row.line_count),selectedCount:Number(row.selected_count),createdAt:row.created_at,...(request.user.financeAccess===false?{}:{totalAmount:Number(row.total_amount||0)})})) });
   });
 
   router.post('/projects/:id/time-entries',requireRoles('admin','manager','technician'),async(request,response)=>{
@@ -414,11 +417,19 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
 
   router.patch('/projects/:id/equipment/:itemId', requireRoles('admin', 'manager', 'technician'), async (request, response) => {
     const current = await pool.query('SELECT * FROM project_equipment WHERE id=$1 AND project_id=$2', [request.params.itemId, request.params.id]); if (!current.rowCount) return response.status(404).json({ error: 'הציוד לא נמצא' }); const row=current.rows[0];
-    const result=await pool.query('UPDATE project_equipment SET quantity=$1,location=$2,status=$3,serial_number=$4,notes=$5,quantity_installed=$6,updated_at=NOW() WHERE id=$7 RETURNING *',[request.body.quantity??row.quantity,request.body.location??row.location,request.body.status??row.status,request.body.serialNumber??row.serial_number,request.body.notes??row.notes,request.body.quantityInstalled??row.quantity_installed,request.params.itemId]);
+    const result=await pool.query('UPDATE project_equipment SET quantity=$1,location=$2,status=$3,serial_number=$4,notes=$5,quantity_installed=$6,tag=$7,row_color=$8,board_order=$9,custom_values=$10,updated_at=NOW() WHERE id=$11 RETURNING *',[request.body.quantity??row.quantity,request.body.location??row.location,request.body.status??row.status,request.body.serialNumber??row.serial_number,request.body.notes??row.notes,request.body.quantityInstalled??row.quantity_installed,request.body.tag??row.tag,request.body.rowColor??row.row_color,request.body.boardOrder??row.board_order,JSON.stringify(request.body.customValues??row.custom_values??{}),request.params.itemId]);
     await audit(request,'update','project_equipment',request.params.itemId,{projectId:request.params.id}); response.json({equipment:result.rows[0]});
   });
 
   router.delete('/projects/:id/equipment/:itemId', requireRoles('admin'), async (request, response) => { await pool.query('DELETE FROM project_equipment WHERE id=$1 AND project_id=$2',[request.params.itemId,request.params.id]); await audit(request,'delete','project_equipment',request.params.itemId,{projectId:request.params.id}); response.status(204).end(); });
+
+  router.patch('/projects/:id/system-board/:systemId',requireRoles('admin','manager','technician'),async(request,response)=>{const system=await pool.query("SELECT id FROM equipment_catalog WHERE id=$1 AND item_type='system'",[request.params.systemId]);if(!system.rowCount)return response.status(404).json({error:'המערכת לא נמצאה'});const result=await pool.query(`INSERT INTO project_system_board(project_id,system_id,title,color,sort_order) VALUES($1,$2,$3,$4,$5)
+    ON CONFLICT(project_id,system_id) DO UPDATE SET title=COALESCE(NULLIF(EXCLUDED.title,''),project_system_board.title),color=COALESCE(NULLIF(EXCLUDED.color,''),project_system_board.color),sort_order=EXCLUDED.sort_order RETURNING *`,[request.params.id,request.params.systemId,request.body.title||'',request.body.color||'',Number(request.body.sortOrder)||0]);await audit(request,'update','project_system_board',`${request.params.id}:${request.params.systemId}`,{projectId:request.params.id});response.json({system:result.rows[0]})});
+  router.patch('/projects/:id/system-board-order',requireRoles('admin','manager','technician'),async(request,response)=>{const ids=(request.body.systemIds||[]).map(Number).filter(Boolean);for(let index=0;index<ids.length;index++)await pool.query(`INSERT INTO project_system_board(project_id,system_id,sort_order) VALUES($1,$2,$3) ON CONFLICT(project_id,system_id) DO UPDATE SET sort_order=EXCLUDED.sort_order`,[request.params.id,ids[index],index]);response.sendStatus(204)});
+  router.patch('/projects/:id/equipment-order',requireRoles('admin','manager','technician'),async(request,response)=>{const ids=(request.body.itemIds||[]).map(Number).filter(Boolean);for(let index=0;index<ids.length;index++)await pool.query('UPDATE project_equipment SET board_order=$1 WHERE id=$2 AND project_id=$3',[index,ids[index],request.params.id]);response.sendStatus(204)});
+  router.post('/projects/:id/system-columns',requireRoles('admin','manager'),async(request,response)=>{const label=String(request.body.label||'').trim();if(!label)return response.status(400).json({error:'יש להזין שם עמודה'});const key=`custom_${Date.now()}`;const result=await pool.query('INSERT INTO project_system_columns(project_id,column_key,label,sort_order) VALUES($1,$2,$3,(SELECT COUNT(*) FROM project_system_columns WHERE project_id=$1)) RETURNING *',[request.params.id,key,label]);response.status(201).json({column:result.rows[0]})});
+  router.patch('/projects/:id/system-columns/order',requireRoles('admin','manager'),async(request,response)=>{const ids=(request.body.columnIds||[]).map(Number).filter(Boolean);for(let index=0;index<ids.length;index++)await pool.query('UPDATE project_system_columns SET sort_order=$1 WHERE id=$2 AND project_id=$3',[index,ids[index],request.params.id]);response.sendStatus(204)});
+  router.delete('/projects/:id/system-columns/:columnId',requireRoles('admin','manager'),async(request,response)=>{await pool.query('DELETE FROM project_system_columns WHERE id=$1 AND project_id=$2',[request.params.columnId,request.params.id]);response.sendStatus(204)});
 
   router.get('/reports/overview', async (request, response) => {
     const reportQuery = async (name, sql, fallback) => {
