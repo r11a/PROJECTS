@@ -38,7 +38,7 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
   const groups = useMemo(() => {
     const map = new Map();
     for (const item of tasks) {
-      if (!item.start_date || !item.due_date) continue;
+      if (!item.start_date || !item.due_date || item.status === "done") continue;
       const project=projects.find((entry)=>String(entry.id)===String(item.project_id));
       if(category!=="all"&&(category==="smart_home"?project?.projectCategory==='other':project?.projectCategory!=='other'))continue;
       const name = `${item.project_name || "ללא פרויקט"} · ${project?.projectCategory==='other'?(project.projectCategoryCustom||'אחר'):'בית חכם'}`;
@@ -64,8 +64,10 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
       setEditor(null);
       setNotice("המשימה נשמרה בהצלחה");
       load();
+      return true;
     } catch (error) {
       setNotice(error.message);
+      return false;
     }
   };
   const saveSchedule = async (item, dates) => {

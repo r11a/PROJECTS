@@ -268,7 +268,11 @@ export function ProjectWorkspace({
       let professionalId;
       try{const result=await api('/professionals',{method:'POST',body:JSON.stringify(body)});professionalId=result.professional.id;}
       catch(error){if(error.status!==409||error.body?.code!=='SIMILAR_PROFESSIONAL')throw error;const match=error.body.matches?.[0];if(match&&confirm(`${error.message}.\nאישור — איחוד ושיוך האדם הקיים.\nביטול — אפשרות ליצירת כרטיס נפרד.`)){await api(`/professionals/${match.id}/merge`,{method:'POST',body:JSON.stringify(body)});professionalId=match.id;}else if(confirm('ליצור בכל זאת כרטיס נפרד?')){const result=await api('/professionals',{method:'POST',body:JSON.stringify({...body,allowDuplicate:true})});professionalId=result.professional.id;}else return;}
-      await api(`/projects/${project.id}/team`,{method:'POST',body:JSON.stringify({professionalId,roleTypeId})});setModal('');setNotice('איש המקצוע נשמר במאגר ושויך לפרויקט');load();
+      await api(`/projects/${project.id}/team`,{method:'POST',body:JSON.stringify({professionalId,roleTypeId})});
+      const [rolesResult,equipmentResult]=await Promise.all([api('/professional-roles'),api('/equipment-catalog')]);
+      setReference({roles:rolesResult.roles,equipment:equipmentResult.items});
+      window.dispatchEvent(new Event('projects:reference-changed'));
+      setModal('');setNotice('איש המקצוע נשמר במאגר עם התפקיד שנבחר ושויך לפרויקט');load();
     }catch(error){setNotice(error.message)}
   };
   const addEquipment = async (e) => {
@@ -405,7 +409,8 @@ export function ProjectWorkspace({
     ["gantt", "גאנט"],
     ["reviews", "ביקורות ופגישות"],
     ["hours", "שעות עבודה"],
-    ["systems", "מערכות וצוות"],
+    ["systems", "מערכות ורכיבים"],
+    ["team", "צוות הפרויקט"],
     ["priority", "הזמנות Priority"],
     ["forms", "קבצים ומסמכים"],
     ["finance", "כספים"],
@@ -743,10 +748,10 @@ export function ProjectWorkspace({
           projectId={project.id}
         />
       )}
-      {tab === "systems" && (
+      {["systems","team"].includes(tab) && (
         <div className="project-two-columns">
-          <section className="panel project-resource project-bom"><div className="panel-head"><div><h3>BOM לפי מערכות</h3><span>הוזמן, הותקן, תוכנת ויתרה לביצוע</span></div></div>{[...new Map(bom.map((item)=>[item.project_system_id||'none',{name:item.system_name||'ללא מערכת',color:item.system_color||'#6957df'}])).entries()].map(([systemId,system])=><div className="bom-system" key={systemId}><header style={{borderInlineStartColor:system.color}}><strong>{system.name}</strong></header><div className="bom-head"><span>פריט</span><span>הוזמן</span><span>הותקן</span><span>תוכנת</span><span>יתרה</span></div>{bom.filter((item)=>String(item.project_system_id||'none')===String(systemId)).map((item)=><article key={item.id}><div><strong>{item.name}</strong><small>{item.priority_sku||item.code}</small></div><b>{item.ordered}</b><input type="number" min="0" max={item.ordered} step="1" value={item.installed} disabled={!canEdit} onChange={(event)=>setBom((current)=>current.map((row)=>row.id===item.id?{...row,installed:Number(event.target.value),remaining:Math.max(0,row.ordered-Number(event.target.value))}:row))} onBlur={(event)=>updateBom(item,{installed:Number(event.target.value),programmed:item.programmed})}/><input type="number" min="0" max={item.installed} step="1" value={item.programmed} disabled={!canEdit} onChange={(event)=>setBom((current)=>current.map((row)=>row.id===item.id?{...row,programmed:Number(event.target.value)}:row))} onBlur={(event)=>updateBom(item,{installed:item.installed,programmed:Number(event.target.value)})}/><strong className={item.remaining?'remaining':''}>{item.remaining}</strong></article>)}</div>)}</section>
-          <section className="panel project-resource">
+          {tab === "systems" && <section className="panel project-resource project-bom"><div className="panel-head"><div><h3>BOM לפי מערכות</h3><span>הוזמן, הותקן, תוכנת ויתרה לביצוע</span></div></div>{[...new Map(bom.map((item)=>[item.project_system_id||'none',{name:item.system_name||'ללא מערכת',color:item.system_color||'#6957df'}])).entries()].map(([systemId,system])=><div className="bom-system" key={systemId}><header style={{borderInlineStartColor:system.color}}><strong>{system.name}</strong></header><div className="bom-head"><span>פריט</span><span>הוזמן</span><span>הותקן</span><span>תוכנת</span><span>יתרה</span></div>{bom.filter((item)=>String(item.project_system_id||'none')===String(systemId)).map((item)=><article key={item.id}><div><strong>{item.name}</strong><small>{item.priority_sku||item.code}</small></div><b>{item.ordered}</b><input type="number" min="0" max={item.ordered} step="1" value={item.installed} disabled={!canEdit} onChange={(event)=>setBom((current)=>current.map((row)=>row.id===item.id?{...row,installed:Number(event.target.value),remaining:Math.max(0,row.ordered-Number(event.target.value))}:row))} onBlur={(event)=>updateBom(item,{installed:Number(event.target.value),programmed:item.programmed})}/><input type="number" min="0" max={item.installed} step="1" value={item.programmed} disabled={!canEdit} onChange={(event)=>setBom((current)=>current.map((row)=>row.id===item.id?{...row,programmed:Number(event.target.value)}:row))} onBlur={(event)=>updateBom(item,{installed:item.installed,programmed:Number(event.target.value)})}/><strong className={item.remaining?'remaining':''}>{item.remaining}</strong></article>)}</div>)}</section>}
+          {tab === "team" && <section className="panel project-resource project-team-only">
             <div className="panel-head">
               <div>
                 <h3>צוות הפרויקט</h3>
@@ -792,8 +797,8 @@ export function ProjectWorkspace({
             ) : (
               <div className="inline-empty">טרם שויך צוות לפרויקט.</div>
             )}
-          </section>
-          <section className="panel project-resource">
+          </section>}
+          {tab === "systems" && <section className="panel project-resource">
             <div className="panel-head">
               <div>
                 <h3>מערכות, ציוד ורכיבים</h3>
@@ -830,7 +835,7 @@ export function ProjectWorkspace({
             ) : (
               <div className="inline-empty">טרם שויך ציוד לפרויקט.</div>
             )}
-          </section>
+          </section>}
         </div>
       )}
       {tab === "priority" && (
@@ -1639,7 +1644,7 @@ function GoogleAddressField({ project, api, updateProject, setNotice }) {
 function CommercialProjectGantt({ tasks, milestones, project, projects, professionals, api, setNotice, onDataChanged, users=[] }) {
   const [editor, setEditor] = useState(null);
   const items = [
-    ...tasks.filter((item) => item.start_date && item.due_date).map((item) => ({ ...item, kind: "task", start: item.start_date, end: item.due_date })),
+    ...tasks.filter((item) => item.status !== "done" && item.start_date && item.due_date).map((item) => ({ ...item, kind: "task", start: item.start_date, end: item.due_date })),
     ...milestones.filter((item) => item.due_date).map((item) => ({ ...item, kind: "milestone", start: item.due_date, end: item.due_date })),
   ].sort((a, b) => new Date(a.start) - new Date(b.start));
   const save = async (value) => {
@@ -1649,8 +1654,10 @@ function CommercialProjectGantt({ tasks, milestones, project, projects, professi
       setEditor(null);
       setNotice("המשימה נשמרה בהצלחה");
       if (typeof onDataChanged === "function") onDataChanged();
+      return true;
     } catch (error) {
       setNotice(error.message);
+      return false;
     }
   };
   const saveSchedule = async (item, dates) => {

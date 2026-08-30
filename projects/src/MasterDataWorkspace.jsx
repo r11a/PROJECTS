@@ -4,6 +4,8 @@ import {
   ArrowDownAZ,
   BriefcaseBusiness,
   Building2,
+  ChevronDown,
+  ChevronLeft,
   Check,
   Copy,
   Download,
@@ -14,6 +16,7 @@ import {
   Cable,
   Camera,
   FolderKanban,
+  GripVertical,
   Network,
   Palette,
   Ruler,
@@ -269,6 +272,9 @@ export function MasterDataWorkspace({
           )}
           apiRoot={apiRoot}
           user={user}
+          api={api}
+          refresh={refresh}
+          setNotice={setNotice}
           onEdit={(item) =>
             setEquipmentForm({ ...item, parentId: item.parentId || "" })
           }
@@ -691,12 +697,19 @@ function ProfessionalEditor({ value, roles, users, customFields=[], onClose, onS
   );
 }
 
-function EquipmentTree({ items, apiRoot, user, onEdit, onDelete, onDuplicate }) {
-  const names = {
-    system_type: "סוג מערכת",
-    system: "מערכת",
-    component: "רכיב",
-  };
+function EquipmentTree({ items, apiRoot, api, refresh, setNotice, user, onEdit, onDelete, onDuplicate }) {
+  const catalogColor = (item, inheritedColor) => { const effectiveColor = inheritedColor || item.color || "#6957df"; return effectiveColor; };
+  const [expanded,setExpanded]=useState(()=>new Set());
+  const [columns,setColumns]=useState(()=>{try{return JSON.parse(localStorage.getItem('projects:equipment-board-columns')||'[]')}catch{return []}});
+  const [newColumn,setNewColumn]=useState('');
+  const editable=["admin","manager"].includes(user.role);
+  const metadata=(item)=>item.metadata||{};
+  const update=async(item,patch)=>{try{await api(`/equipment-catalog/${item.id}`,{method:'PATCH',body:JSON.stringify(patch)});await refresh()}catch(error){setNotice(error.message)}};
+  const updateMeta=(item,patch)=>update(item,{metadata:{...metadata(item),...patch}});
+  const addSubitem=async(system)=>{try{await api('/equipment-catalog',{method:'POST',body:JSON.stringify({itemType:'component',parentId:system.id,name:'פריט חדש',unit:'יחידה',color:system.color||'#6957df',active:true,metadata:{location:'',tag:'',quantity:1,installedQuantity:0,status:'waiting',customFields:{}}})});setExpanded(current=>new Set(current).add(system.id));setNotice('שורה חדשה נוספה');await refresh()}catch(error){setNotice(error.message)}};
+  const persistColumns=(next)=>{setColumns(next);localStorage.setItem('projects:equipment-board-columns',JSON.stringify(next))};
+  const addColumn=()=>{const label=newColumn.trim();if(!label)return;persistColumns([...columns,{key:`custom_${Date.now()}`,label}]);setNewColumn('')};
+  const moveColumn=(from,to)=>{if(from===to)return;const next=[...columns];const [column]=next.splice(from,1);next.splice(to,0,column);persistColumns(next)};
   if (!items.length)
     return (
       <EmptyState
@@ -706,43 +719,18 @@ function EquipmentTree({ items, apiRoot, user, onEdit, onDelete, onDuplicate }) 
       />
     );
   const categories=items.filter(item=>item.itemType==="system_type");
-  const renderItem=(item, inheritedColor = null) => {
-    const effectiveColor = inheritedColor || item.color || "#6957df";
-    return <div className={`equipment-row level-${item.itemType}`} key={item.id} style={{ "--equipment-color": effectiveColor }}>
-          <span>
-            {item.iconImageStoredName ? (
-              <img
-                className="catalog-icon-image"
-                src={`${apiRoot}/equipment-catalog/${item.id}/icon`}
-                alt=""
-              />
-            ) : (
-              <i style={{ background: effectiveColor }} />
-            )}{" "}
-            <strong>{item.name}</strong>
-          </span>
-          <span>{names[item.itemType]}</span>
-          <span>
-            {[item.manufacturer, item.model].filter(Boolean).join(" · ") || "—"}
-          </span>
-          <span>{item.prioritySku||item.code || "—"}</span>
-          <span>{item.active ? "פעיל" : "מושבת"}</span>
-          <span>
-            {["admin", "manager"].includes(user.role) && (
-              <button onClick={() => onEdit(item)}>
-                <Pencil size={15} />
-              </button>
-            )}
-            {user.role === "admin" && (
-              <button onClick={() => onDelete(item)}>
-                <Trash2 size={15} />
-              </button>
-            )}
-            {["admin","manager"].includes(user.role)&&item.itemType!=="system_type"&&<label className="catalog-duplicate-select" title="שכפול לקטגוריה נוספת"><Copy size={15}/><select aria-label="שכפול לקטגוריה נוספת" value="" onChange={(event)=>{const target=Number(event.target.value);if(target)onDuplicate(item,target)}}><option value="">שכפל ל...</option>{items.filter(candidate=>candidate.itemType===(item.itemType==="system"?"system_type":"system")&&String(candidate.id)!==String(item.parentId)).map(candidate=><option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>}
-          </span>
-        </div>;
-  };
-  return <div className="equipment-category-grid">{categories.map(category=>{const categoryColor=category.color||"#6957df";const systems=items.filter(item=>item.itemType==="system"&&String(item.parentId)===String(category.id));return <details className="equipment-category panel" key={category.id} style={{"--category-color":categoryColor}}><summary><span className="catalog-category-icon" style={{background:categoryColor}}>{category.iconImageStoredName?<img src={`${apiRoot}/equipment-catalog/${category.id}/icon`} alt=""/>:<Boxes size={20}/>}</span><div><strong>{category.name}</strong><small>{systems.length} מערכות · פתיחה לעריכה וניהול</small></div><button type="button" onClick={event=>{event.preventDefault();onEdit(category)}}><Pencil size={15}/></button></summary><div className="equipment-head"><span>מערכת / מוצר / התקן / רכיב</span><span>סוג</span><span>יצרן / דגם</span><span>מק״ט Priority</span><span>סטטוס</span><span/></div>{systems.map(system=><div className="catalog-system-group" key={system.id} style={{"--equipment-color":categoryColor}}>{renderItem(system, categoryColor)}{items.filter(item=>item.itemType==="component"&&String(item.parentId)===String(system.id)).map(component=>renderItem(component, categoryColor))}</div>)}</details>})}</div>;
+  return <div className="equipment-board">
+    <header className="equipment-board-intro"><div><Boxes size={21}/><span><strong>לוח מערכות ורכיבים</strong><small>עריכה ישירה, תתי־פריטים וסיכומי ביצוע בזמן אמת</small></span></div>{editable&&<div className="equipment-add-column"><input value={newColumn} onChange={event=>setNewColumn(event.target.value)} placeholder="שם עמודה חדשה" onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();addColumn()}}}/><button onClick={addColumn}><Plus size={15}/>עמודה</button></div>}</header>
+    {categories.map(category=>{const color=catalogColor(category);const systems=items.filter(item=>item.itemType==='system'&&String(item.parentId)===String(category.id));return <section className="equipment-board-group panel" key={category.id} style={{'--category-color':color}}><header><span className="catalog-category-icon" style={{background:color}}>{category.iconImageStoredName?<img src={`${apiRoot}/equipment-catalog/${category.id}/icon`} alt=""/>:<Boxes size={20}/>}</span><div><strong>{category.name}</strong><small>{systems.length} פריטי אב</small></div>{editable&&<button onClick={()=>onEdit(category)} title="עריכת קטגוריה"><Pencil size={15}/></button>}</header>
+      <div className="equipment-board-scroll"><div className="equipment-board-table" style={{'--custom-columns':columns.length}}><div className="equipment-board-head"><span>מערכת / פריט אב</span><span>סוג מערכת</span><span>סה״כ כמות</span><span>הותקן</span><span>יתרה</span><span>פעולות</span></div>
+      {systems.map(system=>{const children=items.filter(item=>item.itemType==='component'&&String(item.parentId)===String(system.id));const total=children.reduce((sum,item)=>sum+Number(metadata(item).quantity||0),0);const installed=children.reduce((sum,item)=>sum+Number(metadata(item).installedQuantity||0),0);const open=expanded.has(system.id);return <div className={`equipment-parent ${open?'open':''}`} key={system.id}>
+        <div className="equipment-parent-row"><button className="equipment-expand" onClick={()=>setExpanded(current=>{const next=new Set(current);next.has(system.id)?next.delete(system.id):next.add(system.id);return next})}>{open?<ChevronDown size={17}/>:<ChevronLeft size={17}/>}</button><input disabled={!editable} defaultValue={system.name} onBlur={event=>event.target.value!==system.name&&update(system,{name:event.target.value})}/><select disabled={!editable} value={system.parentId||''} onChange={event=>update(system,{parentId:Number(event.target.value)})}>{categories.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select><b>{total}</b><b className="installed">{installed}</b><b className="remaining">{Math.max(0,total-installed)}</b><span className="equipment-row-actions">{editable&&<><button onClick={()=>addSubitem(system)} title="הוספת תת־פריט"><Plus size={15}/></button><button onClick={()=>onEdit(system)} title="עריכה מלאה"><Pencil size={15}/></button></>}{user.role==='admin'&&<button onClick={()=>onDelete(system)}><Trash2 size={15}/></button>}</span></div>
+        {open&&<div className="equipment-subtable"><div className="equipment-subhead"><span>פריט</span><span>מיקום</span><span>תיוג</span><span>מק״ט</span><span>כמות</span><span>סטטוס</span>{columns.map((column,index)=><span draggable key={column.key} onDragStart={event=>event.dataTransfer.setData('text/plain',String(index))} onDragOver={event=>event.preventDefault()} onDrop={event=>moveColumn(Number(event.dataTransfer.getData('text/plain')),index)}><GripVertical size={13}/>{column.label}{editable&&<button onClick={()=>persistColumns(columns.filter(item=>item.key!==column.key))}>×</button>}</span>)}<span/></div>
+          {children.map(child=>{const data=metadata(child);const custom=data.customFields||{};return <div className="equipment-subrow" key={child.id}><input disabled={!editable} defaultValue={child.name} onBlur={event=>event.target.value!==child.name&&update(child,{name:event.target.value})}/><input disabled={!editable} defaultValue={data.location||''} onBlur={event=>updateMeta(child,{location:event.target.value})}/><input disabled={!editable} defaultValue={data.tag||''} onBlur={event=>updateMeta(child,{tag:event.target.value})}/><input disabled={!editable} defaultValue={child.prioritySku||child.code||''} onBlur={event=>update(child,{prioritySku:event.target.value})}/><input disabled={!editable} type="number" min="0" step="1" defaultValue={Number(data.quantity||0)} onBlur={event=>updateMeta(child,{quantity:Number(event.target.value)})}/><select disabled={!editable} value={data.status||'waiting'} onChange={event=>updateMeta(child,{status:event.target.value,installedQuantity:event.target.value==='installed'?Number(data.quantity||0):Number(data.installedQuantity||0)})} className={`equipment-status ${data.status||'waiting'}`}><option value="waiting">ממתין</option><option value="in_progress">בביצוע</option><option value="installed">הותקן</option></select>{columns.map(column=><input key={column.key} disabled={!editable} defaultValue={custom[column.key]||''} onBlur={event=>updateMeta(child,{customFields:{...custom,[column.key]:event.target.value}})}/>)}<span className="equipment-row-actions">{editable&&<button onClick={()=>onDuplicate(child,system.id)} title="שכפול"><Copy size={14}/></button>}{user.role==='admin'&&<button onClick={()=>onDelete(child)} title="מחיקה"><Trash2 size={14}/></button>}</span></div>})}
+          {editable&&<button className="equipment-add-row" onClick={()=>addSubitem(system)}><Plus size={15}/>הוסף שורה</button>}</div>}
+      </div>})}</div></div>
+    </section>})}
+  </div>;
 }
 
 function EquipmentEditor({ value, items, onClose, onSave }) {

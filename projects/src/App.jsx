@@ -583,6 +583,11 @@ function App() {
     return () => window.removeEventListener("projects:data-changed", refresh);
   }, [user?.id]);
   useEffect(() => {
+    const refreshReference = () => loadReferenceData().catch(() => {});
+    window.addEventListener("projects:reference-changed", refreshReference);
+    return () => window.removeEventListener("projects:reference-changed", refreshReference);
+  }, [user?.id]);
+  useEffect(() => {
     if (!user) return undefined;
     const refreshWhenActive = () => {
       if (document.visibilityState === "visible" && navigator.onLine) loadProjects().catch(() => {});

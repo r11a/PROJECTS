@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { TimeSelect } from "./TimeSelect";
 import {
   Activity,
   AlertTriangle,
@@ -4491,8 +4492,7 @@ function BackupSettings({ api, apiRoot, backups, policy, reload, setNotice }) {
           </label>
           <label>
             שעה
-            <input
-              type="time"
+            <TimeSelect
               value={form.hour}
               onChange={(event) =>
                 setForm({ ...form, hour: event.target.value })

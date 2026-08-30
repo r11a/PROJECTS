@@ -41,6 +41,7 @@ import { SmartTextArea } from "./features/smart-input/SmartTextArea";
 import { AppModal } from "./AppModal";
 import { createMilestoneDraft, createTaskDraft } from "./features/tasks/taskDefaults";
 import { localDateValue } from "./dateTime";
+import { TimeSelect } from "./TimeSelect";
 
 const money = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -157,19 +158,17 @@ export function TaskEditor({
   onSave,
   fixedProjectId = "",
 }) {
-  const timeChoices = Array.from({ length: 48 }, (_, index) => {
-    const hour = String(Math.floor(index / 2)).padStart(2, "0");
-    const minute = index % 2 ? "30" : "00";
-    return `${hour}:${minute}`;
-  });
   const isMilestone = kind === "milestone";
   const [form, setForm] = useState(
     initial ||
       (isMilestone ? createMilestoneDraft() : createTaskDraft()),
   );
-  const submit = (event) => {
+  const [submitting, setSubmitting] = useState(false);
+  const submit = async (event) => {
     event.preventDefault();
-    onSave({
+    if (submitting) return;
+    setSubmitting(true);
+    const saved = await onSave({
       ...form,
       projectId: form.projectId || initial?.project_id,
       startDate: form.startDate || initial?.start_date,
@@ -179,6 +178,8 @@ export function TaskEditor({
       ownerProfessionalId: form.ownerProfessionalId || null,
       parentTaskId: form.parentTaskId || null,
     });
+    if (saved !== false) onClose();
+    else setSubmitting(false);
   };
   return (
     <Modal
@@ -245,10 +246,7 @@ export function TaskEditor({
         </label>
         {!isMilestone && <label className="task-schedule-field task-start-time">
           שעת התחלה
-          <select disabled={Boolean(form.allDay ?? form.all_day)} value={String(form.startTime || form.start_time || "").slice(0,5)} onChange={(e)=>setForm({...form,startTime:e.target.value})}>
-            <option value="">ללא שעה</option>
-            {timeChoices.map((time)=><option key={time} value={time}>{time}</option>)}
-          </select>
+          <TimeSelect allowEmpty min="08:00" max="18:00" disabled={Boolean(form.allDay ?? form.all_day)} value={form.startTime || form.start_time || ""} onChange={(e)=>setForm({...form,startTime:e.target.value})}/>
         </label>}
         {!isMilestone && <label className="task-schedule-field">
           שעות משוערות
@@ -391,8 +389,8 @@ export function TaskEditor({
           <button type="button" className="ops-secondary" onClick={onClose}>
             ביטול
           </button>
-          <button className="ops-primary">
-            {initial?.id ? "שמירת שינויים" : "יצירה"}
+          <button className="ops-primary" disabled={submitting}>
+            {submitting ? "שומר..." : initial?.id ? "שמירת שינויים" : "יצירת משימה"}
           </button>
         </div>
       </form>
@@ -527,7 +525,12 @@ export function TasksWorkspace({
       return sortBy === "due_desc" ? right - left : left - right;
     });
   }, [tasks, priority, assigneeId, managerId, projectFilter, dueFilter, sortBy]);
-  const items = tab === "tasks" ? visibleTasks : milestones;
+  const completedProjectTasks = projectId
+    ? visibleTasks.filter((item) => item.status === "done").sort((a, b) => new Date(b.due_date || b.updated_at || 0) - new Date(a.due_date || a.updated_at || 0))
+    : [];
+  const items = tab === "tasks"
+    ? (projectId ? visibleTasks.filter((item) => item.status !== "done") : visibleTasks)
+    : milestones;
   const activeFilterCount = [status, priority, assigneeId, managerId, projectFilter, dueFilter].filter(Boolean).length;
   const clearFilters = () => {
     setStatus("");
@@ -574,8 +577,10 @@ export function TasksWorkspace({
         : "✓ השינויים נשמרו בהצלחה");
       load({ silent: true });
       if (typeof onDataChanged === "function") onDataChanged();
+      return true;
     } catch (e) {
       setNotice(e.message);
+      return false;
     }
   };
   const remove = async (item) => {
@@ -802,6 +807,16 @@ export function TasksWorkspace({
           ))
         )}
       </div>
+      {projectId && tab === "tasks" && completedProjectTasks.length > 0 && (
+        <section className="completed-tasks-panel panel">
+          <header><div><CheckCircle2 size={19}/><span><strong>משימות שהושלמו</strong><small>היסטוריית ביצוע לפי תאריך המשימה</small></span></div><em>{completedProjectTasks.length}</em></header>
+          <div className="completed-task-table">
+            {completedProjectTasks.map((item) => <button type="button" key={item.id} onClick={() => canEdit && setEditor({kind:"task",item})}>
+              <CheckCircle2 size={16}/><strong>{item.title}</strong><span>{item.assignees?.map((person)=>person.displayName).join(", ") || item.assignee_name || "ללא מבצע"}</span><time>{dateText(item.due_date)}</time>
+            </button>)}
+          </div>
+        </section>
+      )}
       {editor && (
         <TaskEditor
           api={api}

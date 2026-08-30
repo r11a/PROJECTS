@@ -51,8 +51,9 @@ test('catalog colors inherit from the system type and commercial layouts stay is
   const styles=await read('src/commercial-ui-extra.css');
 
   assert.match(catalog,/const effectiveColor = inheritedColor \|\| item\.color \|\| "#6957df"/);
-  assert.match(catalog,/renderItem\(system, categoryColor\)/);
-  assert.match(catalog,/renderItem\(component, categoryColor\)/);
+  assert.match(catalog,/const color=catalogColor\(category\)/);
+  assert.match(catalog,/equipment-parent-row/);
+  assert.match(catalog,/equipment-subrow/);
   assert.match(app,/className="admin-user-row"/);
   assert.match(styles,/\.admin-user-row\s*\{/);
   assert.doesNotMatch(styles,/^\.user-card\s*\{/m);
