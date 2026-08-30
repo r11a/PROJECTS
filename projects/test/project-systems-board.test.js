@@ -10,3 +10,9 @@ test('project systems board persists groups rows custom columns colors and execu
   for(const token of ['project_system_board','project_system_columns','board_order','quantity_installed','custom_values'])assert.match(server,new RegExp(token));
   for(const token of ['project_system_board','project_system_columns','board_order','tag TEXT','row_color','custom_values JSONB'])assert.match(migration,new RegExp(token));
 });
+
+test('project systems board foreign keys use the existing text project identity',async()=>{
+  const migration=await readFile(new URL('../migrations/043_project_system_board.sql',import.meta.url),'utf8');
+  assert.match(migration,/project_id TEXT NOT NULL REFERENCES projects\(id\)/);
+  assert.doesNotMatch(migration,/project_id BIGINT NOT NULL REFERENCES projects\(id\)/);
+});

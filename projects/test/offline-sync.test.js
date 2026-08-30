@@ -22,3 +22,12 @@ test('PWA caches its shell and exposes explicit offline synchronization UI',asyn
   assert.match(worker,/addEventListener\('fetch'/);assert.match(worker,/request\.mode==='navigate'/);assert.match(worker,/projects-outbox/);
   assert.match(main,/serviceWorker\.register/);assert.match(app,/סנכרון עבודה Offline/);assert.match(workspace,/נשמר במכשיר/);
 });
+
+test('offline API cache is schema-versioned without deleting pending work',async()=>{
+  const source=await read('../src/offlineQueue.js');
+  assert.match(source,/DB_VERSION=2/);
+  assert.match(source,/API_CACHE_SCHEMA="v2"/);
+  assert.match(source,/transaction\.objectStore\(CACHE_STORE\)\.clear\(\)/);
+  assert.match(source,/key:`\$\{API_CACHE_SCHEMA\}:\$\{path\}`/);
+  assert.doesNotMatch(source,/objectStore\(QUEUE_STORE\)\.clear/);
+});

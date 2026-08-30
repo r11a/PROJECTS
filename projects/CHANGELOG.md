@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.2
+
+- Fixed the systems-board migration to use PROJECTS' existing text project identifiers, removing the startup failure that kept the API behind Cloudflare in a persistent 502 state.
+- Added regression coverage for project foreign-key type compatibility so future systems migrations cannot block add-on startup.
+- Versioned and refreshed only the offline API cache after schema upgrades, preventing stale cached response shapes from crashing a newly updated workspace while preserving every queued offline change.
+
 ## 0.32.1
 
 - Hardened live-update delivery so closing or navigating away from a systems screen cannot terminate the API through a stale SSE connection.

@@ -1,12 +1,13 @@
 const DB_NAME="projects-offline-v1";
-const DB_VERSION=1;
+const DB_VERSION=2;
+const API_CACHE_SCHEMA="v2";
 const QUEUE_STORE="outbox";
 const CACHE_STORE="apiCache";
 const META_STORE="meta";
 
 const openDb=()=>new Promise((resolve,reject)=>{
   const request=indexedDB.open(DB_NAME,DB_VERSION);
-  request.onupgradeneeded=()=>{const db=request.result;if(!db.objectStoreNames.contains(QUEUE_STORE))db.createObjectStore(QUEUE_STORE,{keyPath:"id"});if(!db.objectStoreNames.contains(CACHE_STORE))db.createObjectStore(CACHE_STORE,{keyPath:"key"});if(!db.objectStoreNames.contains(META_STORE))db.createObjectStore(META_STORE,{keyPath:"key"});};
+  request.onupgradeneeded=()=>{const db=request.result,transaction=request.transaction;if(!db.objectStoreNames.contains(QUEUE_STORE))db.createObjectStore(QUEUE_STORE,{keyPath:"id"});if(!db.objectStoreNames.contains(CACHE_STORE))db.createObjectStore(CACHE_STORE,{keyPath:"key"});else transaction.objectStore(CACHE_STORE).clear();if(!db.objectStoreNames.contains(META_STORE))db.createObjectStore(META_STORE,{keyPath:"key"});};
   request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
 });
 const requestValue=(request)=>new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
@@ -34,8 +35,8 @@ const restoreBody=(serialized,mappings)=>{if(serialized.type==="form"){const for
 const parseBody=async(response)=>{const text=response.status===204?"":await response.text();if(!text)return null;try{return JSON.parse(text)}catch{return {error:text.slice(0,300)}}};
 const serverId=(body)=>body?.task?.id||body?.review?.id||body?.meeting?.id||body?.entry?.id||body?.record?.id||body?.message?.id||body?.document?.id||body?.note?.id||body?.update?.id||null;
 
-export async function cacheApiResponse(path,body){if(body!==undefined&&body!==null)await put(CACHE_STORE,{key:path,body,savedAt:Date.now()}).catch(()=>{})}
-export async function cachedApiResponse(path){return (await withStore(CACHE_STORE,"readonly",store=>requestValue(store.get(path))).catch(()=>null))?.body??null}
+export async function cacheApiResponse(path,body){if(body!==undefined&&body!==null&&typeof body==="object")await put(CACHE_STORE,{key:`${API_CACHE_SCHEMA}:${path}`,body,savedAt:Date.now()}).catch(()=>{})}
+export async function cachedApiResponse(path){const cached=await withStore(CACHE_STORE,"readonly",store=>requestValue(store.get(`${API_CACHE_SCHEMA}:${path}`))).catch(()=>null);return cached&&cached.body&&typeof cached.body==="object"?cached.body:null}
 export async function queueOfflineMutation(path,options={}){
   const method=String(options.method||"GET").toUpperCase();if(!allowedMutation(path,method))return null;
   const id=crypto.randomUUID(),temporaryId=`offline:${id}`;
