@@ -314,7 +314,12 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
       pool.query(`SELECT m.*,pr.display_name owner_name FROM project_milestones m LEFT JOIN professionals pr ON pr.id=m.owner_professional_id WHERE m.project_id=$1 ORDER BY (m.status='completed'),m.due_date`, [id]),
       pool.query('SELECT * FROM project_payments WHERE project_id=$1 ORDER BY due_date NULLS LAST,created_at DESC', [id]),
       pool.query(`SELECT pp.*,p.display_name,p.phone,p.email,p.color,p.icon,r.name role_name,r.role_key FROM project_professionals pp JOIN professionals p ON p.id=pp.professional_id JOIN professional_role_types r ON r.id=pp.role_type_id WHERE pp.project_id=$1 ORDER BY pp.is_primary DESC,r.sort_order,p.display_name`, [id]),
-      pool.query(`SELECT pe.*,e.name,e.item_type,e.manufacturer,e.model,e.unit,e.color,e.icon FROM project_equipment pe JOIN equipment_catalog e ON e.id=pe.catalog_item_id WHERE pe.project_id=$1 ORDER BY e.item_type,e.name`, [id]),
+      pool.query(`SELECT pe.*,e.name,e.item_type,e.manufacturer,e.model,e.unit,e.color,e.icon,e.code,e.priority_sku,
+        COALESCE(pe.project_system_id,e.parent_id) system_id,s.name system_name,s.color system_color,s.parent_id system_type_id,st.name system_type_name
+        FROM project_equipment pe JOIN equipment_catalog e ON e.id=pe.catalog_item_id
+        LEFT JOIN equipment_catalog s ON s.id=COALESCE(pe.project_system_id,e.parent_id)
+        LEFT JOIN equipment_catalog st ON st.id=s.parent_id
+        WHERE pe.project_id=$1 ORDER BY st.name,s.name,e.name`, [id]),
       pool.query(`SELECT fr.*,ft.name template_name FROM form_records fr JOIN form_templates ft ON ft.id=fr.template_id WHERE fr.project_id=$1 ORDER BY fr.updated_at DESC`, [id]),
       pool.query(`SELECT f.*,COALESCE(u.display_name,u.username,'מערכת') uploaded_by_name FROM client_files f LEFT JOIN users u ON u.id=f.uploaded_by WHERE f.project_id=$1 AND f.deleted_at IS NULL ORDER BY f.created_at DESC`, [id]),
       pool.query('SELECT pu.*,u.display_name created_by_name,u.avatar_color FROM project_updates pu LEFT JOIN users u ON u.id=pu.created_by WHERE pu.project_id=$1 ORDER BY pu.created_at DESC', [id]),
@@ -409,7 +414,7 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
 
   router.patch('/projects/:id/equipment/:itemId', requireRoles('admin', 'manager', 'technician'), async (request, response) => {
     const current = await pool.query('SELECT * FROM project_equipment WHERE id=$1 AND project_id=$2', [request.params.itemId, request.params.id]); if (!current.rowCount) return response.status(404).json({ error: 'הציוד לא נמצא' }); const row=current.rows[0];
-    const result=await pool.query('UPDATE project_equipment SET quantity=$1,location=$2,status=$3,serial_number=$4,notes=$5,updated_at=NOW() WHERE id=$6 RETURNING *',[request.body.quantity??row.quantity,request.body.location??row.location,request.body.status??row.status,request.body.serialNumber??row.serial_number,request.body.notes??row.notes,request.params.itemId]);
+    const result=await pool.query('UPDATE project_equipment SET quantity=$1,location=$2,status=$3,serial_number=$4,notes=$5,quantity_installed=$6,updated_at=NOW() WHERE id=$7 RETURNING *',[request.body.quantity??row.quantity,request.body.location??row.location,request.body.status??row.status,request.body.serialNumber??row.serial_number,request.body.notes??row.notes,request.body.quantityInstalled??row.quantity_installed,request.params.itemId]);
     await audit(request,'update','project_equipment',request.params.itemId,{projectId:request.params.id}); response.json({equipment:result.rows[0]});
   });
 

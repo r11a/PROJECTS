@@ -7,13 +7,17 @@ import {
   Camera,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
   Command,
+  Copy,
   Download,
   Eye,
   Film,
   FileText,
   FileSpreadsheet,
   Flag,
+  GripVertical,
   Home,
   House,
   Mail,
@@ -798,44 +802,7 @@ export function ProjectWorkspace({
               <div className="inline-empty">טרם שויך צוות לפרויקט.</div>
             )}
           </section>}
-          {tab === "systems" && <section className="panel project-resource">
-            <div className="panel-head">
-              <div>
-                <h3>מערכות, ציוד ורכיבים</h3>
-                <span>כמות, מיקום, סטטוס ומספר סידורי</span>
-              </div>
-              {canEdit && (
-                <button onClick={() => setModal("equipment")}>
-                  <Plus size={15} />
-                  הוספת ציוד
-                </button>
-              )}
-            </div>
-            {workspace.equipment.length ? (
-              workspace.equipment.map((x) => (
-                <div className="resource-row resource-row-preview" key={x.id} role="button" tabIndex={0} onClick={()=>setPreviewFile(x)} onKeyDown={(event)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setPreviewFile(x)}}}>
-                  <span className="resource-avatar equipment">
-                    <Command size={17} />
-                  </span>
-                  <div>
-                    <strong>{x.name}</strong>
-                    <small>
-                      {x.manufacturer} {x.model} · {x.quantity} {x.unit} ·{" "}
-                      {x.location || "ללא מיקום"}
-                    </small>
-                  </div>
-                  <span className="resource-status">{x.status}</span>
-                  {user.role === "admin" && (
-                    <button onClick={() => deleteEquipment(x)}>
-                      <Trash2 size={15} />
-                    </button>
-                  )}
-                </div>
-              ))
-            ) : (
-              <div className="inline-empty">טרם שויך ציוד לפרויקט.</div>
-            )}
-          </section>}
+          {tab === "systems" && <ProjectSystemsBoard items={workspace.equipment} canEdit={canEdit} canManage={canManage} user={user} api={api} projectId={project.id} onAdd={()=>setModal('equipment')} onReload={load} onDelete={deleteEquipment} setNotice={setNotice}/>}
         </div>
       )}
       {tab === "priority" && (
@@ -1639,6 +1606,19 @@ function GoogleAddressField({ project, api, updateProject, setNotice }) {
       <small>Photon · OpenStreetMap — ללא מפתח API וללא עלות שימוש.</small>
     </section>
   );
+}
+
+function ProjectSystemsBoard({items,canEdit,canManage,user,api,projectId,onAdd,onReload,onDelete,setNotice}){
+  const [expanded,setExpanded]=useState(()=>new Set());
+  const [columns,setColumns]=useState(()=>{try{return JSON.parse(localStorage.getItem('projects:project-system-columns')||'[]')}catch{return []}});
+  const [newColumn,setNewColumn]=useState('');
+  const groups=useMemo(()=>{const map=new Map();for(const item of items){const key=String(item.system_id||'other');if(!map.has(key))map.set(key,{id:item.system_id,name:item.system_name||'ללא מערכת',type:item.system_type_name||'אחר',color:item.system_color||item.color||'#6957df',items:[]});map.get(key).items.push(item)}return [...map.values()]},[items]);
+  const save=async(item,patch)=>{try{await api(`/projects/${projectId}/equipment/${item.id}`,{method:'PATCH',body:JSON.stringify(patch)});setNotice('השורה עודכנה');await onReload()}catch(error){setNotice(error.message)}};
+  const persist=(next)=>{setColumns(next);localStorage.setItem('projects:project-system-columns',JSON.stringify(next))};
+  const addColumn=()=>{if(!newColumn.trim())return;persist([...columns,{key:`custom-${Date.now()}`,label:newColumn.trim()}]);setNewColumn('')};
+  const move=(from,to)=>{const next=[...columns];const [column]=next.splice(from,1);next.splice(to,0,column);persist(next)};
+  return <section className="project-systems-board panel"><header className="project-systems-board-title"><div><Command size={20}/><span><h3>מערכות ורכיבים</h3><small>ITEM ותתי־פריטים עם חישובי ביצוע חיים</small></span></div><div>{canManage&&<><input value={newColumn} onChange={event=>setNewColumn(event.target.value)} placeholder="עמודה חדשה"/><button onClick={addColumn}><Plus size={15}/>עמודה</button></>} {canEdit&&<button className="primary-button" onClick={onAdd}><Plus size={15}/>הוספת רכיב</button>}</div></header>
+  {!groups.length?<div className="inline-empty">טרם שויכו מערכות ורכיבים לפרויקט.</div>:<div className="project-systems-scroll"><div className="project-systems-table" style={{'--project-custom-columns':columns.length}}><div className="project-system-head"><span>ITEM</span><span>סוג מערכת</span><span>סה״כ כמות</span><span>הותקן</span><span>יתרה</span><span/></div>{groups.map(group=>{const total=group.items.reduce((sum,item)=>sum+Number(item.quantity_ordered??item.quantity??0),0);const installed=group.items.reduce((sum,item)=>sum+Number(item.quantity_installed||0),0);const open=expanded.has(group.id||group.name);return <div className="project-system-item" key={group.id||group.name} style={{'--system-color':group.color}}><div className="project-system-row"><button onClick={()=>setExpanded(current=>{const next=new Set(current),key=group.id||group.name;next.has(key)?next.delete(key):next.add(key);return next})}>{open?<ChevronDown size={17}/>:<ChevronLeft size={17}/>}</button><strong>{group.name}</strong><span>{group.type}</span><b>{total}</b><b className="installed">{installed}</b><b className="remaining">{Math.max(0,total-installed)}</b><i/></div>{open&&<div className="project-subitems"><div className="project-subitem-head"><span>פריט</span><span>מיקום</span><span>תיוג</span><span>מק״ט</span><span>כמות</span><span>סטטוס</span>{columns.map((column,index)=><span key={column.key} draggable onDragStart={event=>event.dataTransfer.setData('text/plain',String(index))} onDragOver={event=>event.preventDefault()} onDrop={event=>move(Number(event.dataTransfer.getData('text/plain')),index)}><GripVertical size={12}/>{column.label}{canManage&&<button onClick={()=>persist(columns.filter(item=>item.key!==column.key))}>×</button>}</span>)}<span/></div>{group.items.map(item=><div className="project-subitem-row" key={item.id}><strong>{item.name}</strong><input disabled={!canEdit} defaultValue={item.location||''} onBlur={event=>save(item,{location:event.target.value})}/><input disabled={!canEdit} defaultValue={item.serial_number||''} onBlur={event=>save(item,{serialNumber:event.target.value})}/><span>{item.priority_sku||item.code||'—'}</span><input disabled={!canEdit} type="number" min="0" step="1" defaultValue={Number(item.quantity_ordered??item.quantity??0)} onBlur={event=>save(item,{quantity:Number(event.target.value)})}/><select disabled={!canEdit} className={`monday-status ${item.status||'waiting'}`} value={item.status==='planned'?'waiting':item.status||'waiting'} onChange={event=>save(item,{status:event.target.value,quantityInstalled:event.target.value==='installed'?Number(item.quantity_ordered??item.quantity??0):Number(item.quantity_installed||0)})}><option value="waiting">ממתין</option><option value="in_progress">בביצוע</option><option value="installed">הותקן</option></select>{columns.map(column=><span className="custom-column-empty" key={column.key}>—</span>)}<span className="project-subitem-actions">{canEdit&&<button title="שכפול" onClick={async()=>{try{await api(`/projects/${projectId}/equipment`,{method:'POST',body:JSON.stringify({catalogItemId:item.catalog_item_id,quantity:item.quantity,location:item.location,status:item.status,serialNumber:item.serial_number,notes:item.notes})});setNotice('השורה שוכפלה');onReload()}catch(error){setNotice(error.message)}}}><Copy size={14}/></button>}{user.role==='admin'&&<button onClick={()=>onDelete(item)}><Trash2 size={14}/></button>}</span></div>)}<button className="project-add-subitem" onClick={onAdd}><Plus size={15}/>הוסף שורה</button></div>}</div>})}</div></div>}</section>
 }
 
 function CommercialProjectGantt({ tasks, milestones, project, projects, professionals, api, setNotice, onDataChanged, users=[] }) {

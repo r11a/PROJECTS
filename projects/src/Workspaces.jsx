@@ -168,7 +168,7 @@ export function TaskEditor({
     event.preventDefault();
     if (submitting) return;
     setSubmitting(true);
-    const saved = await onSave({
+    const payload = {
       ...form,
       projectId: form.projectId || initial?.project_id,
       startDate: form.startDate || initial?.start_date,
@@ -177,9 +177,9 @@ export function TaskEditor({
       assigneeProfessionalIds: (form.assigneeProfessionalIds || [form.assigneeProfessionalId]).filter(Boolean),
       ownerProfessionalId: form.ownerProfessionalId || null,
       parentTaskId: form.parentTaskId || null,
-    });
-    if (saved !== false) onClose();
-    else setSubmitting(false);
+    };
+    onClose();
+    await onSave(payload);
   };
   return (
     <Modal
