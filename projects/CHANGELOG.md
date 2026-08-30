@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.32.8
+
+- Redesigned phone system cards around a fixed 100% viewport width with no horizontal overflow.
+- Long values and custom fields expand vertically without overlapping or hiding information.
+- Moved secondary subitem actions into an accessible three-dot menu that expands inside the card.
+- Refined system summaries and touch targets for a native mobile-app feel.
+
 ## 0.32.7
 
 - Rebuilt systems management on phones as touch-friendly system and subitem cards.

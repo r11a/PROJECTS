@@ -30,24 +30,33 @@
 .equipment-mobile-field{min-width:0;margin-inline:5px;display:block}
 .equipment-mobile-field>small{display:none}
 .equipment-mobile-field>input,.equipment-mobile-field>select{width:100%;margin:0}
+.equipment-mobile-menu{display:none}
 @media(max-width:680px){
   .equipment-board-table{min-width:0}
   .equipment-board-head{display:none}
   .equipment-parent{margin:8px;border:1px solid #e2e5ec;border-radius:13px;overflow:hidden}
-  .equipment-parent-row{grid-template-columns:36px minmax(0,1fr) 74px;gap:7px;padding:9px}
-  .equipment-parent-row>select{grid-column:2/3}
+  .equipment-parent-row{grid-template-columns:36px minmax(0,1fr) 40px;gap:8px;padding:11px}
+  .equipment-parent-row>input{grid-column:2/3;font-size:14px}
+  .equipment-parent-row>select{grid-column:1/-1;padding-inline:9px;border-color:#e5e7ed;background:#fafbfc}
   .equipment-parent-row>b{min-height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f5f6f9;font-size:12px}
   .equipment-parent-row>b::before{margin-inline-end:3px;color:#8b92a2;font-size:10px}.equipment-parent-row>b:nth-of-type(1)::before{content:'סה״כ'}.equipment-parent-row>b:nth-of-type(2)::before{content:'הותקן'}.equipment-parent-row>b:nth-of-type(3)::before{content:'יתרה'}
   .equipment-parent-row>b:nth-of-type(1){grid-column:1/2}.equipment-parent-row>b:nth-of-type(2){grid-column:2/3}.equipment-parent-row>b:nth-of-type(3){grid-column:3/4}
-  .equipment-parent-row>.equipment-row-actions{grid-column:3/4;grid-row:1/3}
+  .equipment-parent-row>.equipment-row-actions{grid-column:3/4;grid-row:1/2}
   .equipment-subtable{max-width:none;margin:0 8px 12px}
   .equipment-subhead{display:none}
-  .equipment-subrow{display:grid;grid-template-columns:minmax(0,1fr) 78px 78px!important;gap:7px;margin:8px;padding:9px;border:1px solid #e3e6ed;border-radius:10px}
+  .equipment-subrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:9px;width:calc(100% - 16px);margin:8px;padding:12px;border:1px solid #e3e6ed;border-radius:12px}
   .equipment-subrow>*{width:100%;margin:0}
   .equipment-mobile-field{min-height:58px;margin:0;padding:6px 8px;display:flex;flex-direction:column;justify-content:center;border:1px solid #e5e7ed;border-radius:9px;background:#fafbfc}
   .equipment-mobile-field>small{display:block;margin-bottom:3px;color:#858d9e;font-size:10px;font-weight:750}
   .equipment-mobile-field>input,.equipment-mobile-field>select{height:32px;padding:0;border:0;background:transparent;font-size:13px}
-  .equipment-mobile-field.item-name,.equipment-mobile-field.status{grid-column:1/-1}
+  .equipment-mobile-field.item-name,.equipment-mobile-field.status,.equipment-mobile-field.sku,.equipment-mobile-field.custom{grid-column:1/-1}
   .equipment-mobile-field.item-name input{font-size:14px;font-weight:750}
-  .equipment-row-actions{grid-column:1/-1;justify-content:flex-start}
+  .equipment-subrow>.equipment-row-actions{display:none}
+  .equipment-mobile-menu{position:relative;grid-column:1/-1;display:block;width:100%}
+  .equipment-mobile-menu>summary{height:42px;display:flex;align-items:center;justify-content:center;border:1px solid #e1e4ea;border-radius:10px;background:#fff;color:#6655d3;list-style:none}
+  .equipment-mobile-menu>summary::-webkit-details-marker{display:none}
+  .equipment-mobile-menu[open]>summary{border-color:#cfc8f2;background:#f5f2ff}
+  .equipment-mobile-menu>div{margin-top:8px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:7px;border:1px solid #e3e5eb;border-radius:11px;background:#f8f9fb}
+  .equipment-mobile-menu button{min-height:42px;display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid #dfe2e9;border-radius:9px;background:#fff;color:#4e5668;font:inherit;font-size:12px;font-weight:750}
+  .equipment-mobile-menu .danger{color:#c34152}
 }
