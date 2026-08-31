@@ -45,7 +45,7 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
 .system-row-tools{display:flex;align-items:center;justify-content:center;gap:3px}
 .system-row-tools .color-control{width:29px;height:29px;margin:0;border-radius:8px}
 .group-sort-button{width:29px;height:29px;min-height:29px!important;padding:0!important;display:grid!important;place-items:center;border:1px solid #dfe2e9!important;border-radius:8px!important;background:#fff!important;color:#6a7182!important;box-shadow:none!important}
-.board-fields-head span{cursor:grab}.board-fields-head span b{font-size:12px}.board-fields-head span:hover{background:#e9e6ff;color:#5744c7}
+.board-fields-head span{cursor:grab}.board-fields-head span b{min-width:0;overflow:hidden;font-size:12px;text-overflow:ellipsis}.board-fields-head span:hover{background:#e9e6ff;color:#5744c7}.board-fields-head .column-sort{width:26px;height:26px;min-width:26px;margin-inline-start:auto;padding:0;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:#959cad;cursor:pointer}.board-fields-head .column-sort:hover,.board-fields-head .column-sort.active{background:#ded9ff;color:#5946cb}
 .systems-board-actions>select{height:40px;padding:0 10px;border:1px solid #dfe2ea;border-radius:9px;background:#fff;color:#4d5567;font-weight:700}
 .add-column-control select{height:34px;border:0;border-inline-start:1px solid #e1e3e9;background:transparent;color:#525a6c}
 .project-systems-board .project-subitems{max-width:calc(100% - 70px)}
@@ -70,18 +70,23 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
   -webkit-line-clamp:2;
 }
 @media(max-width:760px){
+  .project-systems-board.modern-project-systems-board .project-systems-table{width:100%;max-width:100%;min-width:0}
+  .project-systems-board.modern-project-systems-board .project-system-row{grid-template-columns:38px minmax(0,1fr) 38px}
+  .project-systems-board.modern-project-systems-board .project-subitems{width:auto;max-width:none;min-width:0;margin-inline:8px;overflow:hidden}
+  .project-systems-board.modern-project-systems-board .project-subitem-row{width:calc(100% - 16px);min-width:0}
   .project-systems-board{width:100%;max-width:100%;min-width:0;contain:inline-size;overflow:hidden}
   .project-systems-board-title,.systems-board-actions,.add-column-control{width:100%;max-width:100%;min-width:0}
   .add-column-control{display:grid;grid-template-columns:minmax(0,1fr) 82px auto}
   .add-column-control input{width:100%}
   .project-systems-scroll{overflow-x:hidden}
-  .project-systems-scroll,.project-systems-table,.project-system-item,.project-subitems{width:100%;max-width:100%;min-width:0}
+  .project-systems-scroll,.project-systems-table{width:100%;max-width:100%;min-width:0}
+  .project-system-item,.project-subitems{width:auto;max-width:none;min-width:0}
   .project-system-head{display:none}
   .board-fields-head{display:none!important}
   .project-system-item{margin:9px;border:1px solid #e2e5ec;border-radius:14px;overflow:hidden}
-  .project-system-row{grid-template-columns:38px minmax(0,1fr) 38px;gap:7px;min-height:0;padding:10px;border-inline-start:4px solid var(--system-color)}
+  .project-system-row{position:relative;grid-template-columns:38px minmax(0,1fr) 38px;gap:7px;width:100%;max-width:100%;min-height:0;padding:10px;border-inline-start:4px solid var(--system-color);overflow:hidden}
   .project-system-row .system-title-cell{grid-column:2/3;min-width:0;padding:0}
-  .project-system-row .system-category{grid-column:1/-1;padding:5px 7px;border-radius:8px;background:color-mix(in srgb,var(--system-color) 7%,white)}
+  .project-system-row .system-category{grid-column:1/-1;min-width:0;padding:7px 9px;border-radius:8px;background:color-mix(in srgb,var(--system-color) 7%,white);white-space:normal;overflow-wrap:anywhere}
   .project-system-row>b{display:flex;align-items:center;justify-content:center;min-height:34px;border-radius:8px;background:#f5f6f9;font-size:12px}
   .project-system-row>b::before{margin-inline-end:4px;color:#8b92a2;font-size:10px;font-weight:650}
   .project-system-row>b:nth-of-type(1)::before{content:'סה״כ'}
@@ -90,7 +95,7 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
   .project-system-row>b:nth-of-type(1){grid-column:1/2}.project-system-row>b:nth-of-type(2){grid-column:2/3}.project-system-row>b:nth-of-type(3){grid-column:3/4}
   .project-system-row>.system-row-tools{grid-column:3/4;grid-row:1/2;display:grid;grid-template-columns:1fr;gap:3px}
   .project-system-row>.system-row-tools .color-control,.project-system-row>.system-row-tools .group-sort-button{width:34px;height:28px;min-height:28px!important}
-  .project-subitems{max-width:none;margin:0 8px 12px}
+  .project-subitems{max-width:none;margin:0 8px 12px;overflow:hidden}
   .project-systems-board .project-subitem-head{display:none}
   .project-systems-board .project-subitem-row{
     display:grid;
@@ -106,7 +111,7 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
   }
   .project-systems-board .project-subitem-row>*{width:100%;max-width:100%;min-width:0;margin:0;grid-column:1/-1}
   .project-systems-board .project-subitem-row:not(.is-expanded)>.field-slot:not(:has(.subitem-name)){display:none}
-  .project-systems-board .project-subitem-row:not(.is-expanded){grid-template-columns:minmax(0,1fr) 44px!important;padding-block:9px}
+  .project-systems-board .project-subitem-row:not(.is-expanded){grid-template-columns:minmax(0,1fr) 44px!important;padding-block:9px;overflow:hidden}
   .project-systems-board .project-subitem-row:not(.is-expanded)>.field-slot:has(.subitem-name){grid-column:1/2}
   .project-systems-board .project-subitem-row:not(.is-expanded)>.mobile-subitem-menu{grid-column:2/3;grid-row:1}
   .project-systems-board .subitem-name{grid-column:1/-1;min-height:auto;padding:2px 0 9px;border-bottom:1px solid #eceef3}
@@ -129,7 +134,7 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
   .systems-board-actions{display:grid;grid-template-columns:1fr 1fr}
   .systems-board-actions>.add-column-control{grid-column:1/-1}
   .systems-board-actions>.primary-button{min-width:0;width:100%}
-  .project-system-item{margin:7px}
+  .project-system-item{margin:7px;width:auto}
   .project-subitems{margin-inline:5px}
   .project-systems-board .project-subitem-row{width:calc(100% - 10px);margin:5px;padding:10px}
 }

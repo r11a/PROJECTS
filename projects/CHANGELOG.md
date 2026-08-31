@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.33.2
+
+- Added icon-only ascending/descending sorting to every subitem column, independently for each system.
+- Moved column headings inside each expanded system so headings and subitems always share the same grid.
+- Fixed category color propagation and immediate inherited-color feedback for all subitems.
+- Replaced the unexplained open BOM block with a collapsed, plain-language equipment-progress summary.
+- Rebuilt phone system cards to stay inside the viewport with vertical-only navigation and no clipped metrics.
+
 ## 0.33.1
 
 - Moved A–Z/Z–A sorting to a compact icon on each individual system.
