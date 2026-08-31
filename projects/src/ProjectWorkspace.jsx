@@ -49,6 +49,7 @@ import { MeetingSummaryForm } from "./features/meetings/MeetingSummaryForm";
 import { VoiceNotes, VoiceNotesToggle } from "./features/voice-notes/VoiceNotes";
 import { SmartTextArea } from "./features/smart-input/SmartTextArea";
 import { MobileActionMenu } from "./MobileActionMenu";
+import { ProjectSystemsBoard } from "./ProjectSystemsBoard";
 import { classificationLabel, priorityMoney } from "./features/priority-import/priorityImport";
 import "./project-systems-board.css";
 
@@ -171,6 +172,7 @@ export function ProjectWorkspace({
     timeEntries: [],
     priorityOrders: [],
     systemColumns: [],
+    systemFieldSettings: [],
   });
   const [bom,setBom]=useState([]);
   const [mentionUsers,setMentionUsers]=useState([]);
@@ -806,7 +808,7 @@ export function ProjectWorkspace({
               <div className="inline-empty">טרם שויך צוות לפרויקט.</div>
             )}
           </section>}
-          {tab === "systems" && <ProjectSystemsBoard items={workspace.equipment} columns={workspace.systemColumns||[]} canEdit={canEdit} canManage={canManage} user={user} api={api} projectId={project.id} onAdd={()=>setModal('equipment')} onReload={load} onDelete={deleteEquipment} setNotice={setNotice}/>}
+          {tab === "systems" && <ProjectSystemsBoard items={workspace.equipment} columns={workspace.systemColumns||[]} fieldSettings={workspace.systemFieldSettings||[]} canEdit={canEdit} canManage={canManage} user={user} api={api} projectId={project.id} onAdd={()=>setModal('equipment')} onReload={load} onDelete={deleteEquipment} setNotice={setNotice}/>}
         </div>
       )}
       {tab === "priority" && (
@@ -1612,7 +1614,7 @@ function GoogleAddressField({ project, api, updateProject, setNotice }) {
   );
 }
 
-function ProjectSystemsBoard({items,columns,canEdit,canManage,user,api,projectId,onAdd,onReload,onDelete,setNotice}) {
+function LegacyProjectSystemsBoard({items,columns,canEdit,canManage,user,api,projectId,onAdd,onReload,onDelete,setNotice}) {
   const [expanded,setExpanded]=useState(()=>new Set());
   const [newColumn,setNewColumn]=useState('');
   const [draggedRow,setDraggedRow]=useState(null);

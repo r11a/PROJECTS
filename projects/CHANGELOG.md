@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.33.0
+
+- Rebuilt project systems as a zero-horizontal-scroll phone-first board with collapsed subitems.
+- Added full built-in/custom field ordering and label control plus text, number and status custom columns.
+- Added ascending/descending sorting, quantity-aware duplication and drag between systems.
+- Synchronized status and installed quantity in both directions and added project-level SKU overrides.
+- Stabilized inherited and per-subitem colors with clear reset behavior.
+
 ## 0.32.9
 
 - Removed the remaining inherited minimum widths that caused phone-side horizontal scrolling.

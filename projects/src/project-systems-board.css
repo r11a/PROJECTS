@@ -37,6 +37,10 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
 .project-systems-board .subitem-field>small,.project-systems-board .sku-cell>small{display:none}
 .project-systems-board .subitem-field>input,.project-systems-board .subitem-field>select{width:100%;margin:0}
 .mobile-subitem-menu{display:none}
+.project-subitem-row>.field-slot{display:contents}
+.board-fields-head span{cursor:grab}.board-fields-head span b{font-size:12px}.board-fields-head span:hover{background:#e9e6ff;color:#5744c7}
+.systems-board-actions>select{height:40px;padding:0 10px;border:1px solid #dfe2ea;border-radius:9px;background:#fff;color:#4d5567;font-weight:700}
+.add-column-control select{height:34px;border:0;border-inline-start:1px solid #e1e3e9;background:transparent;color:#525a6c}
 .project-systems-board .project-subitems{max-width:calc(100% - 70px)}
 @media(max-width:760px){
   .project-systems-board .project-subitems{max-width:calc(100% - 52px)}
@@ -61,11 +65,12 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
 @media(max-width:760px){
   .project-systems-board{width:100%;max-width:100%;min-width:0;contain:inline-size;overflow:hidden}
   .project-systems-board-title,.systems-board-actions,.add-column-control{width:100%;max-width:100%;min-width:0}
-  .add-column-control{display:grid;grid-template-columns:minmax(0,1fr) auto}
+  .add-column-control{display:grid;grid-template-columns:minmax(0,1fr) 82px auto}
   .add-column-control input{width:100%}
   .project-systems-scroll{overflow-x:hidden}
   .project-systems-scroll,.project-systems-table,.project-system-item,.project-subitems{width:100%;max-width:100%;min-width:0}
   .project-system-head{display:none}
+  .board-fields-head{display:none!important}
   .project-system-item{margin:9px;border:1px solid #e2e5ec;border-radius:14px;overflow:hidden}
   .project-system-row{grid-template-columns:38px minmax(0,1fr) 38px;gap:7px;min-height:0;padding:10px;border-inline-start:4px solid var(--system-color)}
   .project-system-row .system-title-cell{grid-column:2/3;min-width:0;padding:0}
@@ -92,7 +97,14 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
     border-radius:10px;
   }
   .project-systems-board .project-subitem-row>*{width:100%;margin:0}
+  .project-systems-board .project-subitem-row:not(.is-expanded)>.field-slot:not(:has(.subitem-name)){display:none}
+  .project-systems-board .project-subitem-row:not(.is-expanded){grid-template-columns:minmax(0,1fr) 44px!important;padding-block:9px}
+  .project-systems-board .project-subitem-row:not(.is-expanded)>.field-slot:has(.subitem-name){grid-column:1/2}
+  .project-systems-board .project-subitem-row:not(.is-expanded)>.mobile-subitem-menu{grid-column:2/3;grid-row:1}
   .project-systems-board .subitem-name{grid-column:1/-1;min-height:auto;padding:2px 0 9px;border-bottom:1px solid #eceef3}
+  .project-systems-board .project-subitem-row:not(.is-expanded) .subitem-name{padding:0;border:0}
+  .project-systems-board .subitem-name button{min-width:0;padding:0;display:flex;flex:1;flex-direction:column;align-items:flex-start;border:0;background:transparent;color:inherit;text-align:right}
+  .project-systems-board .subitem-name button small{margin-top:3px;color:#7968da;font-size:10px}
   .project-systems-board .subitem-name strong{-webkit-line-clamp:3;font-size:14px}
   .project-systems-board .subitem-field,.project-systems-board .sku-cell{min-height:58px;padding:6px 8px;display:flex;flex-direction:column;justify-content:center;border:1px solid #e5e7ed;border-radius:9px;background:#fafbfc}
   .project-systems-board .subitem-field>small,.project-systems-board .sku-cell>small{display:block;margin-bottom:3px;color:#858d9e;font-size:10px;font-weight:750}
@@ -104,4 +116,13 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
   .project-systems-board .status-field select{padding-inline:8px}
   .project-systems-board .project-subitem-actions{display:none}
   .mobile-subitem-menu{position:relative;grid-column:1/-1;display:block;width:100%;margin:0}
+}
+@media(max-width:420px){
+  .project-systems-board-title{padding:12px}
+  .systems-board-actions{display:grid;grid-template-columns:1fr 1fr}
+  .systems-board-actions>.add-column-control{grid-column:1/-1}
+  .systems-board-actions>.primary-button{min-width:0;width:100%}
+  .project-system-item{margin:7px}
+  .project-subitems{margin-inline:5px}
+  .project-systems-board .project-subitem-row{width:calc(100% - 10px);margin:5px;padding:10px}
 }

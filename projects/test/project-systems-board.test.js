@@ -53,3 +53,10 @@ test('systems boards expose labelled touch-friendly mobile subitem cards',async(
   assert.match(masterCss,/\.equipment-mobile-menu/);
   assert.match(masterUi,/MobileActionMenu label="פעולות מערכת"/);
 });
+
+test('advanced project systems board supports field control sorting duplication and cross-system moves',async()=>{
+  const [ui,server,migration]=await Promise.all([read('src/ProjectSystemsBoard.jsx'),read('server/operations.js'),read('migrations/044_project_system_field_controls.sql')]);
+  for(const token of ['fieldSettings','newColumnType','sortMode','expandedRows','projectSystemId','כמה עותקים ליצור?','system-fields','columnType'])assert.match(ui,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  for(const token of ['quantityInstalled','status===\'installed\'','projectSystemId','/duplicate','column_type','project_system_field_settings'])assert.match(server,new RegExp(token));
+  for(const token of ['column_type','sku_override','project_system_field_settings'])assert.match(migration,new RegExp(token));
+});
