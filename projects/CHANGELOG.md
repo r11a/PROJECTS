@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.33.6
+
+- Fixed the root cause of light dialogs in dark mode by applying the active theme to `body`, where React portals are mounted.
+- Added a complete granite contract for every portaled modal, wizard, task editor, alert center, form builder, form fill screen and Gantt dialog.
+- Darkened dialog headers, bodies, footers, fields, performer lists, action controls and snooze selectors with consistent contrast.
+- Fixed selected table/view controls that could still fall back to a white active state.
+- Added regression coverage for body-level theme propagation and portal component families.
+
 ## 0.33.5
 
 - Completed an exhaustive literal-light audit across every authored stylesheet and eliminated all unhandled white application surfaces in dark mode.

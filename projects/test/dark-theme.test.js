@@ -9,6 +9,8 @@ test('the dark theme is loaded after every feature stylesheet',async()=>{
   const darkImport=app.lastIndexOf('import "./theme-dark.css"');
   assert.ok(darkImport>0);
   assert.equal(app.slice(darkImport).match(/import\s+["'][^"']+\.css["']/g)?.length,1);
+  assert.match(app,/document\.body\.classList\.add\("theme-dark"\)/);
+  assert.match(app,/document\.body\.classList\.remove\("theme-dark"\)/);
 });
 
 test('granite mode covers atomic surfaces instead of only page backgrounds',async()=>{
@@ -46,4 +48,10 @@ test('real documents are the only deliberately white dark-mode canvases',async()
   assert.match(intentional,/pdf-report-sheet/);
   assert.match(intentional,/document-viewer-stage iframe/);
   assert.doesNotMatch(intentional,/form|table|hero|toolbar/);
+});
+
+test('portaled dialogs inherit granite mode from body',async()=>{
+  const css=await read('src/theme-dark.css');
+  assert.match(css,/body\.theme-dark>:is\(\.modal-backdrop,\.ops-modal-backdrop,\.cg-dialog-backdrop,\.alert-backdrop\)/);
+  for(const token of ['.app-modal-content','.form-builder-body','.form-fill-body','.alert-list','.performer-picker','.alert-snooze-options'])assert.match(css,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
 });

@@ -717,13 +717,19 @@ function App() {
     if (darkMode) {
       document.documentElement.dataset.projectsTheme = "dark";
       document.documentElement.style.colorScheme = "dark";
+      document.body.classList.add("theme-dark");
+      document.body.dataset.projectsTheme = "dark";
     } else {
       delete document.documentElement.dataset.projectsTheme;
       document.documentElement.style.removeProperty("color-scheme");
+      document.body.classList.remove("theme-dark");
+      delete document.body.dataset.projectsTheme;
     }
     return () => {
       delete document.documentElement.dataset.projectsTheme;
       document.documentElement.style.removeProperty("color-scheme");
+      document.body.classList.remove("theme-dark");
+      delete document.body.dataset.projectsTheme;
     };
   }, [darkMode]);
 
