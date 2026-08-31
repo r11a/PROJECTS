@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.33.5
+
+- Completed an exhaustive literal-light audit across every authored stylesheet and eliminated all unhandled white application surfaces in dark mode.
+- Rebuilt the entire forms subsystem for granite mode, including cards, builders, fill screens, records, fields, capture controls, footers and action bars.
+- Fixed the personal-work hero and completed dark coverage for productivity, automation, governance, messages, voice notes, Priority import, push settings, calendars and Gantt controls.
+- Reserved white backgrounds only for genuine PDF/document canvases and uploaded brand artwork.
+- Extended dark-theme regression coverage across the newly audited workspace families.
+
 ## 0.33.4
 
 - Completed a full dark-mode audit across project, customer, professional, systems, finance, task, report, settings and modal component families.
