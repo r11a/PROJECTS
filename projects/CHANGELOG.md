@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.33.4
+
+- Completed a full dark-mode audit across project, customer, professional, systems, finance, task, report, settings and modal component families.
+- Replaced remaining white table headers, search controls, selected views, statistic cards, board rows and action controls with a consistent granite surface hierarchy.
+- Added dark-safe semantic colors for statuses, tags, company badges, warnings and interactive menus without flattening the action hierarchy.
+- Reworked charts, legends, axes, progress bars and range sliders for clear contrast and vivid data colors on dark backgrounds.
+- Added regression coverage that keeps the dark theme last in the cascade and verifies the principal atomic UI surfaces.
+
 ## 0.33.3
 
 - Added a polished Hebrew Excel export for every project's systems, with a management summary and a complete component sheet.

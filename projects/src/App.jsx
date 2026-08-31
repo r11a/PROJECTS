@@ -199,10 +199,10 @@ import "./task-center.css";
 import "./ai-chat.css";
 import "./ai-chat-voice.css";
 import "./commercial-gantt.css";
-import "./theme-dark.css";
 import "./modal-system.css";
 import "./productivity.css";
 import "./responsive-unified.css";
+import "./theme-dark.css";
 import projectsMark from "./assets/projects-mark.svg";
 
 const money = new Intl.NumberFormat("he-IL", {
