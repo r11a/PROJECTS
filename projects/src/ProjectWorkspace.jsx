@@ -808,7 +808,7 @@ export function ProjectWorkspace({
               <div className="inline-empty">טרם שויך צוות לפרויקט.</div>
             )}
           </section>}
-          {tab === "systems" && <ProjectSystemsBoard items={workspace.equipment} columns={workspace.systemColumns||[]} fieldSettings={workspace.systemFieldSettings||[]} canEdit={canEdit} canManage={canManage} user={user} api={api} projectId={project.id} onAdd={()=>setModal('equipment')} onReload={load} onDelete={deleteEquipment} setNotice={setNotice}/>}
+          {tab === "systems" && <ProjectSystemsBoard items={workspace.equipment} columns={workspace.systemColumns||[]} fieldSettings={workspace.systemFieldSettings||[]} canEdit={canEdit} canManage={canManage} user={user} api={api} apiRoot={apiRoot} projectId={project.id} onAdd={()=>setModal('equipment')} onReload={load} onDelete={deleteEquipment} setNotice={setNotice}/>}
         </div>
       )}
       {tab === "priority" && (

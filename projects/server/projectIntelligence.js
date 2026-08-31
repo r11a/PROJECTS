@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import ExcelJS from 'exceljs';
 
 const VOICE_LIMIT_BYTES = 8 * 1024 * 1024;
 const VOICE_MIMES = new Set(['audio/webm','audio/ogg','audio/mp4','audio/mpeg','audio/wav','audio/x-m4a']);
@@ -49,6 +50,32 @@ export async function createProjectIntelligenceRouter({pool,authenticate,require
   router.get('/risk-center',async(request,response)=>{
     const projects=(await loadProjectHealth(pool,request.user.financeAccess!==false)).filter(item=>item.score<100).sort((a,b)=>a.score-b.score);
     response.json({projects});
+  });
+
+  router.get('/projects/:id/systems.xlsx',async(request,response)=>{
+    const projectResult=await pool.query('SELECT id,name,client,address,stage,manager,updated_at FROM projects WHERE id=$1',[request.params.id]);
+    if(!projectResult.rowCount)return response.status(404).json({error:'הפרויקט לא נמצא'});
+    const project=projectResult.rows[0];
+    const items=(await pool.query(`SELECT pe.*,c.name,c.code,COALESCE(NULLIF(pe.sku_override,''),c.priority_sku,c.code,'') sku,
+      COALESCE(NULLIF(psb.title,''),s.name,'ללא מערכת') system_name,COALESCE(NULLIF(psb.color,''),s.color,'#6957df') system_color
+      FROM project_equipment pe JOIN equipment_catalog c ON c.id=pe.catalog_item_id
+      LEFT JOIN equipment_catalog s ON s.id=COALESCE(pe.project_system_id,c.parent_id)
+      LEFT JOIN project_system_board psb ON psb.project_id=pe.project_id AND psb.system_id=s.id
+      WHERE pe.project_id=$1 ORDER BY COALESCE(psb.sort_order,0),system_name,pe.board_order,c.name`,[request.params.id])).rows;
+    const workbook=new ExcelJS.Workbook();workbook.creator='PROJECTS';workbook.created=new Date();
+    const purple='6957DF',navy='202536',soft='F3F1FF',line='E4E7EE',green='238263',amber='B57620';
+    const titleStyle={font:{name:'Arial',size:20,bold:true,color:{argb:'FFFFFFFF'}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:`FF${purple}`}},alignment:{horizontal:'right',vertical:'middle'}};
+    const headerStyle={font:{name:'Arial',size:11,bold:true,color:{argb:'FFFFFFFF'}},fill:{type:'pattern',pattern:'solid',fgColor:{argb:`FF${navy}`}},alignment:{horizontal:'center',vertical:'middle'},border:{bottom:{style:'thin',color:{argb:`FF${line}`}}}};
+    const summary=workbook.addWorksheet('סיכום מערכות',{views:[{rightToLeft:true,state:'frozen',ySplit:7}]});summary.columns=[{width:34},{width:18},{width:16},{width:16},{width:16},{width:18}];summary.mergeCells('A1:F2');summary.getCell('A1').value=`PROJECTS | סיכום מערכות — ${project.name}`;Object.assign(summary.getCell('A1'),titleStyle);summary.getRow(1).height=28;summary.getRow(2).height=16;
+    summary.mergeCells('A3:F3');summary.getCell('A3').value=`לקוח: ${project.client||'—'}   |   כתובת: ${project.address||'—'}   |   שלב: ${project.stage||'—'}   |   מנהל: ${project.manager||'—'}`;summary.getCell('A3').alignment={horizontal:'right'};summary.getCell('A3').font={name:'Arial',size:11,color:{argb:`FF${navy}`}};
+    summary.mergeCells('A4:F4');summary.getCell('A4').value=`הופק בתאריך ${new Intl.DateTimeFormat('he-IL',{dateStyle:'short',timeStyle:'short',timeZone:'Asia/Jerusalem'}).format(new Date())}`;summary.getCell('A4').font={name:'Arial',size:9,color:{argb:'FF7F8797'}};summary.getCell('A4').alignment={horizontal:'right'};
+    summary.addRow([]);const summaryHeader=summary.addRow(['מערכת','מספר פריטים','הוזמן','הותקן','תוכנת','יתרה להתקנה']);summaryHeader.eachCell(cell=>Object.assign(cell,headerStyle));summaryHeader.height=24;
+    const systems=new Map();for(const item of items){const key=item.system_name||'ללא מערכת';if(!systems.has(key))systems.set(key,{name:key,color:item.system_color||'#6957df',lines:0,ordered:0,installed:0,programmed:0});const row=systems.get(key);row.lines++;row.ordered+=Number(item.quantity_ordered??item.quantity??0);row.installed+=Number(item.quantity_installed||0);row.programmed+=Number(item.quantity_programmed||0)}
+    for(const system of systems.values()){const row=summary.addRow([system.name,system.lines,system.ordered,system.installed,system.programmed,Math.max(0,system.ordered-system.installed)]);row.getCell(1).font={name:'Arial',bold:true,color:{argb:`FF${String(system.color).replace('#','').padStart(6,'0').slice(-6).toUpperCase()}`}};row.eachCell(cell=>{cell.alignment={horizontal:'center',vertical:'middle'};cell.border={bottom:{style:'hair',color:{argb:`FF${line}`}}}});row.getCell(1).alignment={horizontal:'right',vertical:'middle'}}
+    const total=summary.addRow(['סה״כ',items.length,items.reduce((sum,item)=>sum+Number(item.quantity_ordered??item.quantity??0),0),items.reduce((sum,item)=>sum+Number(item.quantity_installed||0),0),items.reduce((sum,item)=>sum+Number(item.quantity_programmed||0),0),items.reduce((sum,item)=>sum+Math.max(0,Number(item.quantity_ordered??item.quantity??0)-Number(item.quantity_installed||0)),0)]);total.eachCell(cell=>{cell.font={name:'Arial',bold:true,color:{argb:`FF${navy}`}};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:`FF${soft}`}};cell.alignment={horizontal:'center'}});total.getCell(1).alignment={horizontal:'right'};
+    const details=workbook.addWorksheet('רשימת רכיבים',{views:[{rightToLeft:true,state:'frozen',ySplit:1}]});details.columns=[{header:'מערכת',key:'system',width:22},{header:'פריט',key:'name',width:40},{header:'מק״ט',key:'sku',width:18},{header:'מיקום',key:'location',width:22},{header:'תיוג',key:'tag',width:18},{header:'כמות',key:'quantity',width:12},{header:'הותקן',key:'installed',width:12},{header:'תוכנת',key:'programmed',width:12},{header:'יתרה',key:'remaining',width:12},{header:'סטטוס',key:'status',width:16},{header:'הערות',key:'notes',width:34}];details.getRow(1).eachCell(cell=>Object.assign(cell,headerStyle));details.autoFilter={from:'A1',to:'K1'};
+    const statusLabels={waiting:'ממתין',planned:'ממתין',in_progress:'בביצוע',installed:'הותקן'};for(const item of items){const quantity=Number(item.quantity_ordered??item.quantity??0),installed=Number(item.quantity_installed||0);const row=details.addRow({system:item.system_name,name:item.name,sku:item.sku,location:item.location,tag:item.tag,quantity,installed,programmed:Number(item.quantity_programmed||0),remaining:Math.max(0,quantity-installed),status:statusLabels[item.status]||item.status||'ממתין',notes:item.notes||''});row.eachCell(cell=>{cell.alignment={horizontal:'right',vertical:'top',wrapText:true};cell.border={bottom:{style:'hair',color:{argb:`FF${line}`}}}});row.getCell(7).font={color:{argb:`FF${green}`},bold:true};row.getCell(9).font={color:{argb:`FF${amber}`},bold:true}}
+    const buffer=await workbook.xlsx.writeBuffer();await audit(request,'export','project_systems',request.params.id,{projectId:request.params.id,format:'xlsx',rows:items.length});response.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');response.setHeader('Content-Disposition',`attachment; filename="PROJECTS-${String(project.id).replace(/[^a-zA-Z0-9_-]/g,'_')}-systems.xlsx"`);response.send(Buffer.from(buffer));
   });
 
   router.get('/projects/:id/bom',async(request,response)=>{

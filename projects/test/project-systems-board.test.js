@@ -60,3 +60,11 @@ test('advanced project systems board supports field control sorting duplication 
   for(const token of ['quantityInstalled','status===\'installed\'','projectSystemId','/duplicate','column_type','project_system_field_settings'])assert.match(server,new RegExp(token));
   for(const token of ['column_type','sku_override','project_system_field_settings'])assert.match(migration,new RegExp(token));
 });
+
+test('project systems export creates a styled RTL Excel workbook',async()=>{
+  const [ui,server,dark]=await Promise.all([read('src/ProjectSystemsBoard.jsx'),read('server/projectIntelligence.js'),read('src/theme-dark.css')]);
+  for(const token of ['systems.xlsx','ייצוא Excel','rowColorOverrides'])assert.match(ui,new RegExp(token));
+  for(const token of ["import ExcelJS from 'exceljs'","addWorksheet('סיכום מערכות'","addWorksheet('רשימת רכיבים'",'rightToLeft:true','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])assert.match(server,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  assert.match(dark,/Final commercial dark surface pass/);
+  assert.match(dark,/--granite-0/);
+});

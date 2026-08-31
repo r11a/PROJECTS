@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.33.3
+
+- Added a polished Hebrew Excel export for every project's systems, with a management summary and a complete component sheet.
+- Included project metadata, system totals, ordered/installed/programmed/remaining quantities, SKU, location, tag, status and notes.
+- Added RTL layout, frozen headers, filters, useful column widths and visual system styling to the generated workbook.
+- Made category and per-component color changes persist optimistically without snapping back during live reloads.
+- Rebuilt dark mode as a consistent granite design system across workspaces, forms, tables, modals, charts and feature panels, with dark-safe semantic colors and contrast.
+- Refined the dark sidebar to near-black granite with high-contrast typography, brighter icons and a clear premium-purple active state.
+
 ## 0.33.2
 
 - Added icon-only ascending/descending sorting to every subitem column, independently for each system.
