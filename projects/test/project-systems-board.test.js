@@ -41,14 +41,14 @@ test('systems boards expose labelled touch-friendly mobile subitem cards',async(
   const [projectUi,projectCss,masterUi,masterCss,mobileMenu]=await Promise.all([read('src/ProjectWorkspace.jsx'),read('src/project-systems-board.css'),read('src/MasterDataWorkspace.jsx'),read('src/master-data.css'),read('src/MobileActionMenu.jsx')]);
   for(const label of ['מיקום','תיוג','כמות','הותקן','סטטוס'])assert.match(projectUi,new RegExp(`<small>${label}`));
   assert.match(projectCss,/\.subitem-field>small/);
-  assert.match(projectCss,/grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)!important/);
+  assert.match(projectCss,/grid-template-columns:minmax\(0,1fr\)!important/);
   for(const label of ['פריט','מיקום','תיוג','מק״ט','כמות','סטטוס'])assert.match(masterUi,new RegExp(`<small>${label}`));
   assert.match(masterCss,/\.equipment-mobile-field>small/);
   assert.match(masterCss,/\.equipment-mobile-field\.item-name/);
   assert.match(projectUi,/mobile-subitem-menu/);
   assert.match(mobileMenu,/createPortal/);
   assert.match(mobileMenu,/MoreHorizontal/);
-  assert.match(projectCss,/grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)!important/);
+  assert.match(projectCss,/grid-template-columns:minmax\(0,1fr\)!important/);
   assert.match(masterUi,/equipment-mobile-menu/);
   assert.match(masterCss,/\.equipment-mobile-menu/);
   assert.match(masterUi,/MobileActionMenu label="פעולות מערכת"/);
@@ -56,7 +56,7 @@ test('systems boards expose labelled touch-friendly mobile subitem cards',async(
 
 test('advanced project systems board supports field control sorting duplication and cross-system moves',async()=>{
   const [ui,server,migration]=await Promise.all([read('src/ProjectSystemsBoard.jsx'),read('server/operations.js'),read('migrations/044_project_system_field_controls.sql')]);
-  for(const token of ['fieldSettings','newColumnType','sortMode','expandedRows','projectSystemId','כמה עותקים ליצור?','system-fields','columnType'])assert.match(ui,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  for(const token of ['fieldSettings','newColumnType','groupSorts','expandedRows','projectSystemId','כמה עותקים ליצור?','system-fields','columnType','colorOverrides'])assert.match(ui,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
   for(const token of ['quantityInstalled','status===\'installed\'','projectSystemId','/duplicate','column_type','project_system_field_settings'])assert.match(server,new RegExp(token));
   for(const token of ['column_type','sku_override','project_system_field_settings'])assert.match(migration,new RegExp(token));
 });

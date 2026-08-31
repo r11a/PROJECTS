@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.33.1
+
+- Moved A–Z/Z–A sorting to a compact icon on each individual system.
+- Restored the original compact desktop row appearance, icon scale and plain item-name treatment.
+- Changed expanded phone subitems to a strict single-column vertical layout with no horizontal overflow.
+- Added optimistic, stable category-color feedback while the persisted update reloads.
+
 ## 0.33.0
 
 - Rebuilt project systems as a zero-horizontal-scroll phone-first board with collapsed subitems.
