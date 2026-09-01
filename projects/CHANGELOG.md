@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.33.8
+
+- Corrected dark report fallback cards, chart labels and empty states.
+- Changed the active project tab to the product purple surface with white text.
+
 ## 0.33.7
 
 - Fixed project work-hours navigation so the report form opens only from the explicit add-hours action.

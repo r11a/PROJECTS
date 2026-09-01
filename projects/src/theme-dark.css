@@ -131,6 +131,14 @@ html[data-projects-theme='dark'],html[data-projects-theme='dark'] body{backgroun
 .theme-dark .calendar-week-view>section.today,.theme-dark .calendar-day-view.today{background:#302d40!important}.theme-dark .calendar-week-view>section.non-working{background:#202326!important}.theme-dark .calendar-week-view>section>header{border-color:#44484e!important}
 .theme-dark .cg-non-working-day{background:repeating-linear-gradient(135deg,#303338 0,#303338 8px,#282b2f 8px,#282b2f 16px)!important;opacity:1!important}
 
+/* Reports fallback cards are real application surfaces, not printable white sheets. */
+.theme-dark .reports-page :where(.report-finance-fallback,.report-finance-fallback article,.report-panel,.report-table){color:#eef0f3!important;background:#25282c!important;border-color:#44484e!important}
+.theme-dark .reports-page .report-finance-fallback article header strong{color:#f5f6f7!important}.theme-dark .reports-page .report-finance-fallback :where(article header span,article footer span,>p){color:#b7bcc4!important}.theme-dark .reports-page .report-finance-fallback article footer b{color:#75d2b8!important}.theme-dark .reports-page .report-finance-track{background:#5a4b2d!important}.theme-dark .reports-page :where(.chart-empty,.inline-empty){color:#aeb4bd!important;background:#222529!important;border-color:#484c52!important}.theme-dark .reports-page :where(.recharts-cartesian-grid line,.recharts-cartesian-axis line){stroke:#4a4e54!important}.theme-dark .reports-page .recharts-text{fill:#b9bec6!important}
+
+/* Project navigation: one unambiguous selected state across light and dark themes. */
+.project-workspace .detail-tabs>button.active{color:#fff!important;background:linear-gradient(135deg,#735fe2,#5d49cf)!important;border-color:#8b7af0!important;box-shadow:0 7px 18px #4f3cbd3d!important}.project-workspace .detail-tabs>button.active :where(svg,em){color:#fff!important}.project-workspace .detail-tabs>button.active em{background:#ffffff26!important}
+.theme-dark .project-workspace :where(.inline-empty,.chart-empty){color:#aeb4bd!important;background:#222529!important;border-color:#484c52!important}
+
 /* Native and custom switches retain a visible knob without creating a white card. */
 .theme-dark .main-area :where(.active-toggle,.setting-toggle,.admin-switch,.personal-notification-setting>button){background:transparent!important;border-color:transparent!important}.theme-dark .main-area :where(.active-toggle span,.setting-toggle i,.admin-switch>span,.personal-notification-setting>button i){background:#3b3f45!important;border-color:#535860!important}.theme-dark .main-area :where(.active-toggle span::after,.setting-toggle i::after,.admin-switch>span::after,.personal-notification-setting>button i::after){background:#dfe3e8!important;box-shadow:0 2px 7px #0007!important}
 
