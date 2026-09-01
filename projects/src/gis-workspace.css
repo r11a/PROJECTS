@@ -3,11 +3,18 @@
 @media(max-width:760px){.gis-workspace-page{gap:10px}.gis-hero{min-height:0;padding:14px}.gis-hero h2{font-size:19px}.gis-hero p{font-size:11px}.gis-hero>strong{display:none}.gis-shell{height:auto;min-height:0;display:flex;flex-direction:column;border-radius:14px;overflow:visible}.gis-project-panel{padding:10px;border:0;border-bottom:1px solid #e3e6ed}.gis-project-list{max-height:132px;display:flex;overflow-x:auto;overflow-y:hidden}.gis-project-list>button{min-width:230px}.gis-map-stage{height:68dvh;min-height:520px;border-radius:0 0 14px 14px}.gis-selected-card{right:10px;bottom:10px;width:calc(100% - 20px);padding:12px}.gis-selected-card footer{display:grid;grid-template-columns:1fr 1fr}.gis-selected-card footer :is(button,a){min-width:0}.gis-selected-card footer button:first-child{grid-column:1/-1}.gis-map-tools{top:72px;right:10px}.leaflet-control-layers{font-size:12px}}
 
 .gis-project-list{flex:1;overscroll-behavior:contain;scrollbar-gutter:stable}
+.gis-project-panel{height:100%;min-height:0;overflow:hidden}
+.gis-project-list{height:0;flex:1 1 0;max-height:100%;overflow-x:hidden;overflow-y:scroll;touch-action:pan-y;pointer-events:auto}
+.gis-project-list::-webkit-scrollbar{width:8px}
+.gis-project-list::-webkit-scrollbar-track{background:transparent}
+.gis-project-list::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:999px;background:#b7aecf;background-clip:padding-box}
+.theme-dark .gis-project-list::-webkit-scrollbar-thumb{background:#665c7c;background-clip:padding-box}
 @media(max-width:760px){
   .gis-workspace-page,.gis-shell,.gis-project-panel,.gis-project-list{width:100%;max-width:100%;min-width:0}
   .gis-workspace-page{overflow-x:hidden}
   .gis-shell{inline-size:100%;max-inline-size:100%;overflow:hidden;contain:inline-size}
-  .gis-project-list{max-height:190px;display:grid;overflow-x:hidden;overflow-y:auto;touch-action:pan-y}
+  .gis-project-panel{height:auto;overflow:hidden}
+  .gis-project-list{height:auto;flex:none;max-height:190px;display:grid;overflow-x:hidden;overflow-y:auto;touch-action:pan-y}
   .gis-project-list>button{width:100%;min-width:0;max-width:100%}
   .gis-map-stage{inline-size:100%;max-inline-size:100%;overflow:hidden;contain:inline-size}
   .gis-map-stage>.leaflet-container{inline-size:100%!important;max-inline-size:100%;overflow:hidden}
