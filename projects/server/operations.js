@@ -214,9 +214,10 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     response.json({ task: result.rows[0] });
   });
 
-  router.delete('/operations/tasks/:id', requireRoles('admin'), async (request, response) => {
+  router.delete('/operations/tasks/:id', requireRoles('admin','manager','technician'), async (request, response) => {
     const current=await pool.query('SELECT * FROM tasks WHERE id=$1',[request.params.id]);
     if(!current.rowCount)return response.status(404).json({error:'המשימה לא נמצאה'});
+    if (!(await mayEditProject(pool, request, current.rows[0].project_id))) return response.status(403).json({error:'אין הרשאה למחוק משימה בפרויקט זה'});
     await moveToRecycleBin(pool,request,'task',current.rows[0],current.rows[0].title,current.rows[0].project_id);
     const result = await pool.query('DELETE FROM tasks WHERE id=$1 RETURNING project_id,title', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'המשימה לא נמצאה' });
@@ -361,6 +362,13 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const result=await pool.query(`INSERT INTO project_site_reviews(project_id,review_date,performed_by,supervision_type,summary,follow_up,plan_update_required,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,[request.params.id,request.body.reviewDate,request.body.performedBy||null,request.body.supervisionType||'',summary,request.body.followUp||'',Boolean(request.body.planUpdateRequired),request.user.id]);
     if(request.body.voiceContextId)await pool.query(`UPDATE voice_notes SET entity_type='site_review',entity_id=$1,project_id=$2 WHERE entity_type='site_review_draft' AND entity_id=$3 AND recorded_by=$4`,[String(result.rows[0].id),request.params.id,String(request.body.voiceContextId),request.user.id]);
     await syncSourceHours(pool,{projectId:request.params.id,sourceType:'site_review',sourceId:result.rows[0].id,professionalId:request.body.performedBy,userId:request.user.id,activityType:'supervision',workDate:request.body.reviewDate,hours,notes:request.body.supervisionType||'ביקורת אתר'});
+    if(request.body.planUpdateRequired){
+      const owner=await pool.query("SELECT id FROM professionals WHERE linked_user_id=$1 AND active=TRUE ORDER BY (affiliation='company') DESC,id LIMIT 1",[request.user.id]);
+      const ownerId=owner.rows[0]?.id||null;
+      const task=await pool.query(`INSERT INTO tasks(project_id,title,description,status,priority,assignee_professional_id,owner_professional_id,start_date,due_date,task_type,created_by)
+        VALUES($1,'עדכון תכנית לאחר פגישה','נוצר אוטומטית בעקבות ביקורת שבה סומן שנדרש עדכון תכנית','open','high',$2,$2,CURRENT_DATE,CURRENT_DATE+7,'planning',$3) RETURNING id`,[request.params.id,ownerId,request.user.id]);
+      if(ownerId)await replaceTaskAssignees(pool,task.rows[0].id,[ownerId],request.user.id);
+    }
     await audit(request,'create','site_review',String(result.rows[0].id),{projectId:request.params.id});response.status(201).json({review:result.rows[0]});
   });
   router.patch('/projects/:id/site-reviews/:reviewId',requireRoles('admin','manager','technician'),async(request,response)=>{

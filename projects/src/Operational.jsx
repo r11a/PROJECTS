@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Archive,
   ArrowLeft,
+  ArrowRight,
   BriefcaseBusiness,
   BellRing,
   Building2,
@@ -307,7 +308,7 @@ export function AlertCenter({ alerts, api, onSnoozed, onClose, setNotice, onOpen
               <div>
                 <strong>{alert.title}</strong>
                 <small>
-                  {alert.clientName || "ללא לקוח"} · יעד{" "}
+                  {alert.projectName || alert.clientName || "ללא פרויקט"} · יעד{" "}
                   {formatDate(alert.dueDate)}
                 </small>
               </div>
@@ -605,7 +606,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
             <CalendarDays size={15} />
             תכנון וביצוע
           </span>
-          <h2>לוח שנה תפעולי</h2>
+          <h2>יומן עבודה</h2>
           <p>כל ההיסטוריה, המשימות, הביקורות ואבני הדרך מתעדכנות אוטומטית.</p>
         </div>
         {canCreate && (
@@ -630,7 +631,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
               title={`${navigationUnit} קודם`}
               aria-label={`${navigationUnit} קודם`}
             >
-              <ChevronLeft size={18} />
+              <ArrowRight size={18} />
             </button>
             <button onClick={() => setCursor(new Date())}>היום</button>
             <button

@@ -213,9 +213,9 @@ export function createProductivityRouter({ pool, authenticate, requireRoles, aud
       ORDER BY source.event_at DESC LIMIT 30`,[request.user.id]);
     const attention=await pool.query(`SELECT p.id,p.name,p.flag,p.health FROM projects p LEFT JOIN professionals manager ON manager.id=p.manager_professional_id WHERE p.archived_at IS NULL AND p.completed_at IS NULL AND manager.linked_user_id=$1 AND (btrim(COALESCE(p.flag,''))<>'' OR p.health<70) ORDER BY p.health,p.updated_at DESC LIMIT 20`,[request.user.id]);
     const today=new Date().toISOString().slice(0,10);
-    const sections={ overdue:[],today:[],upcoming:[],waiting:[] };
-    for(const task of tasks.rows){const due=String(task.due_date).slice(0,10);if(task.dependency_task_id)sections.waiting.push(task);else if(due<today)sections.overdue.push(task);else if(due===today)sections.today.push(task);else sections.upcoming.push(task);}
-    response.json({ sections, messages:messages.rows, followUps:followUps.rows, attention:attention.rows, stats:{ total:tasks.rowCount,overdue:sections.overdue.length,today:sections.today.length,waiting:sections.waiting.length,critical:tasks.rows.filter((task)=>task.critical).length } });
+    const sections={ overdue:[],today:[],upcoming:[] };
+    for(const task of tasks.rows){const due=String(task.due_date).slice(0,10);if(due<today)sections.overdue.push(task);else if(due===today)sections.today.push(task);else sections.upcoming.push(task);}
+    response.json({ sections, messages:messages.rows, followUps:followUps.rows, attention:attention.rows, stats:{ total:tasks.rowCount,overdue:sections.overdue.length,today:sections.today.length,critical:tasks.rows.filter((task)=>task.critical).length } });
   });
 
   router.get('/saved-views',async(request,response)=>{const workspace=String(request.query.workspace||'tasks');const result=await pool.query('SELECT * FROM saved_views WHERE user_id=$1 AND workspace=$2 ORDER BY sort_order,created_at',[request.user.id,workspace]);response.json({views:result.rows});});

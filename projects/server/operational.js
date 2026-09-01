@@ -551,6 +551,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
         LEFT JOIN professionals task_professional ON task_professional.id=calendar_task.assignee_professional_id
         LEFT JOIN users task_user ON task_user.id=task_professional.linked_user_id
         WHERE h.event_at >= $1::timestamptz AND h.event_at < $2::timestamptz AND ($3='' OR h.project_id=$3)
+          AND (h.source_type<>'task' OR calendar_task.id IS NOT NULL)
           AND ($4::text='' OR h.user_id=NULLIF($4::text,'')::bigint OR task_user.id=NULLIF($4::text,'')::bigint OR EXISTS(SELECT 1 FROM task_assignees ta JOIN professionals tap ON tap.id=ta.professional_id WHERE ta.task_id=calendar_task.id AND tap.linked_user_id=NULLIF($4::text,'')::bigint))
         ORDER BY h.event_at`, [from, to, projectId, assigneeId,request.user.id]),
       pool.query('SELECT id,name FROM projects ORDER BY name'),

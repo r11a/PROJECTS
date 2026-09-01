@@ -37,7 +37,7 @@
 .equipment-row.level-component { background: color-mix(in srgb, var(--equipment-color, #6957df) 5%, #fff); }
 .catalog-system-group { border-top-color: color-mix(in srgb, var(--equipment-color, #6957df) 24%, #eceef3); }
 
-.project-navigation-link { border: 0; background: transparent; padding: 0; cursor: pointer; font: inherit; text-align: inherit; }
+.project-navigation-link { min-height:36px;border:1px solid var(--line,#dfe2e9);border-radius:9px;background:var(--surface,#fff);padding:5px 9px;cursor:pointer;font:inherit;font-weight:650;text-align:inherit; }
 .project-navigation-link small { margin-inline-start: 5px; color: #6957df; font-size: 11px; font-weight: 800; }
 .resource-row-preview { cursor:pointer; }
 .resource-row-preview:hover { background:#faf9ff; }

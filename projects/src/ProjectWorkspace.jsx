@@ -183,6 +183,7 @@ export function ProjectWorkspace({
   const [editingReview,setEditingReview]=useState(null);
   const [editingMeeting,setEditingMeeting]=useState(null);
   const [selectedExecution,setSelectedExecution]=useState(null);
+  const [uploadingFiles,setUploadingFiles]=useState(false);
   const [modal, setModal] = useState("");
   const [previewFile,setPreviewFile]=useState(null);
   const [priorityOrderDetail,setPriorityOrderDetail]=useState(null);
@@ -319,7 +320,7 @@ export function ProjectWorkspace({
       setNotice(err.message);
     }
   };
-  const uploadRecordFiles=async(files,title,category,relatedEntityType,relatedEntityId)=>{for(const file of files.filter(file=>file instanceof File&&file.size)){const body=new FormData();body.set('projectId',project.id);body.set('title',`${title} · ${file.name}`);body.set('category',category);body.set('relatedEntityType',relatedEntityType);body.set('relatedEntityId',String(relatedEntityId));body.set('file',file);await api('/documents',{method:'POST',body});}};
+  const uploadRecordFiles=async(files,title,category,relatedEntityType,relatedEntityId)=>{const pending=files.filter(file=>file instanceof File&&file.size);if(!pending.length)return;setUploadingFiles(true);try{for(const file of pending){const body=new FormData();body.set('projectId',project.id);body.set('title',`${title} · ${file.name}`);body.set('category',category);body.set('relatedEntityType',relatedEntityType);body.set('relatedEntityId',String(relatedEntityId));body.set('file',file);await api('/documents',{method:'POST',body});}}finally{setUploadingFiles(false)}};
   const addReview=async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);const wasEditing=Boolean(editingReview);const payload={reviewDate:f.get('reviewDate'),performedBy:f.get('performedBy'),supervisionType:f.get('supervisionType'),summary:reviewDraft.summary,followUp:reviewDraft.followUp,hours:f.get('hours'),planUpdateRequired:f.get('planUpdateRequired')==='on',voiceContextId:reviewVoiceContext};try{const result=await api(editingReview?`/projects/${project.id}/site-reviews/${editingReview.id}`:`/projects/${project.id}/site-reviews`,{method:editingReview?'PATCH':'POST',body:JSON.stringify(payload)});await uploadRecordFiles(f.getAll('attachments'),`ביקורת אתר ${f.get('reviewDate')}`,'ביקורת אתר','site_review',result.review.id);setReviewVoiceContext(newVoiceContext());setEditingReview(null);setReviewDraft({summary:'',followUp:''});setModal('');setNotice(result.offlineQueued?'✓ הביקורת והקבצים נשמרו במכשיר ויסתנכרנו אוטומטית':wasEditing?'✓ ביקורת האתר והשעות עודכנו בהצלחה':'✓ ביקורת האתר, השעות והקבצים נשמרו בהצלחה');if(!result.offlineQueued)await load()}catch(error){setNotice(`השמירה נכשלה: ${error.message}`)}};
   const addMeeting=async(e,providedForm)=>{e.preventDefault();const f=providedForm||new FormData(e.currentTarget);const wasEditing=Boolean(editingMeeting);try{const endpoint=editingMeeting?`/projects/${project.id}/meetings/${editingMeeting.id}`:`/projects/${project.id}/meetings`;const result=await api(endpoint,{method:editingMeeting?'PATCH':'POST',body:JSON.stringify({meetingAt:f.get('meetingAt'),attendees:f.get('attendees'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours'),voiceContextId:f.get('voiceContextId')})});const aiTasks=JSON.parse(String(f.get('aiTasks')||'[]'));if(aiTasks.length)await api(`/projects/${project.id}/meetings/${result.meeting.id}/tasks`,{method:'POST',body:JSON.stringify({tasks:aiTasks})});await uploadRecordFiles(f.getAll('attachments'),`סיכום פגישה ${String(f.get('meetingAt')).slice(0,10)}`,'סיכום פגישה','meeting_summary',result.meeting.id);setEditingMeeting(null);setModal('');setNotice(result.offlineQueued?'✓ סיכום הפגישה והקבצים נשמרו במכשיר ויסתנכרנו אוטומטית':wasEditing?'✓ סיכום הפגישה והשעות עודכנו בהצלחה':aiTasks.length?`✓ סיכום הפגישה נשמר ונוצרו ${aiTasks.length} משימות`:'✓ סיכום הפגישה, השעות והקבצים נשמרו בהצלחה');if(!result.offlineQueued)await load()}catch(error){setNotice(`השמירה נכשלה: ${error.message}`)}};
   const deleteReview=async(item)=>{if(user.role!=='admin'||!confirm('למחוק את ביקורת האתר?'))return;try{await api(`/projects/${project.id}/site-reviews/${item.id}`,{method:'DELETE'});setNotice('ביקורת האתר נמחקה');load()}catch(error){setNotice(error.message)}};
@@ -1159,6 +1160,7 @@ export function ProjectWorkspace({
           </div>
         </AppModal>
       )}
+      {uploadingFiles&&<div className="record-upload-overlay" role="status" aria-live="polite"><Upload className="spin" size={22}/><strong>מעלה קבצים…</strong><span>המידע נשמר. נא להמתין לסיום העלאת התמונות והמסמכים.</span></div>}
 
     </div>
   );

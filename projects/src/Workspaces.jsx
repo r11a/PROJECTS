@@ -164,6 +164,14 @@ export function TaskEditor({
       (isMilestone ? createMilestoneDraft() : createTaskDraft()),
   );
   const [submitting, setSubmitting] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+  const selectedProjectId = String(fixedProjectId || form.projectId || initial?.project_id || "");
+  const eligibleProfessionals = useMemo(() => professionals.filter((person) => {
+    if (!person.active) return false;
+    if (person.affiliation === "company") return true;
+    const ids = person.projectIds || person.project_ids || [];
+    return selectedProjectId && ids.map(String).includes(selectedProjectId);
+  }).filter((person) => `${person.displayName || ""} ${person.jobTitle || ""} ${person.companyName || ""}`.toLocaleLowerCase("he").includes(assigneeSearch.trim().toLocaleLowerCase("he"))), [professionals, selectedProjectId, assigneeSearch]);
   const submit = async (event) => {
     event.preventDefault();
     if (submitting) return;
@@ -315,7 +323,8 @@ export function TaskEditor({
           <>
             <fieldset className="task-assignees wide">
               <legend>מבצעים</legend>
-              <div>{professionals.filter((p) => p.active).map((p) => {const selected=(form.assigneeProfessionalIds || form.assignees?.map((item)=>String(item.id)) || [form.assigneeProfessionalId || form.assignee_professional_id]).map(String).includes(String(p.id));return <label key={p.id}><input type="checkbox" checked={selected} onChange={(event)=>{const current=(form.assigneeProfessionalIds || form.assignees?.map((item)=>String(item.id)) || [form.assigneeProfessionalId || form.assignee_professional_id]).filter(Boolean).map(String);setForm({...form,assigneeProfessionalIds:event.target.checked?[...new Set([...current,String(p.id)])]:current.filter((id)=>id!==String(p.id))})}}/><span style={{'--avatar-color':p.color||'#6957df'}}>{p.avatarImage?<img src={p.avatarImage} alt=""/>:(p.displayName||'א').slice(0,2)}</span><b>{p.displayName}</b><small>{p.jobTitle || p.roles?.[0]?.name || "איש מקצוע"}</small></label>})}</div>
+              <label className="task-assignee-search"><Search size={16}/><input value={assigneeSearch} onChange={(event)=>setAssigneeSearch(event.target.value)} placeholder="חיפוש מבצע לפי שם או תפקיד"/></label>
+              <div>{eligibleProfessionals.map((p) => {const selected=(form.assigneeProfessionalIds || form.assignees?.map((item)=>String(item.id)) || [form.assigneeProfessionalId || form.assignee_professional_id]).map(String).includes(String(p.id));return <label key={p.id}><input type="checkbox" checked={selected} onChange={(event)=>{const current=(form.assigneeProfessionalIds || form.assignees?.map((item)=>String(item.id)) || [form.assigneeProfessionalId || form.assignee_professional_id]).filter(Boolean).map(String);setForm({...form,assigneeProfessionalIds:event.target.checked?[...new Set([...current,String(p.id)])]:current.filter((id)=>id!==String(p.id))})}}/><span style={{'--avatar-color':p.color||'#6957df'}}>{p.avatarImage?<img src={p.avatarImage} alt=""/>:(p.displayName||'א').slice(0,2)}</span><b>{p.displayName}</b><small>{p.jobTitle || p.roles?.[0]?.name || "איש מקצוע"}</small></label>})}</div>
             </fieldset>
             <label>
               עדיפות
@@ -344,8 +353,9 @@ export function TaskEditor({
                 <option value="procurement">רכש</option>
                 <option value="followup">מעקב</option>
                 <option value="supervision">פיקוח</option>
-                <option value="inspection">ביקורת</option>
                 <option value="meeting">פגישה</option>
+                <option value="installation">התקנה</option>
+                <option value="quotation">הצעת מחיר</option>
               </select>
             </label>
           </>
@@ -386,6 +396,7 @@ export function TaskEditor({
         )}
         <div className="wide"><SmartTextArea api={api} value={form.description||""} onChange={(description)=>setForm({...form,description})} setNotice={setNotice} label="הנחיות והערות" textareaProps={{placeholder:'מידע שיאפשר לאחראי לבצע בלי צורך בבירור נוסף'}}/></div>
         <div className="wide form-actions">
+          {initial?.id&&<button type="button" className="ops-danger" onClick={async()=>{if(!confirm(`למחוק את המשימה “${form.title}”?`))return;try{setSubmitting(true);await api(`/operations/tasks/${initial.id}`,{method:"DELETE"});setNotice("המשימה נמחקה והוסרה מיומן העבודה");onClose()}catch(error){setSubmitting(false);setNotice(error.message)}}}><Trash2 size={16}/>מחיקה</button>}
           <button type="button" className="ops-secondary" onClick={onClose}>
             ביטול
           </button>

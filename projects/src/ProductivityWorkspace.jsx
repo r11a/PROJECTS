@@ -112,7 +112,7 @@ function buildConditionSummary(conditions) {
 }
 
 export function MyWorkWorkspace({api,user,projects,professionals,setNotice,openProject}){
-  const [data,setData]=useState({sections:{overdue:[],today:[],upcoming:[],waiting:[]},stats:{},messages:[],followUps:[],attention:[]});
+  const [data,setData]=useState({sections:{overdue:[],today:[],upcoming:[]},stats:{},messages:[],followUps:[],attention:[]});
   const [loading,setLoading]=useState(true);const [section,setSection]=useState("all");const [projectId,setProjectId]=useState("");const [priority,setPriority]=useState("");
   const [views,setViews]=useState([]);const [editor,setEditor]=useState(null);const [undo,setUndo]=useState(null);
   const loadRequest=useRef(0);
@@ -124,7 +124,7 @@ export function MyWorkWorkspace({api,user,projects,professionals,setNotice,openP
   const saveView=async()=>{const name=prompt("שם לתצוגה השמורה");if(!name)return;try{await api("/saved-views",{method:"POST",body:JSON.stringify({workspace:"my-work",name,filters:{section,projectId,priority}})});setNotice("התצוגה נשמרה עבורך");load({silent:true})}catch(error){setNotice(error.message)}};
   const applyView=(view)=>{const filters=view.filters||{};setSection(filters.section||"overdue");setProjectId(String(filters.projectId||""));setPriority(filters.priority||"")};
   const saveTask=async(value)=>{try{await api(`/operations/tasks/${editor.id}`,{method:"PATCH",body:JSON.stringify(value)});setEditor(null);setNotice("המשימה עודכנה");load({silent:true})}catch(error){setNotice(error.message)}};
-  const sections=[["all","הכול",data.stats.total,ListChecks],["overdue","באיחור",data.stats.overdue,ShieldAlert],["today","היום",data.stats.today,Clock3],["upcoming","בהמשך",(data.sections.upcoming||[]).length,ArrowLeft],["waiting","ממתינות לתלות",data.stats.waiting,Layers3]];
+  const sections=[["all","הכול",data.stats.total,ListChecks],["overdue","באיחור",data.stats.overdue,ShieldAlert],["today","היום",data.stats.today,Clock3],["upcoming","בהמשך",(data.sections.upcoming||[]).length,ArrowLeft]];
   const personalName=String(user?.displayName||user?.username||"").trim().split(/\s+/)[0]||"שלך";
   return <div className="productivity-page my-work-page">
     <section className="productivity-hero"><div><span><Sparkles size={16}/> מרכז העבודה של {personalName}</span><h2>מה דורש את תשומת הלב שלך עכשיו, {personalName}?</h2><p>זהו סדר היום האישי שלך: משימות, חסמים והודעות שרלוונטיים אליך — לפי דחיפות, בלי לחפש בכל פרויקט בנפרד.</p></div><button onClick={load} disabled={loading}><RefreshCw size={17} className={loading?"spin":""}/> רענון</button></section>

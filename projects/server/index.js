@@ -525,8 +525,8 @@ app.post('/api/auth/login', async (request, response) => {
   }
   ipLoginAttempts.delete(key); await pool.query('UPDATE users SET failed_login_attempts=0,locked_until=NULL WHERE id=$1',[row.id]);
   const user = publicUser(row);
-  const token = jwt.sign({ sub: String(user.id), role: user.role }, jwtSecret, { expiresIn: '12h' });
-  response.cookie('projects_session', token, { httpOnly: true, sameSite: 'strict', secure: request.secure, maxAge: 12 * 60 * 60 * 1000, path: '/' });
+  const token = jwt.sign({ sub: String(user.id), role: user.role }, jwtSecret, { expiresIn: '30d' });
+  response.cookie('projects_session', token, { httpOnly: true, sameSite: 'strict', secure: request.secure, maxAge: 30 * 24 * 60 * 60 * 1000, path: '/' });
   await pool.query('UPDATE users SET last_login_at=NOW(),last_seen_at=NOW() WHERE id=$1',[user.id]);
   await audit({ user }, 'login', 'session', String(user.id));
   response.json({ user });

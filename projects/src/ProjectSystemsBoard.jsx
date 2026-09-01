@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowDownAZ, ArrowUpAZ, ChevronDown, ChevronLeft, Copy, Download, GripVertical, Palette, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, ChevronDown, ChevronLeft, Copy, Download, GripVertical, Palette, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { MobileActionMenu } from "./MobileActionMenu";
 import "./project-systems-board.css";
 
@@ -35,7 +35,7 @@ export function ProjectSystemsBoard({items,columns,fieldSettings=[],canEdit,canM
   const sortValue=(item,field)=>{if(field.key==='name')return item.name||'';if(field.key==='category')return item.system_name||'';if(field.key==='sku')return item.priority_sku||item.code||'';if(field.key==='quantity')return Number(item.quantity_ordered??item.quantity??0);if(field.key==='installed')return Number(item.quantity_installed||0);if(field.key==='status')return item.status||'';if(field.custom)return item.custom_values?.[field.key]??'';return item[field.key]??''};
   const addColumn=async()=>{if(!newColumn.trim())return;await api(`/projects/${projectId}/system-columns`,{method:'POST',body:JSON.stringify({label:newColumn.trim(),columnType:newColumnType})});setNewColumn('');await onReload()};
   const persistFields=async(next)=>{await api(`/projects/${projectId}/system-fields`,{method:'PATCH',body:JSON.stringify({fields:next.map(field=>({key:field.key,label:field.label}))})});await onReload()};
-  const moveField=async(from,to)=>{if(from===to)return;const next=[...fields],[field]=next.splice(from,1);next.splice(to,0,field);await persistFields(next)};
+  const moveField=async(from,to)=>{if(from===to||from===0||to===0)return;const next=[...fields],[field]=next.splice(from,1);next.splice(to,0,field);await persistFields(next)};
   const renameField=async(field)=>{if(!canManage)return;const label=prompt('שם העמודה',field.label)?.trim();if(!label||label===field.label)return;if(field.custom)await api(`/projects/${projectId}/system-columns/${field.id}`,{method:'PATCH',body:JSON.stringify({label,columnType:field.type})});await persistFields(fields.map(item=>item.key===field.key?{...item,label}:item))};
   const duplicate=async(item)=>{const count=Number(prompt('כמה עותקים ליצור?','1'));if(!Number.isInteger(count)||count<1)return;if(count>50)return setNotice('אפשר לשכפל עד 50 עותקים בפעולה');await api(`/projects/${projectId}/equipment/${item.id}/duplicate`,{method:'POST',body:JSON.stringify({count})});setNotice(`${count} עותקים נוצרו`);await onReload()};
   const moveGroup=async(targetId)=>{if(draggedRow){await save(draggedRow,{projectSystemId:targetId},'הרכיב הועבר למערכת');setDraggedRow(null);return}if(!draggedGroup||String(draggedGroup)===String(targetId))return;const next=[...groups],from=next.findIndex(item=>String(item.id)===String(draggedGroup)),to=next.findIndex(item=>String(item.id)===String(targetId));const [group]=next.splice(from,1);next.splice(to,0,group);await api(`/projects/${projectId}/system-board-order`,{method:'PATCH',body:JSON.stringify({systemIds:next.map(item=>item.id)})});setDraggedGroup(null);await onReload()};

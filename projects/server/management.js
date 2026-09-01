@@ -28,7 +28,7 @@ function professionalFromRow(row) {
     phone: row.phone, additionalPhones: row.additional_phones || [], email: row.email,
     additionalEmails: row.additional_emails || [], address: row.address, notes: row.notes, color: row.color,
     icon: row.icon, active: row.active, linkedUserId: row.linked_user_id, customValues: row.custom_values || {},
-    roles: row.roles || [], projectCount: Number(row.project_count || 0), clientCount: Number(row.client_count || 0),
+    roles: row.roles || [], projectIds: row.project_ids || [], projectCount: Number(row.project_count || 0), clientCount: Number(row.client_count || 0),
   };
 }
 
@@ -184,6 +184,7 @@ export async function createManagementRouter({ pool, authenticate, requireRoles,
     const result = await pool.query(
       `SELECT p.*,
         COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id',rt.id,'key',rt.role_key,'name',rt.name,'color',rt.color,'icon',rt.icon)) FILTER (WHERE rt.id IS NOT NULL),'[]') roles,
+        COALESCE((SELECT jsonb_agg(DISTINCT pp.project_id) FROM project_professionals pp WHERE pp.professional_id=p.id),'[]') project_ids,
         (SELECT COUNT(DISTINCT pp.project_id) FROM project_professionals pp WHERE pp.professional_id=p.id) project_count,
         (SELECT COUNT(DISTINCT cp.client_id) FROM client_professionals cp WHERE cp.professional_id=p.id) client_count
        FROM professionals p
