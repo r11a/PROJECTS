@@ -87,3 +87,11 @@ test('workspace failures are isolated and reported without replacing navigation'
   assert.match(app, /api\("\/ui-errors"/);
   assert.match(server, /router\.post\('\/ui-errors'/);
 });
+
+test('effects never return asynchronous loaders as React cleanup functions', async () => {
+  const files = ['../src/App.jsx', '../src/Workspaces.jsx'];
+  for (const file of files) {
+    const source = await readFile(new URL(file, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /useEffect\(\s*(?:load|loadBackups)\s*,/);
+  }
+});

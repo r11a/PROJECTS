@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.33.9
+
+- Fixed the rapid-tab navigation crash by preventing asynchronous data loaders from being returned as React effect cleanup handlers.
+- Added a regression test for invalid asynchronous effect cleanup patterns.
+
 ## 0.33.8
 
 - Corrected dark report fallback cards, chart labels and empty states.

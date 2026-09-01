@@ -2017,7 +2017,9 @@ function SystemPage({ setNotice }) {
     api("/system/backups")
       .then((result) => setBackups(result.backups))
       .catch((error) => setNotice(error.message));
-  useEffect(loadBackups, []);
+  useEffect(() => {
+    loadBackups();
+  }, []);
   const createBackup = async () => {
     setBusy(true);
     try {
