@@ -184,7 +184,6 @@ export function ProjectWorkspace({
   const [editingMeeting,setEditingMeeting]=useState(null);
   const [selectedExecution,setSelectedExecution]=useState(null);
   const [modal, setModal] = useState("");
-  const [hoursReportRequest, setHoursReportRequest] = useState(0);
   const [previewFile,setPreviewFile]=useState(null);
   const [priorityOrderDetail,setPriorityOrderDetail]=useState(null);
   const [teamRoleId,setTeamRoleId]=useState("");
@@ -559,7 +558,7 @@ export function ProjectWorkspace({
           <button
             className={tab === id ? "active" : ""}
             key={id}
-            onClick={() => {setTab(id);if(id==='hours')setHoursReportRequest((value)=>value+1)}}
+            onClick={() => setTab(id)}
           >
             {label}
             {id === "tasks" && <em>{workspace.tasks.length}</em>}
@@ -567,7 +566,7 @@ export function ProjectWorkspace({
         ))}
       </div>
       {tab === "hours" && (
-        <ProjectHoursPanel project={project} entries={workspace.timeEntries || []} professionals={professionals} api={api} setNotice={setNotice} onDone={load} canEdit={canEdit} openRequest={hoursReportRequest}/>
+        <ProjectHoursPanel project={project} entries={workspace.timeEntries || []} professionals={professionals} api={api} setNotice={setNotice} onDone={load} canEdit={canEdit}/>
       )}
       {tab === "activity" && <ProjectGovernancePanel project={project} api={api} user={user} setNotice={setNotice}/>}
       {tab === "overview"&&<div className="project-overview-snapshot">
@@ -1707,10 +1706,9 @@ function ExecutionMedia({files,entityType,entityId,apiRoot,onPreview}){
 
 const timeActivityLabels={planning:'תכנון',supervision:'פיקוח',technician:'זמן טכנאים',installation:'התקנה',threading:'השחלות',programming:'תכנות',training:'הדרכה'};
 
-function ProjectHoursPanel({project,entries,professionals,api,setNotice,onDone,canEdit,openRequest=0}){
+function ProjectHoursPanel({project,entries,professionals,api,setNotice,onDone,canEdit}){
   const [open,setOpen]=useState(false);
   const [editing,setEditing]=useState(null);
-  useEffect(()=>{if(openRequest>0){setEditing(null);setOpen(true)}},[openRequest]);
   const totals=summarizeTimeEntries(entries);
   const totalHours=totals.reduce((sum,item)=>sum+item.hours,0);
   const submit=async(event)=>{event.preventDefault();const data=new FormData(event.currentTarget);try{const result=await api(`/projects/${project.id}/time-entries${editing?`/${editing.id}`:''}`,{method:editing?'PATCH':'POST',body:JSON.stringify({activityType:data.get('activityType'),workDate:data.get('workDate'),hours:data.get('hours'),professionalId:data.get('professionalId')||null,notes:data.get('notes')})});setOpen(false);setEditing(null);setNotice(result.offlineQueued?'✓ דיווח השעות נשמר במכשיר ובנק השעות יתעדכן לאחר הסנכרון':editing?'השינוי בדיווח השעות נשמר בהצלחה':'דיווח השעות נשמר בהצלחה ובנק השעות עודכן');if(!result.offlineQueued)await onDone()}catch(error){setNotice(error.message)}};

@@ -246,7 +246,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
       alert("לא ניתן לתזמן משימה ביום שאינו יום עבודה. ניתן לשנות זאת בהגדרות המערכת.");
       return;
     }
-    await onScheduleChange?.(scheduleDialog.item, { startDate:scheduleDialog.startDate, dueDate:scheduleDialog.dueDate, color:scheduleDialog.color, critical:scheduleDialog.critical, mentionUserIds:scheduleDialog.mentionUserIds });
+    if (typeof onScheduleChange === "function") await onScheduleChange(scheduleDialog.item, { startDate:scheduleDialog.startDate, dueDate:scheduleDialog.dueDate, color:scheduleDialog.color, critical:scheduleDialog.critical, mentionUserIds:scheduleDialog.mentionUserIds });
     setScheduleDialog(null);
   };
   const adjustDialogDuration = (days) => setScheduleDialog((current) => {

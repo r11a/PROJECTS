@@ -269,14 +269,14 @@ export function AlertCenter({ alerts, api, onSnoozed, onClose, setNotice, onOpen
         }),
       });
       setNotice(`ההתראות נדחו עד ${result?.snoozedUntil?new Date(result.snoozedUntil).toLocaleString('he-IL'):'המועד שנבחר'}`);
-      await onSnoozed?.(result);
+      if (typeof onSnoozed === "function") await onSnoozed(result);
     } catch (error) {
       setNotice(error.message);
     } finally {
       setBusy(false);
     }
   };
-  const dismiss=async()=>{setBusy(true);try{await api('/alerts/dismiss',{method:'POST',body:JSON.stringify({keys:alerts.map(alert=>alert.key)})});setNotice('ההתראות בוטלו עבורך');onSnoozed()}catch(error){setNotice(error.message)}finally{setBusy(false)}};
+  const dismiss=async()=>{setBusy(true);try{await api('/alerts/dismiss',{method:'POST',body:JSON.stringify({keys:alerts.map(alert=>alert.key)})});setNotice('ההתראות בוטלו עבורך');if(typeof onSnoozed==='function')await onSnoozed()}catch(error){setNotice(error.message)}finally{setBusy(false)}};
   return (
     <ModalPortal>
     <div className="alert-backdrop">

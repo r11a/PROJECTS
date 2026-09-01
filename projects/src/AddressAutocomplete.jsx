@@ -27,7 +27,7 @@ export function AddressAutocomplete({ api, value, onChange, onSelect, label = '×
 
   const choose = (item) => {
     onChange(item.address);
-    onSelect?.(item);
+    if (typeof onSelect === "function") onSelect(item);
     setItems([]);
     setOpen(false);
   };

@@ -145,7 +145,7 @@ export function AiChat({ apiRoot, onClose, onNavigate }) {
         <div className="ai-chat-thread" ref={threadRef}>
           {messages.map((message,index)=><article key={index} className={message.role}>
             {message.role !== "user" && <span><Sparkles size={15}/></span>}
-            <div><p>{message.text}</p>{message.actions?.length>0&&<nav className="ai-chat-actions">{message.actions.map((action)=><button type="button" key={action.page} onClick={()=>onNavigate?.(action.page)}>{action.label}<ArrowLeft size={14}/></button>)}</nav>}{message.meta && <small>{message.meta}</small>}</div>
+            <div><p>{message.text}</p>{message.actions?.length>0&&<nav className="ai-chat-actions">{message.actions.map((action)=><button type="button" key={action.page} onClick={()=>typeof onNavigate==='function'&&onNavigate(action.page)}>{action.label}<ArrowLeft size={14}/></button>)}</nav>}{message.meta && <small>{message.meta}</small>}</div>
           </article>)}
           {listening && <article className="assistant voice-listening"><span><Mic size={15}/></span><div><strong>מאזין…</strong><i/><i/><i/><i/><i/></div></article>}
           {busy && <article className="assistant thinking"><span><Sparkles size={15}/></span><div><i/><i/><i/></div></article>}

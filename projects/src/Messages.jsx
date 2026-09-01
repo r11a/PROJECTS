@@ -68,7 +68,7 @@ export function MessageCenter({
     event.stopPropagation();
     try {
       await read(message);
-      onOpenLinked?.(message.linkedUrl);
+      if (typeof onOpenLinked === "function") onOpenLinked(message.linkedUrl);
     } catch (error) {
       setNotice(error.message || "לא ניתן לפתוח את מקור התיוג");
     }

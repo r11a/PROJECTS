@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.33.7
+
+- Fixed project work-hours navigation so the report form opens only from the explicit add-hours action.
+- Completed dark-mode contrast for finance reports, alerts, calendars, Gantt non-working days, and execution health scores.
+- Hardened cross-workspace callbacks to prevent invalid callback payloads from crashing navigation.
+
 ## 0.33.6
 
 - Fixed the root cause of light dialogs in dark mode by applying the active theme to `body`, where React portals are mounted.

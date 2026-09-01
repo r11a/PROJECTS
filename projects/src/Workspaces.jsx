@@ -1077,7 +1077,7 @@ export function FinanceWorkspace({
                 const itemPaid = Math.max(0, Number(item.paid || 0));
                 const itemBalance = Math.max(0, Number(item.balance || 0));
                 const paidPercent = itemTotal ? Math.min(100, Math.round((itemPaid / itemTotal) * 100)) : 0;
-                return <button type="button" role="listitem" key={item.id} className="finance-bar-row" onClick={() => openProject?.(projects.find((project) => String(project.id) === String(item.id)))}>
+                return <button type="button" role="listitem" key={item.id} className="finance-bar-row" onClick={() => typeof openProject === "function" && openProject(projects.find((project) => String(project.id) === String(item.id)))}>
                   <div className="finance-bar-title"><strong>{item.name}</strong><small>{money.format(itemTotal)} היקף</small></div>
                   <div className="finance-bar-track" aria-label={`${item.name}: ${paidPercent}% נגבה`}><i className="paid" style={{ width: `${paidPercent}%` }} /><i className="balance" style={{ width: `${100 - paidPercent}%` }} /></div>
                   <div className="finance-bar-values"><b>{money.format(itemPaid)} <small>שולם</small></b><span>{money.format(itemBalance)} <small>יתרה</small></span><em>{paidPercent}%</em></div>

@@ -145,7 +145,8 @@ test('project time reporting keeps targets in project setup and actual hours in 
   assert.match(app,/user\.avatarImage \|\| user\.id \|\| "current"/);
   assert.match(operational,/DemoDataToggle/);
   assert.match(operational,/activationLocked/);
-  assert.match(projectWorkspace,/openRequest/);
+  assert.doesNotMatch(projectWorkspace,/openRequest|hoursReportRequest/);
+  assert.match(projectWorkspace,/onClick=\{\(\) => setTab\(id\)\}/);
   assert.doesNotMatch(projectWorkspace,/setTargetsOpen/);
   assert.match(operations,/project_time_entries/);
   assert.match(operations,/operations\/tasks\/count/);
