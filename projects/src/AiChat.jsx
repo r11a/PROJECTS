@@ -15,6 +15,7 @@ const helpDestinations = [
   { page:"catalog",label:"פתח מערכות ורכיבים",pattern:/מערכות ורכיבים|קטלוג|רכיב|KNX|מצלמ/i },
   { page:"professionals",label:"פתח אנשי מקצוע",pattern:/אנשי מקצוע|טכנאי|אדריכל|חשמלאי|ספק/i },
   { page:"clients",label:"פתח לקוחות",pattern:/לקוח|לקוחות|Priority/i },
+  { page:"gis",label:"פתח מפת GIS",pattern:/GIS|מפת פרויקט|לוויין|קואורדינטות/i },
   { page:"projects",label:"פתח פרויקטים",pattern:/פרויקט|פרויקטים|אשף|ארכיון/i },
   { page:"dashboard",label:"פתח תמונת מצב",pattern:/תמונת מצב|דשבורד|תובנות/i },
 ];

@@ -83,6 +83,7 @@ import {
   OperationalSettings,
 } from "./Operational";
 import { FormsWorkspace } from "./FormsWorkspace";
+import { GisWorkspace } from "./GisWorkspace";
 import { MasterDataWorkspace } from "./MasterDataWorkspace";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { AppModal, ModalPortal } from "./AppModal";
@@ -318,6 +319,7 @@ const nav = [
   { id: "my-work", label: "העבודה שלי", icon: CheckCircle2 },
   { id: "calendar", label: "יומן עבודה", icon: CalendarDays },
   { id: "projects", label: "פרויקטים", icon: FolderKanban },
+  { id: "gis", label: "מפת GIS", icon: Map },
   { id: "clients", label: "לקוחות", icon: Users },
   { id: "professionals", label: "אנשי מקצוע", icon: Users },
   { id: "catalog", label: "מערכות ורכיבים", icon: Database },
@@ -1264,6 +1266,7 @@ function App() {
               setNotice={setNotice}
             />
           )}
+          {page === "gis" && <GisWorkspace projects={projects} openProject={openProject} setNotice={setNotice}/>}
           {page === "clients" && (
             <ClientsWorkspace
               api={api}
@@ -1433,7 +1436,7 @@ const permissionSections=[
   ["reports","דוחות וניתוחים"],["messages","הודעות"],["settings","הגדרות מערכת"],
 ];
 function PermissionMatrix({value={},onChange}){return <div className="permission-matrix"><header><b>מסך / תחום</b><span>ללא</span><span>קריאה</span><span>קריאה וכתיבה</span></header>{permissionSections.map(([key,label])=><div key={key}><b>{label}</b>{["none","read","write"].map(level=><label key={level}><input type="radio" name={`permission-${key}`} checked={(value[key]||"none")===level} onChange={()=>onChange({...value,[key]:level})}/><span/></label>)}</div>)}</div>}
-const pageResources={dashboard:"projects","my-work":"tasks",calendar:"calendar",projects:"projects",clients:"clients",professionals:"professionals",catalog:"catalog",forms:"forms",finance:"finance",tasks:"tasks",gantt:"tasks",control:"projects",reports:"reports",settings:"settings"};
+const pageResources={dashboard:"projects","my-work":"tasks",calendar:"calendar",projects:"projects",gis:"projects",clients:"clients",professionals:"professionals",catalog:"catalog",forms:"forms",finance:"finance",tasks:"tasks",gantt:"tasks",control:"projects",reports:"reports",settings:"settings"};
 const uiRoleResources={
   manager:["projects","clients","professionals","tasks","calendar","forms","catalog","finance","reports","messages"],
   supervisor:["projects","clients","professionals","tasks","calendar","forms","catalog","reports","messages"],
