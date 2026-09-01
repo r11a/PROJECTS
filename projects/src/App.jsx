@@ -316,7 +316,7 @@ export async function api(path, options = {}) {
 const nav = [
   { id: "dashboard", label: "תמונת מצב", icon: LayoutDashboard },
   { id: "my-work", label: "העבודה שלי", icon: CheckCircle2 },
-  { id: "calendar", label: "לוח שנה", icon: CalendarDays },
+  { id: "calendar", label: "יומן עבודה", icon: CalendarDays },
   { id: "projects", label: "פרויקטים", icon: FolderKanban },
   { id: "clients", label: "לקוחות", icon: Users },
   { id: "professionals", label: "אנשי מקצוע", icon: Users },
@@ -732,6 +732,8 @@ function App() {
       delete document.body.dataset.projectsTheme;
     };
   }, [darkMode]);
+  useEffect(()=>{let disposed=false;offlineStatus().then(value=>!disposed&&setOfflineState(value));const changed=event=>setOfflineState(current=>({...current,...event.detail}));window.addEventListener("projects:offline-status",changed);return()=>{disposed=true;window.removeEventListener("projects:offline-status",changed)}},[]);
+  useEffect(()=>{if(!user?.id)return undefined;const cleanup=initializeOfflineSync(apiRoot);return typeof cleanup==='function'?cleanup:undefined},[user?.id]);
 
   const openProject = (project) => {
     setSelectedProject(project);
@@ -1427,7 +1429,7 @@ const roleLabels = {
 };
 const permissionSections=[
   ["projects","פרויקטים"],["clients","לקוחות"],["professionals","אנשי מקצוע"],["tasks","משימות וגאנט"],
-  ["calendar","לוח שנה"],["forms","מסמכים והקלטות"],["catalog","מערכות ורכיבים"],["finance","כספים וגבייה"],
+  ["calendar","יומן עבודה"],["forms","מסמכים והקלטות"],["catalog","מערכות ורכיבים"],["finance","כספים וגבייה"],
   ["reports","דוחות וניתוחים"],["messages","הודעות"],["settings","הגדרות מערכת"],
 ];
 function PermissionMatrix({value={},onChange}){return <div className="permission-matrix"><header><b>מסך / תחום</b><span>ללא</span><span>קריאה</span><span>קריאה וכתיבה</span></header>{permissionSections.map(([key,label])=><div key={key}><b>{label}</b>{["none","read","write"].map(level=><label key={level}><input type="radio" name={`permission-${key}`} checked={(value[key]||"none")===level} onChange={()=>onChange({...value,[key]:level})}/><span/></label>)}</div>)}</div>}
@@ -2971,8 +2973,6 @@ function MapPage({ projects, openProject, stageFilter, setStageFilter }) {
       {navigationTarget&&<AppModal title="בחירת אפליקציית ניווט" subtitle={navigationTarget.address||navigationTarget.location} className="navigation-selector-modal" onClose={()=>setNavigationTarget(null)}><div className="navigation-selector-body"><div className="navigation-provider-list">{NAVIGATION_OPTIONS.map((option)=><button type="button" className="navigation-provider" key={option.key} onClick={()=>{openNavigation(navigationTarget,option.key);setNavigationTarget(null)}}><span className="navigation-provider-icon" style={{background:option.color}}>{option.icon}</span><span>{option.label}</span></button>)}</div></div></AppModal>}
     </div>
   );
-  useEffect(()=>{let disposed=false;offlineStatus().then(value=>!disposed&&setOfflineState(value));const changed=event=>setOfflineState(current=>({...current,...event.detail}));window.addEventListener("projects:offline-status",changed);return()=>{disposed=true;window.removeEventListener("projects:offline-status",changed)}},[]);
-  useEffect(()=>{if(!user?.id)return;return initializeOfflineSync(apiRoot)},[user?.id]);
 }
 
 function offlineActionLabel(path,method){const action=method==='PATCH'?'עדכון':'יצירה';if(path.includes('/tasks'))return `${action} משימה`;if(path.includes('/time-entries'))return `${action} דיווח שעות`;if(path.includes('/site-reviews'))return `${action} ביקורת אתר`;if(path.includes('/meetings'))return `${action} סיכום פגישה`;if(path.includes('/updates'))return `${action} עדכון לפרויקט`;if(path==='/messages')return 'שליחת הודעה פנימית';if(path==='/documents')return 'העלאת תמונה או מסמך';if(path.includes('/form-records'))return `${action} טופס`;return 'עדכון נתונים'}

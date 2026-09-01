@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Mail, Sparkles, Trash2 } from "lucide-react";
 import { AppModal } from "../../AppModal";
 import { localDateTimeValue } from "../../dateTime";
@@ -8,17 +8,18 @@ import "./meeting-summary.css";
 const meetingDateValue=(value)=>value?new Date(value).toLocaleString('sv-SE',{timeZone:'Asia/Jerusalem'}).replace(' ','T').slice(0,16):localDateTimeValue();
 
 export function MeetingSummaryForm({ api,onClose,onSubmit,setNotice,project,professionals=[],initial=null }) {
+  const formRef=useRef(null);
   const [summary,setSummary]=useState(initial?.summary||"");
   const [followUp,setFollowUp]=useState(initial?.follow_up||"");
   const [tasks,setTasks]=useState([]);const [email,setEmail]=useState({subject:"",body:""});
   const [recipients,setRecipients]=useState([]);const [to,setTo]=useState([]);const [cc,setCc]=useState([]);const [busy,setBusy]=useState(false);
   useEffect(()=>{if(project?.id)api(`/projects/${project.id}/email-recipients`).then((result)=>setRecipients(result.recipients||[])).catch(()=>{})},[project?.id]);
-  const analyze=async()=>{if(summary.trim().length<10)return setNotice('יש להזין סיכום לפני חילוץ פעולות');setBusy(true);try{const result=await api('/ai/meeting-actions',{method:'POST',body:JSON.stringify({text:`${summary}\n${followUp}`})});setTasks((result.tasks||[]).map((task)=>({...task,enabled:true,assigneeProfessionalId:professionals.find((person)=>String(person.displayName||person.display_name||'').includes(task.assigneeName))?.id||''})));setEmail(result.email||{subject:'סיכום פגישה והמשך טיפול',body:summary});if(!(result.tasks||[]).length)setNotice('הניתוח הושלם, אך לא זוהו פעולות המשך מפורשות')}catch(error){const fallback=followUp.split(/\n|[.;•]/).map((line)=>line.trim()).filter((line)=>line.length>4).slice(0,8).map((line)=>({title:line.slice(0,120),description:line,priority:'normal',dueDate:'',assigneeProfessionalId:'',enabled:true}));setTasks(fallback);setEmail({subject:`סיכום פגישה – ${project?.name||''}`.trim(),body:`שלום,\n\nלהלן סיכום הפגישה:\n${summary}\n\nהמשך טיפול:\n${followUp}\n\nבברכה`});setNotice(`הופעלה חלופה מקומית: ${error.message}`)}finally{setBusy(false)}};
+  const analyze=async()=>{const liveSummary=String(formRef.current?.elements?.namedItem('summary')?.value??summary).trim();const liveFollowUp=String(formRef.current?.elements?.namedItem('followUp')?.value??followUp).trim();if(!liveSummary)return setNotice('יש להזין סיכום לפני חילוץ פעולות');setSummary(liveSummary);setFollowUp(liveFollowUp);setBusy(true);try{const result=await api('/ai/meeting-actions',{method:'POST',body:JSON.stringify({text:`${liveSummary}\n${liveFollowUp}`})});setTasks((result.tasks||[]).map((task)=>({...task,enabled:true,assigneeProfessionalId:professionals.find((person)=>String(person.displayName||person.display_name||'').includes(task.assigneeName))?.id||''})));setEmail(result.email||{subject:'סיכום פגישה והמשך טיפול',body:liveSummary});if(!(result.tasks||[]).length)setNotice('הניתוח הושלם, אך לא זוהו פעולות המשך מפורשות')}catch(error){const fallback=liveFollowUp.split(/\n|[.;•]/).map((line)=>line.trim()).filter((line)=>line.length>4).slice(0,8).map((line)=>({title:line.slice(0,120),description:line,priority:'normal',dueDate:'',assigneeProfessionalId:'',enabled:true}));setTasks(fallback);setEmail({subject:`סיכום פגישה – ${project?.name||''}`.trim(),body:`שלום,\n\nלהלן סיכום הפגישה:\n${liveSummary}\n\nהמשך טיפול:\n${liveFollowUp}\n\nבברכה`});setNotice(`הופעלה חלופה מקומית: ${error.message}`)}finally{setBusy(false)}};
   const openMail=async()=>{const toEmails=recipients.filter((item)=>to.includes(String(item.id))).map((item)=>item.email);const ccEmails=recipients.filter((item)=>cc.includes(String(item.id))).map((item)=>item.email);if(!toEmails.length)return setNotice('יש לבחור לפחות נמען אחד');await api(`/projects/${project.id}/email-draft-opened`,{method:'POST',body:JSON.stringify({meetingId:initial?.id,recipientCount:toEmails.length,ccCount:ccEmails.length})});window.location.href=`mailto:${toEmails.join(',')}?cc=${encodeURIComponent(ccEmails.join(','))}&subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`;};
   const submit=(event)=>{event.preventDefault();const form=new FormData(event.currentTarget);form.set('summary',summary);form.set('followUp',followUp);form.set('aiTasks',JSON.stringify(tasks.filter((task)=>task.enabled)));onSubmit(event,form);};
   const updateTask=(index,patch)=>setTasks((current)=>current.map((task,i)=>i===index?{...task,...patch}:task));
   return <AppModal title={initial?'עריכת סיכום פגישה':'סיכום פגישה חדש'} subtitle="הכתבה, ניסוח מקצועי, פעולות המשך וטיוטת מייל" onClose={onClose} className="meeting-summary-modal">
-    <form className="work-form meeting-summary-form" onSubmit={submit}>
+    <form ref={formRef} className="work-form meeting-summary-form" onSubmit={submit}>
       <label>תאריך ושעה<input type="datetime-local" name="meetingAt" required defaultValue={meetingDateValue(initial?.meeting_at)}/></label>
       <label>נוכחים<input name="attendees" defaultValue={initial?.attendees||''} placeholder="שמות מופרדים בפסיק"/></label>
       <label>שעות תכנון / ישיבה<input type="number" name="hours" min="0" max="24" step="0.5" placeholder="0" defaultValue={initial?.work_hours||''}/></label>

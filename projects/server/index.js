@@ -721,7 +721,7 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
     await db.query('COMMIT');
     await audit(request, 'update', 'project', request.params.id, Object.fromEntries(entries));
     if(request.body.stage && request.body.stage!==current.rows[0].stage) {
-      await executeAutomations({
+      try { await executeAutomations({
         pool,
         triggerType:'project_stage_changed',
         entityType:'project',
@@ -733,7 +733,9 @@ app.patch('/api/projects/:id', authenticate, requireRoles(...EDIT_ROLES), async 
           managerProfessionalId:current.rows[0].manager_professional_id || null,
         },
         userId:request.user.id,
-      });
+      }); } catch (automationError) {
+        console.error('Project stage automation failed after project update', automationError);
+      }
     }
     response.json({ project: projectForUser(result.rows[0], request.user) });
   } catch (error) {

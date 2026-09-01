@@ -5,7 +5,7 @@ import "./ai-chat-actions.css";
 
 const helpDestinations = [
   { page:"my-work",label:"פתח את העבודה שלי",pattern:/העבודה שלי|סדר היום|עדיפויות אישיות/i },
-  { page:"calendar",label:"פתח לוח שנה",pattern:/לוח שנה|אירוע|Outlook|תאריך/i },
+  { page:"calendar",label:"פתח יומן עבודה",pattern:/יומן עבודה|לוח שנה|אירוע|Outlook|תאריך/i },
   { page:"gantt",label:"פתח לוח גאנט",pattern:/גאנט|ציר זמן|נתיב קריטי/i },
   { page:"tasks",label:"פתח משימות ואבני דרך",pattern:/משימ|אבני דרך|אבן דרך|תלות|אחראי|מבצע/i },
   { page:"reports",label:"פתח דוחות וניתוחים",pattern:/דוח|PDF|מצגת|סטטיסטיקה|ניתוח/i },
