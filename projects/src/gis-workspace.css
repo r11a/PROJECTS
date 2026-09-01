@@ -6,6 +6,11 @@
 @media(max-width:760px){
   .gis-workspace-page,.gis-shell,.gis-project-panel,.gis-project-list{width:100%;max-width:100%;min-width:0}
   .gis-workspace-page{overflow-x:hidden}
+  .gis-shell{inline-size:100%;max-inline-size:100%;overflow:hidden;contain:inline-size}
   .gis-project-list{max-height:190px;display:grid;overflow-x:hidden;overflow-y:auto;touch-action:pan-y}
   .gis-project-list>button{width:100%;min-width:0;max-width:100%}
+  .gis-map-stage{inline-size:100%;max-inline-size:100%;overflow:hidden;contain:inline-size}
+  .gis-map-stage>.leaflet-container{inline-size:100%!important;max-inline-size:100%;overflow:hidden}
+  .gis-selected-card{max-width:calc(100% - 20px);box-sizing:border-box;overflow:hidden}
+  .gis-map-tools,.leaflet-control-container{max-width:100%}
 }

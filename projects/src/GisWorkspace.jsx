@@ -13,6 +13,12 @@ function MapFocus({project,userPosition}){
   return null;
 }
 
+function MapResize(){
+  const map=useMap();
+  useEffect(()=>{const container=map.getContainer();const observer=new ResizeObserver(()=>map.invalidateSize({pan:false}));observer.observe(container);map.invalidateSize({pan:false});return()=>observer.disconnect()},[map]);
+  return null;
+}
+
 function projectIcon(project){return L.divIcon({className:"gis-marker-wrap",html:`<div class="gis-project-marker"><span>${String(project?.name||'P').slice(0,2)}</span><i></i></div>`,iconSize:[48,58],iconAnchor:[24,54],popupAnchor:[0,-48]})}
 
 export function GisWorkspace({projects,openProject,setNotice}){
@@ -39,6 +45,7 @@ export function GisWorkspace({projects,openProject,setNotice}){
             <LayersControl.BaseLayer name="מפת רחובות"><TileLayer attribution="&copy; OpenStreetMap contributors" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20}/></LayersControl.BaseLayer>
             <LayersControl.BaseLayer checked name="תצלום לוויין"><TileLayer attribution="Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" maxZoom={20}/></LayersControl.BaseLayer>
           </LayersControl>
+          <MapResize/>
           <MapFocus project={selected} userPosition={userPosition}/>
           {selected&&validPosition(selected)&&<Marker position={[Number(selected.lat),Number(selected.lng)]} icon={projectIcon(selected)}><Popup><div className="gis-popup" dir="rtl"><strong>{selected.name}</strong><span>{selected.address||selected.location}</span><small>{Number(selected.lat).toFixed(6)}, {Number(selected.lng).toFixed(6)}</small></div></Popup></Marker>}
           {userPosition&&<CircleMarker center={userPosition} radius={9} pathOptions={{color:'#fff',weight:3,fillColor:'#287de0',fillOpacity:1}}/>}
