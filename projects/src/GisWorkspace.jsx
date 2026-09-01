@@ -36,8 +36,8 @@ export function GisWorkspace({projects,openProject,setNotice}){
       <main className="gis-map-stage">
         <MapContainer center={validPosition(selected)?[Number(selected.lat),Number(selected.lng)]:israelCenter} zoom={validPosition(selected)?18:8} zoomControl scrollWheelZoom>
           <LayersControl position="topleft">
-            <LayersControl.BaseLayer checked name="מפת רחובות"><TileLayer attribution="&copy; OpenStreetMap contributors" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20}/></LayersControl.BaseLayer>
-            <LayersControl.BaseLayer name="תצלום לוויין"><TileLayer attribution="Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" maxZoom={20}/></LayersControl.BaseLayer>
+            <LayersControl.BaseLayer name="מפת רחובות"><TileLayer attribution="&copy; OpenStreetMap contributors" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20}/></LayersControl.BaseLayer>
+            <LayersControl.BaseLayer checked name="תצלום לוויין"><TileLayer attribution="Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" maxZoom={20}/></LayersControl.BaseLayer>
           </LayersControl>
           <MapFocus project={selected} userPosition={userPosition}/>
           {selected&&validPosition(selected)&&<Marker position={[Number(selected.lat),Number(selected.lng)]} icon={projectIcon(selected)}><Popup><div className="gis-popup" dir="rtl"><strong>{selected.name}</strong><span>{selected.address||selected.location}</span><small>{Number(selected.lat).toFixed(6)}, {Number(selected.lng).toFixed(6)}</small></div></Popup></Marker>}
