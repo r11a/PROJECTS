@@ -189,7 +189,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   };
   const moveMouseDrag = (event) => {
     if (!mouseDrag.current || mouseDrag.current.pointerId !== event.pointerId) return;
-    scrollRef.current.scrollLeft = mouseDrag.current.left - (event.clientX - mouseDrag.current.x);
+    scrollRef.current.scrollLeft = mouseDrag.current.left + (event.clientX - mouseDrag.current.x);
   };
   const endMouseDrag = (event) => {
     if (!mouseDrag.current || mouseDrag.current.pointerId !== event.pointerId) return;

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.36.5
+
+- Corrected click-and-drag navigation in both Gantt timelines so dragging right advances dates and dragging left returns to earlier dates.
+- Unified mouse dragging with horizontal wheel, trackpad and mobile swipe direction.
+
 ## 0.36.4
 
 - Corrected both Gantt timelines so horizontal navigation follows the date axis: right advances the date and left goes back.
