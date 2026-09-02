@@ -52,6 +52,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   const scrollRef = useRef(null);
   const pendingShift = useRef(0);
   const pinch = useRef(null);
+  const touchPan = useRef(null);
   const mouseDrag = useRef(null);
   const taskDrag = useRef(null);
   const blockTaskClick = useRef(false);
@@ -143,16 +144,31 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     ...extra,
   });
   const startPinch = (event) => {
-    if (event.touches.length !== 2) return;
-    pinch.current = { distance: touchDistance(event.touches), scale };
+    if (event.touches.length === 2) {
+      touchPan.current = null;
+      pinch.current = { distance: touchDistance(event.touches), scale };
+    } else if (event.touches.length === 1 && scrollRef.current) {
+      const touch = event.touches[0];
+      touchPan.current = { x: touch.clientX, y: touch.clientY, left: scrollRef.current.scrollLeft };
+    }
   };
   const movePinch = (event) => {
-    if (event.touches.length !== 2 || !pinch.current) return;
+    if (event.touches.length === 2 && pinch.current) {
+      event.preventDefault();
+      setScale(clampScale(pinch.current.scale * (touchDistance(event.touches) / pinch.current.distance)));
+      return;
+    }
+    if (event.touches.length !== 1 || !touchPan.current || !scrollRef.current) return;
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - touchPan.current.x;
+    const deltaY = touch.clientY - touchPan.current.y;
+    if (Math.abs(deltaX) <= Math.abs(deltaY) || Math.abs(deltaX) < 4) return;
     event.preventDefault();
-    setScale(clampScale(pinch.current.scale * (touchDistance(event.touches) / pinch.current.distance)));
+    scrollRef.current.scrollLeft = touchPan.current.left + deltaX;
   };
   const endPinch = (event) => {
     if (event.touches.length < 2) pinch.current = null;
+    if (!event.touches.length) touchPan.current = null;
   };
   const wheelZoom = (event) => {
     if (event.ctrlKey) {
@@ -161,8 +177,8 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     } else if ((event.shiftKey || event.deltaX) && scrollRef.current) {
       event.preventDefault();
       const delta = event.deltaX || event.deltaY;
-      // RTL timeline navigation: right moves to earlier dates, left to later dates.
-      scrollRef.current.scrollLeft -= delta;
+      // Timeline navigation follows the date axis: right advances, left goes back.
+      scrollRef.current.scrollLeft += delta;
     }
   };
   const startMouseDrag = (event) => {

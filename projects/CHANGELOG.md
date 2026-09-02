@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.36.4
+
+- Corrected both Gantt timelines so horizontal navigation follows the date axis: right advances the date and left goes back.
+- Applied the same mapping to native horizontal trackpad input and Shift+wheel navigation.
+- Added the same right-to-advance and left-to-go-back behavior to mobile swipe gestures while preserving vertical page scrolling.
+
 ## 0.36.3
 
 - Unified horizontal wheel navigation in both portfolio and project Gantt views.
