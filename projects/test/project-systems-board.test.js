@@ -62,6 +62,13 @@ test('master systems catalog supports collapsing and full CRUD entry points at e
   assert.match(css,/\.equipment-category-actions/);
 });
 
+test('uploaded system icons are optically bounded inside a fixed catalog frame',async()=>{
+  const css=await read('src/master-data.css');
+  assert.match(css,/\.equipment-category-toggle \.catalog-category-icon\{[^}]*overflow:hidden/);
+  assert.match(css,/\.equipment-category-toggle \.catalog-category-icon>img\{[^}]*width:36px!important;[^}]*height:36px!important/);
+  assert.match(css,/object-fit:contain;object-position:center/);
+});
+
 test('advanced project systems board supports field control sorting duplication and cross-system moves',async()=>{
   const [ui,server,migration]=await Promise.all([read('src/ProjectSystemsBoard.jsx'),read('server/operations.js'),read('migrations/044_project_system_field_controls.sql')]);
   for(const token of ['fieldSettings','newColumnType','groupSorts','expandedRows','projectSystemId','כמה עותקים ליצור?','system-fields','columnType','colorOverrides'])assert.match(ui,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));

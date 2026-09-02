@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.36.12
+
+- Normalized uploaded system-type icons to the same fixed visual frame and inner image size.
+- Added strict image bounds and clipping so tall or unusually proportioned artwork cannot overflow its card.
+- Preserved the original image aspect ratio with centered `contain` rendering on desktop and mobile.
+
 ## 0.36.11
 
 - Added collapsible system-type sections to the systems and components catalog.

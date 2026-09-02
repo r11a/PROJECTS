@@ -72,6 +72,8 @@
 .equipment-board-group.category-collapsed>header{border-bottom:0}
 .theme-dark .equipment-category-actions button{border-color:#45484e;background:#292b2e;color:#c9c1ff}
 .theme-dark .equipment-category-toggle:hover{background:color-mix(in srgb,var(--category-color) 12%,transparent)}
+.equipment-category-toggle .catalog-category-icon{box-sizing:border-box;width:46px;height:46px;min-width:46px;max-width:46px;min-height:46px;max-height:46px;display:grid;place-items:center;flex:0 0 46px;overflow:hidden;border-radius:12px}
+.equipment-category-toggle .catalog-category-icon>img{display:block;width:36px!important;height:36px!important;min-width:0!important;max-width:36px!important;min-height:0!important;max-height:36px!important;object-fit:contain;object-position:center;border-radius:8px}
 @media(max-width:680px){
   .equipment-board-group>header{align-items:stretch;flex-direction:column}
   .equipment-category-actions{width:100%}
