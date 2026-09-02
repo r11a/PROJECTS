@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.36.3
+
+- Unified horizontal wheel navigation in both portfolio and project Gantt views.
+- Horizontal scrolling right now moves toward earlier dates, while scrolling left moves toward later dates.
+
 ## 0.36.2
 
 - Corrected Shift+wheel horizontal navigation in the general portfolio Gantt so it follows the expected RTL direction.

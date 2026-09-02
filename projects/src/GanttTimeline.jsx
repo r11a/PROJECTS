@@ -38,7 +38,7 @@ const isBlockedWorkday = (value, workCalendar) => {
   return (day === 5 && !workCalendar.includeFriday) || (day === 6 && !workCalendar.includeSaturday);
 };
 
-export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onScheduleChange, users = [], title = "לוח גאנט", compact = false, reverseHorizontalWheel = false }) {
+export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onScheduleChange, users = [], title = "לוח גאנט", compact = false }) {
   const [zoom, setZoom] = useState("day");
   const [anchor, setAnchor] = useState(midnight(new Date()));
   const [collapsed, setCollapsed] = useState(new Set());
@@ -158,10 +158,11 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     if (event.ctrlKey) {
       event.preventDefault();
       changeScale(event.deltaY < 0 ? 0.1 : -0.1);
-    } else if (event.shiftKey && scrollRef.current) {
+    } else if ((event.shiftKey || event.deltaX) && scrollRef.current) {
       event.preventDefault();
-      const delta = event.deltaY || event.deltaX;
-      scrollRef.current.scrollLeft += reverseHorizontalWheel ? -delta : delta;
+      const delta = event.deltaX || event.deltaY;
+      // RTL timeline navigation: right moves to earlier dates, left to later dates.
+      scrollRef.current.scrollLeft -= delta;
     }
   };
   const startMouseDrag = (event) => {

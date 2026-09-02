@@ -53,8 +53,8 @@ test('portfolio Gantt exposes critical tasks and dependency connectors', async (
   assert.match(timeline, /onTouchMove=\{movePinch\}/);
   assert.match(timeline, /onPointerDown=\{startMouseDrag\}/);
   assert.match(timeline, /event\.shiftKey/);
-  assert.match(timeline, /reverseHorizontalWheel \? -delta : delta/);
-  assert.match(gantt, /<GanttTimeline reverseHorizontalWheel/);
+  assert.match(timeline, /scrollLeft -= delta/);
+  assert.doesNotMatch(gantt, /reverseHorizontalWheel/);
   assert.match(gantt, /TaskEditor/);
 });
 
