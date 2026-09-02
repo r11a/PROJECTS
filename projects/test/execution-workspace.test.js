@@ -58,6 +58,8 @@ test('portfolio Gantt exposes critical tasks and dependency connectors', async (
   assert.match(timeline, /mouseDrag\.current\.left - \(event\.clientX - mouseDrag\.current\.x\)/);
   assert.match(timeline, /touchPan\.current\.left - deltaX/);
   assert.match(timeline, /const days = -Math\.round/);
+  assert.match(timeline, /scrollSettle\.current = setTimeout/);
+  assert.match(timeline, /current\.scrollWidth - current\.clientWidth/);
   assert.doesNotMatch(gantt, /reverseHorizontalWheel/);
   assert.match(gantt, /TaskEditor/);
 });

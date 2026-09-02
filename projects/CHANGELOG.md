@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.36.7
+
+- Restored free horizontal movement in both RTL Gantt timelines by preventing infinite-range recentering during an active gesture.
+- Additional date ranges now load only after scrolling settles at the actual canvas edge, preserving the visible date position.
+
 ## 0.36.6
 
 - Rebuilt both Gantt date axes for RTL: later dates now extend leftward and earlier dates rightward.

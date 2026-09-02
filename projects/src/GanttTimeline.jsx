@@ -51,6 +51,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   const [workCalendar, setWorkCalendar] = useState(readWorkCalendar);
   const scrollRef = useRef(null);
   const pendingShift = useRef(0);
+  const scrollSettle = useRef(null);
   const pinch = useRef(null);
   const touchPan = useRef(null);
   const mouseDrag = useRef(null);
@@ -114,13 +115,20 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   const handleScroll = () => {
     const element = scrollRef.current;
     if (!element || pendingShift.current) return;
-    if (element.scrollLeft < pagePixels * 0.75) {
-      pendingShift.current = 1;
-      setAnchor((current) => current + config.pageDays * DAY);
-    } else if (element.scrollLeft > pagePixels * 3.25) {
-      pendingShift.current = -1;
-      setAnchor((current) => current - config.pageDays * DAY);
-    }
+    if (scrollSettle.current) clearTimeout(scrollSettle.current);
+    scrollSettle.current = setTimeout(() => {
+      const current = scrollRef.current;
+      if (!current || pendingShift.current) return;
+      const edge = Math.min(pagePixels * 0.25, Math.max(120, current.clientWidth * 0.35));
+      const maximum = current.scrollWidth - current.clientWidth;
+      if (current.scrollLeft < edge) {
+        pendingShift.current = 1;
+        setAnchor((value) => value + config.pageDays * DAY);
+      } else if (current.scrollLeft > maximum - edge) {
+        pendingShift.current = -1;
+        setAnchor((value) => value - config.pageDays * DAY);
+      }
+    }, 180);
   };
   const chooseZoom = (value) => {
     pendingShift.current = 0;
@@ -129,6 +137,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   const changeScale = (delta) => setScale((current) => clampScale(current + delta));
   useEffect(() => () => {
     if (longPress.current) clearTimeout(longPress.current);
+    if (scrollSettle.current) clearTimeout(scrollSettle.current);
   }, []);
   useEffect(() => {
     const refresh = () => setWorkCalendar(readWorkCalendar());
