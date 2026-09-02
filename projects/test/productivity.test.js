@@ -18,6 +18,15 @@ test('daily work, portfolio control and project governance are wired into the UI
   assert.match(project,/שינויים ובקרה/);assert.match(settings,/ProductivitySettings/);
 });
 
+test('portfolio control exposes calendar project age from the persisted creation date',async()=>{
+  const [workspace,intelligence]=await Promise.all([read('src/ProductivityWorkspace.jsx'),read('server/projectIntelligence.js')]);
+  assert.match(intelligence,/p\.manager,p\.created_at,p\.project_category/);
+  assert.match(workspace,/const projectAge=/);
+  assert.match(workspace,/גיל הפרויקט:/);
+  assert.match(workspace,/projectAgeText\(item\.created_at\)/);
+  for(const unit of ['שנה','חודש','יום'])assert.match(workspace,new RegExp(unit));
+});
+
 test('automation engine is connected to real lifecycle events and overdue scheduling',async()=>{
   const [server,operations,engine]=await Promise.all([read('server/index.js'),read('server/operations.js'),read('server/productivity.js')]);
   assert.match(server,/project_created/);assert.match(server,/project_stage_changed/);assert.match(server,/SELECT \* FROM project_templates WHERE id=\$1 AND active=TRUE/);assert.match(operations,/task_status_changed/);

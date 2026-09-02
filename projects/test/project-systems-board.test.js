@@ -54,9 +54,9 @@ test('systems boards expose labelled touch-friendly mobile subitem cards',async(
   assert.match(masterUi,/MobileActionMenu label="פעולות מערכת"/);
 });
 
-test('master systems catalog supports collapsing and full CRUD entry points at every level',async()=>{
+test('master systems catalog starts collapsed and supports full CRUD entry points at every level',async()=>{
   const [ui,css]=await Promise.all([read('src/MasterDataWorkspace.jsx'),read('src/master-data.css')]);
-  for(const token of ['collapsedCategories','equipment-category-toggle',"onCreate('system',category.id)","onCreate('component',system.id)",'עריכת רכיב','תת־קטגוריה / מערכת'])assert.match(ui,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  for(const token of ['expandedCategories','categoryOpen=expandedCategories.has(category.id)','equipment-category-toggle',"onCreate('system',category.id)","onCreate('component',system.id)",'עריכת רכיב','תת־קטגוריה / מערכת'])assert.match(ui,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
   assert.match(ui,/aria-expanded=\{categoryOpen\}/);
   assert.match(css,/\.equipment-category-toggle/);
   assert.match(css,/\.equipment-category-actions/);

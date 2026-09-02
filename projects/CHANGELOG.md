@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.36.13
+
+- Changed the master systems catalog so every system type and nested system starts collapsed by default.
+- Added each project's calendar age to Performance Control, shown in years, months and days from its persisted creation date through today.
+- Extended the portfolio health response with the project creation timestamp and covered both behaviors with regression tests.
+
 ## 0.36.12
 
 - Normalized uploaded system-type icons to the same fixed visual frame and inner image size.
