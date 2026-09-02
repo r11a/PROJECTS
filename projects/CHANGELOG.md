@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.36.8
+
+- Restored mouse and trackpad horizontal input with a non-passive native wheel listener on both Gantt timelines.
+- Expanded click-and-drag panning to the full empty timeline surface while preserving task editing and opening interactions.
+
 ## 0.36.7
 
 - Restored free horizontal movement in both RTL Gantt timelines by preventing infinite-range recentering during an active gesture.

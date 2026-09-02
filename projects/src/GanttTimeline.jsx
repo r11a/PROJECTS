@@ -191,8 +191,15 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
       scrollRef.current.scrollLeft -= delta;
     }
   };
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return undefined;
+    element.addEventListener("wheel", wheelZoom, { passive: false });
+    return () => element.removeEventListener("wheel", wheelZoom);
+  }, [scale]);
   const startMouseDrag = (event) => {
-    if (event.pointerType !== "mouse" || event.button !== 0 || event.target.closest("button")) return;
+    if (event.pointerType !== "mouse" || event.button !== 0 || event.target.closest?.(".cg-bar, .cg-resize")) return;
+    event.preventDefault();
     mouseDrag.current = { pointerId: event.pointerId, x: event.clientX, left: scrollRef.current.scrollLeft };
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
@@ -319,7 +326,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
             <button type="button" className="cg-item-label" style={{ height: row.height }} key={row.key} onClick={() => onOpen?.(row.item)}><span className="cg-avatar" style={{ background: row.item.assignee_color || palette[row.groupIndex % palette.length] }}>{(row.item.assignee_name || row.item.owner_name || "?").slice(0, 2)}</span><span><strong>{row.item.title}</strong><small>{row.item.assignee_name || row.item.owner_name || "לא הוקצה"} · {dateLabel(row.item.start)}–{dateLabel(row.item.end)}</small>{row.item.dependency_title && <em>תלויה ב: {row.item.dependency_title}</em>}</span></button>
           ))}
         </div>
-        <div className={`cg-scroll ${dragging ? "dragging" : ""}`} ref={scrollRef} onScroll={handleScroll} onTouchStart={startPinch} onTouchMove={movePinch} onTouchEnd={endPinch} onTouchCancel={endPinch} onWheel={wheelZoom} onPointerDown={startMouseDrag} onPointerMove={moveMouseDrag} onPointerUp={endMouseDrag} onPointerCancel={endMouseDrag}>
+        <div className={`cg-scroll ${dragging ? "dragging" : ""}`} ref={scrollRef} onScroll={handleScroll} onTouchStart={startPinch} onTouchMove={movePinch} onTouchEnd={endPinch} onTouchCancel={endPinch} onPointerDown={startMouseDrag} onPointerMove={moveMouseDrag} onPointerUp={endMouseDrag} onPointerCancel={endMouseDrag}>
           <div className="cg-canvas" style={{ width: canvasWidth }}>
             <div className="cg-ruler">{ticks.map((tick) => <span key={tick.value} style={{ left: tick.left }}>{dateLabel(tick.value, zoom === "day")}</span>)}</div>
             <div className="cg-body" style={{ height: bodyHeight, "--grid": `${config.tickDays * pixelsPerDay}px` }}>
