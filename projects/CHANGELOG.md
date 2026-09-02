@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.36.1
+
+- Replaced rigid spreadsheet-style separators in the project header, overview facts and team list with modern spaced information cards.
+- Added consistent light, granite-dark and mobile treatments for project information surfaces.
+- Restored mandatory release-note synchronization so a release cannot pass tests without a matching changelog entry.
+
+## 0.36.0
+
+- Reorganized the main dashboard into clear metrics, attention and planning sections without removing information.
+- Rebuilt the project overview with progress indicators, action summaries, project facts and a cleaner team panel.
+- Removed standalone sort icons from system subitem columns; clicking the full column title now cycles sorting.
+
+## 0.35.3
+
+- Fixed desktop GIS project-list scrolling with an independent vertical scroll area and visible scrollbar.
+
+## 0.35.2
+
+- Constrained the GIS map and all floating controls to the phone viewport and recalculated Leaflet sizing after resize or rotation.
+
+## 0.35.1
+
+- Made satellite imagery the default GIS layer.
+- Replaced horizontal mobile project browsing with a bounded vertical list that scales to large portfolios.
+
+## 0.35.0
+
+- Added a dedicated responsive GIS workspace with project search, exact stored coordinates, street and satellite layers.
+- Added current-location, Waze, Google Maps and direct project actions with granite-dark support.
+
+## 0.34.1
+
+- Completed dark-mode form and report coverage and stabilized cross-workspace navigation callbacks.
+- Improved project workflows, system editing and overview reliability after rapid navigation.
+
+## 0.34.0
+
+- Extended persistent authentication to 30 days across browser and mobile sessions.
+- Preserved active sessions through routine application upgrades while retaining secure invalidation controls.
+
 ## 0.33.9
 
 - Fixed the rapid-tab navigation crash by preventing asynchronous data loaders from being returned as React effect cleanup handlers.

@@ -4,12 +4,14 @@ import { readFile } from 'node:fs/promises';
 
 test('release version stays synchronized across package and Home Assistant metadata', async () => {
   const packageJson=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
-  const [config,docker]=await Promise.all([
+  const [config,docker,changelog]=await Promise.all([
     readFile(new URL('../config.yaml',import.meta.url),'utf8'),
     readFile(new URL('../Dockerfile',import.meta.url),'utf8'),
+    readFile(new URL('../CHANGELOG.md',import.meta.url),'utf8'),
   ]);
   assert.match(config,new RegExp(`^version: "${packageJson.version.replaceAll('.','\\.')}"$`,'m'));
   assert.match(docker,new RegExp(`io\\.hass\\.version="${packageJson.version.replaceAll('.','\\.')}"`));
+  assert.match(changelog,new RegExp(`^## ${packageJson.version.replaceAll('.','\\.')}$`,'m'),'every release must include matching release notes');
 });
 
 test('all AI data dependencies exist in ordered migrations', async () => {
