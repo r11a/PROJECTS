@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.36.9
+
+- Made mobile Gantt panning fluid by synchronizing touch updates with display frames.
+- Added velocity-based inertial scrolling with natural deceleration and immediate interruption on the next gesture.
+- Smoothed desktop mouse dragging with the same frame synchronization and inertia, and coalesced high-frequency trackpad events to prevent jitter.
+
 ## 0.36.8
 
 - Restored mouse and trackpad horizontal input with a non-passive native wheel listener on both Gantt timelines.

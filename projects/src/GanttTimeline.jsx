@@ -54,6 +54,11 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   const scrollSettle = useRef(null);
   const pinch = useRef(null);
   const touchPan = useRef(null);
+  const touchFrame = useRef(null);
+  const touchMomentum = useRef(null);
+  const touchTarget = useRef(null);
+  const wheelFrame = useRef(null);
+  const wheelDelta = useRef(0);
   const mouseDrag = useRef(null);
   const taskDrag = useRef(null);
   const blockTaskClick = useRef(false);
@@ -138,7 +143,26 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   useEffect(() => () => {
     if (longPress.current) clearTimeout(longPress.current);
     if (scrollSettle.current) clearTimeout(scrollSettle.current);
+    if (touchFrame.current) cancelAnimationFrame(touchFrame.current);
+    if (touchMomentum.current) cancelAnimationFrame(touchMomentum.current);
+    if (wheelFrame.current) cancelAnimationFrame(wheelFrame.current);
   }, []);
+  const startMomentum = (element, initialVelocity) => {
+    if (!element || Math.abs(initialVelocity) < 0.04) return;
+    if (touchMomentum.current) cancelAnimationFrame(touchMomentum.current);
+    let velocity = initialVelocity;
+    let previous = performance.now();
+    const coast = (now) => {
+      const elapsed = Math.min(32, now - previous);
+      previous = now;
+      const before = element.scrollLeft;
+      element.scrollLeft += velocity * elapsed;
+      velocity *= Math.pow(0.94, elapsed / 16);
+      if (Math.abs(velocity) > 0.025 && element.scrollLeft !== before) touchMomentum.current = requestAnimationFrame(coast);
+      else touchMomentum.current = null;
+    };
+    touchMomentum.current = requestAnimationFrame(coast);
+  };
   useEffect(() => {
     const refresh = () => setWorkCalendar(readWorkCalendar());
     window.addEventListener("projects:work-calendar-changed", refresh);
@@ -154,12 +178,16 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     ...extra,
   });
   const startPinch = (event) => {
+    if (touchMomentum.current) {
+      cancelAnimationFrame(touchMomentum.current);
+      touchMomentum.current = null;
+    }
     if (event.touches.length === 2) {
       touchPan.current = null;
       pinch.current = { distance: touchDistance(event.touches), scale };
     } else if (event.touches.length === 1 && scrollRef.current) {
       const touch = event.touches[0];
-      touchPan.current = { x: touch.clientX, y: touch.clientY, left: scrollRef.current.scrollLeft };
+      touchPan.current = { x: touch.clientX, y: touch.clientY, left: scrollRef.current.scrollLeft, lastX: touch.clientX, lastTime:performance.now(), velocity:0 };
     }
   };
   const movePinch = (event) => {
@@ -174,11 +202,25 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     const deltaY = touch.clientY - touchPan.current.y;
     if (Math.abs(deltaX) <= Math.abs(deltaY) || Math.abs(deltaX) < 4) return;
     event.preventDefault();
-    scrollRef.current.scrollLeft = touchPan.current.left - deltaX;
+    const now = performance.now();
+    const elapsed = Math.max(1, now - touchPan.current.lastTime);
+    touchPan.current.velocity = -(touch.clientX - touchPan.current.lastX) / elapsed;
+    touchPan.current.lastX = touch.clientX;
+    touchPan.current.lastTime = now;
+    touchTarget.current = touchPan.current.left - deltaX;
+    if (!touchFrame.current) touchFrame.current = requestAnimationFrame(() => {
+      touchFrame.current = null;
+      if (scrollRef.current && touchTarget.current !== null) scrollRef.current.scrollLeft = touchTarget.current;
+    });
   };
   const endPinch = (event) => {
     if (event.touches.length < 2) pinch.current = null;
-    if (!event.touches.length) touchPan.current = null;
+    if (!event.touches.length) {
+      const element = scrollRef.current;
+      const velocity = touchPan.current?.velocity || 0;
+      touchPan.current = null;
+      startMomentum(element, velocity);
+    }
   };
   const wheelZoom = (event) => {
     if (event.ctrlKey) {
@@ -186,9 +228,18 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
       changeScale(event.deltaY < 0 ? 0.1 : -0.1);
     } else if ((event.shiftKey || event.deltaX) && scrollRef.current) {
       event.preventDefault();
+      if (touchMomentum.current) {
+        cancelAnimationFrame(touchMomentum.current);
+        touchMomentum.current = null;
+      }
       const delta = event.deltaX || event.deltaY;
       // The RTL time axis advances toward the left; horizontal input follows its visual motion.
-      scrollRef.current.scrollLeft -= delta;
+      wheelDelta.current -= delta;
+      if (!wheelFrame.current) wheelFrame.current = requestAnimationFrame(() => {
+        wheelFrame.current = null;
+        if (scrollRef.current) scrollRef.current.scrollLeft += wheelDelta.current;
+        wheelDelta.current = 0;
+      });
     }
   };
   useEffect(() => {
@@ -200,18 +251,30 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   const startMouseDrag = (event) => {
     if (event.pointerType !== "mouse" || event.button !== 0 || event.target.closest?.(".cg-bar, .cg-resize")) return;
     event.preventDefault();
-    mouseDrag.current = { pointerId: event.pointerId, x: event.clientX, left: scrollRef.current.scrollLeft };
+    if (touchMomentum.current) cancelAnimationFrame(touchMomentum.current);
+    mouseDrag.current = { pointerId: event.pointerId, x: event.clientX, left: scrollRef.current.scrollLeft, lastX:event.clientX, lastTime:performance.now(), velocity:0 };
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
   };
   const moveMouseDrag = (event) => {
     if (!mouseDrag.current || mouseDrag.current.pointerId !== event.pointerId) return;
-    scrollRef.current.scrollLeft = mouseDrag.current.left - (event.clientX - mouseDrag.current.x);
+    const now = performance.now();
+    const elapsed = Math.max(1, now - mouseDrag.current.lastTime);
+    mouseDrag.current.velocity = -(event.clientX - mouseDrag.current.lastX) / elapsed;
+    mouseDrag.current.lastX = event.clientX;
+    mouseDrag.current.lastTime = now;
+    touchTarget.current = mouseDrag.current.left - (event.clientX - mouseDrag.current.x);
+    if (!touchFrame.current) touchFrame.current = requestAnimationFrame(() => {
+      touchFrame.current = null;
+      if (scrollRef.current && touchTarget.current !== null) scrollRef.current.scrollLeft = touchTarget.current;
+    });
   };
   const endMouseDrag = (event) => {
     if (!mouseDrag.current || mouseDrag.current.pointerId !== event.pointerId) return;
+    const velocity = mouseDrag.current.velocity;
     mouseDrag.current = null;
     setDragging(false);
+    startMomentum(scrollRef.current, velocity);
   };
   const beginTaskDrag = (event, item, mode) => {
     if (!onScheduleChange || event.pointerType === "touch" && event.isPrimary === false) return;

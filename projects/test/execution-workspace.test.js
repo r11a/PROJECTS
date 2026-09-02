@@ -54,7 +54,7 @@ test('portfolio Gantt exposes critical tasks and dependency connectors', async (
   assert.match(timeline, /onPointerDown=\{startMouseDrag\}/);
   assert.match(timeline, /event\.shiftKey/);
   assert.match(timeline, /canvasWidth - index \* config\.tickDays \* pixelsPerDay/);
-  assert.match(timeline, /scrollLeft -= delta/);
+  assert.match(timeline, /wheelDelta\.current -= delta/);
   assert.match(timeline, /mouseDrag\.current\.left - \(event\.clientX - mouseDrag\.current\.x\)/);
   assert.match(timeline, /touchPan\.current\.left - deltaX/);
   assert.match(timeline, /const days = -Math\.round/);
@@ -62,6 +62,10 @@ test('portfolio Gantt exposes critical tasks and dependency connectors', async (
   assert.match(timeline, /current\.scrollWidth - current\.clientWidth/);
   assert.match(timeline, /addEventListener\("wheel", wheelZoom, \{ passive: false \}\)/);
   assert.match(timeline, /\.cg-bar, \.cg-resize/);
+  assert.match(timeline, /startMomentum\(scrollRef\.current, velocity\)/);
+  assert.match(timeline, /velocity \*= Math\.pow\(0\.94/);
+  assert.match(timeline, /wheelDelta\.current -= delta/);
+  assert.match(timeline, /wheelFrame\.current = requestAnimationFrame/);
   assert.doesNotMatch(gantt, /reverseHorizontalWheel/);
   assert.match(gantt, /TaskEditor/);
 });
