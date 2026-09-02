@@ -2171,6 +2171,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
           </div>
         </div>
       </section>
+      <div className="dashboard-section-title"><div><span>01</span><strong>מדדים מרכזיים</strong></div><small>תמונה מהירה של מצב כלל הפרויקטים</small></div>
       <section className="kpi-grid">
         <KpiCard
           icon={FolderKanban}
@@ -2206,7 +2207,8 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
           onClick={() => setPage("finance")}
         />}
       </section>
-      <RiskCenter api={api} projects={projects} openProject={openProject}/>
+      <div className="dashboard-section-title"><div><span>02</span><strong>דורש תשומת לב</strong></div><small>חריגות, סיכונים ופעולות שכדאי לקדם עכשיו</small></div>
+      <section className="dashboard-priority-zone"><RiskCenter api={api} projects={projects} openProject={openProject}/></section>
       <section className="dashboard-grid top">
         {projects.some((p) => p.flag) && <div className="panel portfolio-panel">
           <PanelHead
@@ -2300,6 +2302,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
           </div>
         </div>
       </section>
+      <div className="dashboard-section-title"><div><span>03</span><strong>תכנון וביצוע</strong></div><small>מגמות כספיות והמשימות הקרובות</small></div>
       <section className="dashboard-grid bottom">
         {canViewFinance && <div className="panel cash-panel">
           <PanelHead

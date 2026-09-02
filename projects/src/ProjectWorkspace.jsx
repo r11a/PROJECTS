@@ -236,6 +236,11 @@ export function ProjectWorkspace({
   const totalHours = (workspace.timeEntries||[]).reduce((sum,item)=>sum+Number(item.hours||0),0);
   const targetHours = Number(project.installationHoursTarget||project.installation_hours_target||0)+Number(project.programmingHoursTarget||project.programming_hours_target||0);
   const completed = workspace.tasks.filter((x) => x.status === "done").length;
+  const openTasks = workspace.tasks.length-completed;
+  const equipmentTotal=(workspace.equipment||[]).reduce((sum,item)=>sum+Number(item.quantity_ordered??item.quantity??0),0);
+  const equipmentInstalled=(workspace.equipment||[]).reduce((sum,item)=>sum+Number(item.quantity_installed||0),0);
+  const taskProgress=workspace.tasks.length?Math.round(completed/workspace.tasks.length*100):0;
+  const installationProgress=equipmentTotal?Math.round(equipmentInstalled/equipmentTotal*100):0;
   const addUpdate = async (e) => {
     e.preventDefault();
     if (!note.trim()) return;
@@ -571,7 +576,7 @@ export function ProjectWorkspace({
       )}
       {tab === "activity" && <ProjectGovernancePanel project={project} api={api} user={user} setNotice={setNotice}/>}
       {tab === "overview"&&<div className="project-overview-snapshot">
-        <section className="panel overview-summary-table"><header><div><h3>תמונת מצב הפרויקט</h3><span>נתוני ביצוע מרכזיים, ללא פעולות עריכה</span></div></header><div className="overview-data-grid">
+        <section className="panel overview-summary-table"><header><div><span className="overview-eyebrow">סקירה ניהולית</span><h3>תמונת מצב הפרויקט</h3><span>המידע החשוב לקבלת החלטה מהירה</span></div><button className="overview-manage-link" onClick={()=>setTab('tasks')}>ניהול משימות</button></header><div className="overview-progress-strip"><article><span>התקדמות הפרויקט</span><strong>{project.progress}%</strong><div><i style={{width:`${project.progress}%`}}/></div></article><article><span>השלמת משימות</span><strong>{taskProgress}%</strong><div><i style={{width:`${taskProgress}%`}}/></div></article><article><span>התקנת ציוד</span><strong>{installationProgress}%</strong><div><i style={{width:`${installationProgress}%`}}/></div></article></div><div className="overview-data-grid">
           <div><span>סיווג</span><strong>{project.projectCategory==='other'?(project.projectCategoryCustom||'אחר'):'בית חכם'} · {project.projectClassification||'בית פרטי'}</strong></div>
           <div><span>כתובת</span><strong>{project.address||'לא הוגדרה'}</strong></div>
           <div><span>שלב נוכחי</span><strong>{stageOptions.find((item)=>(item.metadata?.key||item.name)===project.stage)?.name||project.stage}</strong></div>
@@ -580,8 +585,8 @@ export function ProjectWorkspace({
           <div><span>משימות</span><strong>{completed} הושלמו מתוך {workspace.tasks.length}</strong></div>
           <div><span>שעות עבודה</span><strong>{totalHours.toFixed(1)}{targetHours?` מתוך ${targetHours}`:''}</strong></div>
           {user.financeAccess!==false&&<div><span>קצב גבייה</span><strong>{project.value?Math.round(project.paid/project.value*100):0}% · {money.format(due)} יתרה</strong></div>}
-        </div></section>
-        <section className="panel overview-contacts-table"><header><h3>אנשי קשר וצוות</h3><span>{1+workspace.team.length} אנשי קשר משויכים</span></header><div className="overview-contact-rows"><div><span className="resource-avatar">{project.client?.slice(0,2)}</span><strong>{project.client}</strong><small>לקוח</small>{project.phone?<a href={`tel:${project.phone}`}>{project.phone}</a>:<i>—</i>}{project.email?<a href={`mailto:${project.email}`}>{project.email}</a>:<i>—</i>}</div>{workspace.team.map((person)=><div key={`${person.professional_id}-${person.role_type_id}`}><span className="resource-avatar" style={{background:person.color}}>{person.display_name?.slice(0,2)}</span><strong>{person.display_name}</strong><small>{person.role_name}</small>{person.phone?<a href={`tel:${person.phone}`}>{person.phone}</a>:<i>—</i>}{person.email?<a href={`mailto:${person.email}`}>{person.email}</a>:<i>—</i>}</div>)}</div></section>
+        </div><div className="overview-action-summary"><button onClick={()=>setTab('tasks')}><strong>{openTasks}</strong><span>משימות פתוחות</span></button><button onClick={()=>setTab('systems')}><strong>{equipmentInstalled}/{equipmentTotal}</strong><span>רכיבים הותקנו</span></button><button onClick={()=>setTab('hours')}><strong>{totalHours.toFixed(1)}</strong><span>שעות שדווחו</span></button></div></section>
+        <section className="panel overview-contacts-table"><header><div><span className="overview-eyebrow">אנשים בפרויקט</span><h3>לקוח וצוות</h3></div><span>{1+workspace.team.length} משויכים</span></header><div className="overview-contact-rows"><div><span className="resource-avatar">{project.client?.slice(0,2)}</span><strong>{project.client}</strong><small>לקוח</small>{project.phone?<a href={`tel:${project.phone}`}>{project.phone}</a>:<i>—</i>}{project.email?<a href={`mailto:${project.email}`}>{project.email}</a>:<i>—</i>}</div>{workspace.team.map((person)=><div key={`${person.professional_id}-${person.role_type_id}`}><span className="resource-avatar" style={{background:person.color}}>{person.display_name?.slice(0,2)}</span><strong>{person.display_name}</strong><small>{person.role_name}</small>{person.phone?<a href={`tel:${person.phone}`}>{person.phone}</a>:<i>—</i>}{person.email?<a href={`mailto:${person.email}`}>{person.email}</a>:<i>—</i>}</div>)}</div><button className="overview-team-action" onClick={()=>setTab('team')}>ניהול צוות הפרויקט</button></section>
       </div>}
       {tab === "overview" && (
         <div className="detail-grid">
