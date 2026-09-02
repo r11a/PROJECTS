@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.36.2
+
+- Corrected Shift+wheel horizontal navigation in the general portfolio Gantt so it follows the expected RTL direction.
+- Kept the project Gantt interaction and chronological timeline order unchanged.
+
 ## 0.36.1
 
 - Replaced rigid spreadsheet-style separators in the project header, overview facts and team list with modern spaced information cards.

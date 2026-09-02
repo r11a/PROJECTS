@@ -88,7 +88,7 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
         <div className="gantt-summary"><b>{groups.length}</b><span>פרויקטים</span><b>{tasks.filter((item) => item.critical).length}</b><span>משימות קריטיות</span></div>
       </section>
       <nav className="project-category-filter gantt-category-filter"><button className={category==='all'?'active':''} onClick={()=>setCategory('all')}>הכל</button><button className={category==='smart_home'?'active':''} onClick={()=>setCategory('smart_home')}>בית חכם</button><button className={category==='other'?'active':''} onClick={()=>setCategory('other')}>אחרים</button></nav>
-      <GanttTimeline groups={groups} query={query} onQueryChange={setQuery} onOpen={(item) => setEditor({ kind: item.kind, item })} onScheduleChange={saveSchedule} users={users.filter(item=>String(item.id)!==String(user.id))} title="תכנון כלל הפרויקטים" />
+      <GanttTimeline reverseHorizontalWheel groups={groups} query={query} onQueryChange={setQuery} onOpen={(item) => setEditor({ kind: item.kind, item })} onScheduleChange={saveSchedule} users={users.filter(item=>String(item.id)!==String(user.id))} title="תכנון כלל הפרויקטים" />
       {editor && <TaskEditor api={api} setNotice={setNotice} kind={editor.kind} initial={editor.item} projects={projects} professionals={professionals} tasks={tasks} onClose={() => setEditor(null)} onSave={save} />}
     </div>
   );
