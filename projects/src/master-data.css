@@ -59,3 +59,21 @@
   .equipment-subrow>.equipment-row-actions{display:none}
   .equipment-mobile-menu{position:relative;grid-column:1/-1;display:block;width:100%}
 }
+
+/* Three-level catalog controls: type -> system/subcategory -> component. */
+.equipment-board-group>header{height:auto;min-height:62px;padding:7px 12px;gap:10px}
+.equipment-category-toggle{min-width:0;min-height:48px;padding:4px;display:flex;flex:1;align-items:center;gap:11px;border:0;border-radius:11px;background:transparent;color:inherit;text-align:right;cursor:pointer}
+.equipment-category-toggle:hover{background:color-mix(in srgb,var(--category-color) 7%,transparent)}
+.equipment-category-toggle>span:nth-child(2){min-width:0;display:grid;flex:1}
+.equipment-category-toggle strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.equipment-category-toggle>svg{flex:none;color:var(--category-color)}
+.equipment-category-actions{display:flex;align-items:center;gap:6px}
+.equipment-category-actions button{min-height:34px;padding:0 9px;display:flex;align-items:center;gap:5px;border:1px solid #e1e4eb;border-radius:9px;background:#fff;color:#6252cd;font-size:12px;font-weight:750;cursor:pointer}
+.equipment-board-group.category-collapsed>header{border-bottom:0}
+.theme-dark .equipment-category-actions button{border-color:#45484e;background:#292b2e;color:#c9c1ff}
+.theme-dark .equipment-category-toggle:hover{background:color-mix(in srgb,var(--category-color) 12%,transparent)}
+@media(max-width:680px){
+  .equipment-board-group>header{align-items:stretch;flex-direction:column}
+  .equipment-category-actions{width:100%}
+  .equipment-category-actions button{flex:1;justify-content:center}
+}

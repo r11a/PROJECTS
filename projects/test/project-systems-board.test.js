@@ -42,7 +42,7 @@ test('systems boards expose labelled touch-friendly mobile subitem cards',async(
   for(const label of ['מיקום','תיוג','כמות','הותקן','סטטוס'])assert.match(projectUi,new RegExp(`<small>${label}`));
   assert.match(projectCss,/\.subitem-field>small/);
   assert.match(projectCss,/grid-template-columns:minmax\(0,1fr\)!important/);
-  for(const label of ['פריט','מיקום','תיוג','מק״ט','כמות','סטטוס'])assert.match(masterUi,new RegExp(`<small>${label}`));
+  for(const label of ['רכיב','מיקום','תיוג','מק״ט','כמות','סטטוס'])assert.match(masterUi,new RegExp(`<small>${label}`));
   assert.match(masterCss,/\.equipment-mobile-field>small/);
   assert.match(masterCss,/\.equipment-mobile-field\.item-name/);
   assert.match(projectUi,/mobile-subitem-menu/);
@@ -52,6 +52,14 @@ test('systems boards expose labelled touch-friendly mobile subitem cards',async(
   assert.match(masterUi,/equipment-mobile-menu/);
   assert.match(masterCss,/\.equipment-mobile-menu/);
   assert.match(masterUi,/MobileActionMenu label="פעולות מערכת"/);
+});
+
+test('master systems catalog supports collapsing and full CRUD entry points at every level',async()=>{
+  const [ui,css]=await Promise.all([read('src/MasterDataWorkspace.jsx'),read('src/master-data.css')]);
+  for(const token of ['collapsedCategories','equipment-category-toggle',"onCreate('system',category.id)","onCreate('component',system.id)",'עריכת רכיב','תת־קטגוריה / מערכת'])assert.match(ui,new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  assert.match(ui,/aria-expanded=\{categoryOpen\}/);
+  assert.match(css,/\.equipment-category-toggle/);
+  assert.match(css,/\.equipment-category-actions/);
 });
 
 test('advanced project systems board supports field control sorting duplication and cross-system moves',async()=>{

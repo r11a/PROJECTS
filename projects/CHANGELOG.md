@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.36.11
+
+- Added collapsible system-type sections to the systems and components catalog.
+- Added explicit creation flows for system types, systems/subcategories and components with the correct parent preselected.
+- Added full edit actions for every catalog level, including components on desktop and mobile.
+- Clarified the three-level catalog terminology and preserved direct inline name editing.
+
 ## 0.36.10
 
 - Restored fully readable SUBITEM column titles by giving compact fields sufficient width and allowing labels to wrap instead of truncating.
