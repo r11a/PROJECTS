@@ -61,6 +61,14 @@ test('advanced project systems board supports field control sorting duplication 
   for(const token of ['column_type','sku_override','project_system_field_settings'])assert.match(migration,new RegExp(token));
 });
 
+test('subitem column titles remain fully readable and sort from the title itself',async()=>{
+  const [ui,css]=await Promise.all([read('src/ProjectSystemsBoard.jsx'),read('src/project-systems-board.css')]);
+  assert.match(ui,/className="column-title-sort"/);
+  assert.match(ui,/field\.type==='number'\?'minmax\(82px,/);
+  assert.match(css,/\.board-fields-head span>svg\{position:absolute/);
+  assert.match(css,/\.board-fields-head \.column-title-sort b\{[^}]*text-overflow:clip;white-space:normal/);
+});
+
 test('project systems export creates a styled RTL Excel workbook',async()=>{
   const [ui,server,dark]=await Promise.all([read('src/ProjectSystemsBoard.jsx'),read('server/projectIntelligence.js'),read('src/theme-dark.css')]);
   for(const token of ['systems.xlsx','ייצוא Excel','rowColorOverrides'])assert.match(ui,new RegExp(token));

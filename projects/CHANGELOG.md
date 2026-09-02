@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.36.10
+
+- Restored fully readable SUBITEM column titles by giving compact fields sufficient width and allowing labels to wrap instead of truncating.
+- Kept sorting on the column title itself while moving the drag handle out of the title's text space.
+- Matched the improved header layout in light and dark themes without reintroducing separate sort icons.
+
 ## 0.36.9
 
 - Made mobile Gantt panning fluid by synchronizing touch updates with display frames.
