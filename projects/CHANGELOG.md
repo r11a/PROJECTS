@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.36.6
+
+- Rebuilt both Gantt date axes for RTL: later dates now extend leftward and earlier dates rightward.
+- Mirrored tasks, milestones, non-working days, dependency paths, resize handles and infinite-scroll anchoring with the date axis.
+- Aligned mouse, trackpad and mobile gestures so moving right advances in time and moving left returns to earlier dates.
+
 ## 0.36.5
 
 - Corrected click-and-drag navigation in both Gantt timelines so dragging right advances dates and dragging left returns to earlier dates.

@@ -65,6 +65,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   const canvasWidth = canvasDays * pixelsPerDay;
   const rangeStart = anchor - config.pageDays * 2 * DAY;
   const rangeEnd = rangeStart + canvasDays * DAY;
+  const dateX = (value) => canvasWidth - ((midnight(value) - rangeStart) / DAY) * pixelsPerDay;
 
   const rows = useMemo(() => {
     const output = [];
@@ -83,26 +84,26 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     if (!dependencyId) return [];
     const source = rowById.get(`${row.name}-${dependencyId}`);
     if (!source) return [];
-    const sourceX = ((midnight(source.item.end) - rangeStart) / DAY + 1) * pixelsPerDay;
-    const targetX = ((midnight(row.item.start) - rangeStart) / DAY) * pixelsPerDay;
+    const sourceX = dateX(midnight(source.item.end) + DAY);
+    const targetX = dateX(row.item.start);
     const sourceY = source.top + 32;
     const targetY = row.top + 32;
-    const bendX = Math.max(sourceX + 22, (sourceX + targetX) / 2);
+    const bendX = Math.min(sourceX - 22, (sourceX + targetX) / 2);
     return [{ key: `${row.name}-${dependencyId}-${row.item.id}`, d: `M ${sourceX} ${sourceY} C ${bendX} ${sourceY}, ${bendX} ${targetY}, ${targetX} ${targetY}` }];
   });
   const ticks = Array.from({ length: Math.floor(canvasDays / config.tickDays) + 1 }, (_, index) => {
     const value = rangeStart + index * config.tickDays * DAY;
-    return { value, left: index * config.tickDays * pixelsPerDay };
+    return { value, left: canvasWidth - index * config.tickDays * pixelsPerDay };
   });
-  const todayLeft = ((midnight(new Date()) - rangeStart) / DAY) * pixelsPerDay;
+  const todayLeft = dateX(new Date());
 
   const centerTimeline = (behavior = "auto") => {
-    scrollRef.current?.scrollTo({ left: pagePixels * 2 - Math.max(0, (scrollRef.current.clientWidth - pagePixels) / 2), behavior });
+    scrollRef.current?.scrollTo({ left: pagePixels * 3 - Math.max(0, (scrollRef.current.clientWidth - pagePixels) / 2), behavior });
   };
   useLayoutEffect(() => {
     if (!scrollRef.current) return;
     if (pendingShift.current) {
-      scrollRef.current.scrollLeft -= pendingShift.current * pagePixels;
+      scrollRef.current.scrollLeft += pendingShift.current * pagePixels;
       pendingShift.current = 0;
     } else centerTimeline();
   }, [anchor, zoom, scale]);
@@ -114,11 +115,11 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     const element = scrollRef.current;
     if (!element || pendingShift.current) return;
     if (element.scrollLeft < pagePixels * 0.75) {
-      pendingShift.current = -1;
-      setAnchor((current) => current - config.pageDays * DAY);
-    } else if (element.scrollLeft > pagePixels * 3.25) {
       pendingShift.current = 1;
       setAnchor((current) => current + config.pageDays * DAY);
+    } else if (element.scrollLeft > pagePixels * 3.25) {
+      pendingShift.current = -1;
+      setAnchor((current) => current - config.pageDays * DAY);
     }
   };
   const chooseZoom = (value) => {
@@ -164,7 +165,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     const deltaY = touch.clientY - touchPan.current.y;
     if (Math.abs(deltaX) <= Math.abs(deltaY) || Math.abs(deltaX) < 4) return;
     event.preventDefault();
-    scrollRef.current.scrollLeft = touchPan.current.left + deltaX;
+    scrollRef.current.scrollLeft = touchPan.current.left - deltaX;
   };
   const endPinch = (event) => {
     if (event.touches.length < 2) pinch.current = null;
@@ -177,8 +178,8 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     } else if ((event.shiftKey || event.deltaX) && scrollRef.current) {
       event.preventDefault();
       const delta = event.deltaX || event.deltaY;
-      // Timeline navigation follows the date axis: right advances, left goes back.
-      scrollRef.current.scrollLeft += delta;
+      // The RTL time axis advances toward the left; horizontal input follows its visual motion.
+      scrollRef.current.scrollLeft -= delta;
     }
   };
   const startMouseDrag = (event) => {
@@ -189,7 +190,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
   };
   const moveMouseDrag = (event) => {
     if (!mouseDrag.current || mouseDrag.current.pointerId !== event.pointerId) return;
-    scrollRef.current.scrollLeft = mouseDrag.current.left + (event.clientX - mouseDrag.current.x);
+    scrollRef.current.scrollLeft = mouseDrag.current.left - (event.clientX - mouseDrag.current.x);
   };
   const endMouseDrag = (event) => {
     if (!mouseDrag.current || mouseDrag.current.pointerId !== event.pointerId) return;
@@ -218,7 +219,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
     event.stopPropagation();
-    const days = Math.round((event.clientX - drag.x) / pixelsPerDay);
+    const days = -Math.round((event.clientX - drag.x) / pixelsPerDay);
     if (Math.abs(event.clientX - drag.x) > 6 && longPress.current) { clearTimeout(longPress.current); longPress.current=null; }
     if (!days && !drag.moved) return;
     drag.moved = true;
@@ -315,7 +316,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
             <div className="cg-body" style={{ height: bodyHeight, "--grid": `${config.tickDays * pixelsPerDay}px` }}>
               {Array.from({ length: canvasDays }, (_, index) => {
                 const value = rangeStart + index * DAY;
-                return isBlockedWorkday(value, workCalendar) ? <i className="cg-non-working-day" key={value} style={{ left: index * pixelsPerDay, width: pixelsPerDay }} /> : null;
+                return isBlockedWorkday(value, workCalendar) ? <i className="cg-non-working-day" key={value} style={{ left: canvasWidth - (index + 1) * pixelsPerDay, width: pixelsPerDay }} /> : null;
               })}
               {todayLeft >= 0 && todayLeft <= canvasWidth && <div className="cg-today-line" style={{ left: todayLeft }}><span>היום</span></div>}
               <svg className="cg-dependencies" width={canvasWidth} height={bodyHeight} viewBox={`0 0 ${canvasWidth} ${bodyHeight}`} preserveAspectRatio="none"><defs><marker id="cg-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>{dependencies.map((line) => <path key={line.key} d={line.d} markerEnd="url(#cg-arrow)" />)}</svg>
@@ -323,7 +324,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
                 if (row.type === "group") {
                   const starts = row.items.map((item) => midnight(item.start));
                   const ends = row.items.map((item) => midnight(item.end));
-                  const left = ((Math.min(...starts) - rangeStart) / DAY) * pixelsPerDay;
+                  const left = dateX(Math.max(...ends) + DAY);
                   const width = ((Math.max(...ends) - Math.min(...starts)) / DAY + 1) * pixelsPerDay;
                   return <div className="cg-group-row" key={row.key} style={{ top: row.top, height: row.height }}><i style={{ left, width, background: palette[row.groupIndex % palette.length] }} /></div>;
                 }
@@ -332,7 +333,7 @@ export function GanttTimeline({ groups, query = "", onQueryChange, onOpen, onSch
                 const itemStart = preview?.start ?? midnight(item.start);
                 const itemEnd = preview?.end ?? midnight(item.end);
                 const color = item.critical ? "#C92A3A" : item.color || (item.status === "done" || item.status === "completed" ? "#087F5B" : palette[row.groupIndex % palette.length]);
-                const exactLeft = ((itemStart - rangeStart) / DAY) * pixelsPerDay;
+                const exactLeft = dateX(itemEnd + DAY);
                 const exactWidth = Math.max(10, ((itemEnd - itemStart) / DAY + 1) * pixelsPerDay);
                 const renderWidth = item.kind === "milestone" ? 28 : Math.max(34, exactWidth);
                 const left = exactLeft - Math.max(0, (renderWidth - exactWidth) / 2);
