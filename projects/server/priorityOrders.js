@@ -277,7 +277,7 @@ export function createPriorityOrdersRouter({ pool, authenticate, requireRoles, a
         if (line.include && line.includeInEquipment && catalogItemId) {
           const progress=oldBomProgress.get(`${String(line.prioritySku).toLocaleLowerCase('en-US')}:${line.sortOrder}`)||{installed:0,programmed:0};const installed=Math.min(line.quantity,progress.installed);const programmed=Math.min(installed,progress.programmed);
           await db.query(`INSERT INTO project_equipment(project_id,catalog_item_id,project_system_id,source_priority_order_line_id,quantity,quantity_ordered,quantity_installed,quantity_programmed,source_unit,status,notes)
-            VALUES($1,$2,$3,$4,$5,$5,$6,$7,$8,CASE WHEN $6>=$5 THEN 'installed' ELSE 'planned' END,$9)`, [request.params.projectId, catalogItemId, line.projectSystemId, insertedLine.rows[0].id, line.quantity, installed, programmed, line.unit, `הזמנת Priority ${order.priorityOrderNumber}`]);
+            VALUES($1,$2,$3,$4,$5::numeric,$5::numeric,$6::numeric,$7,$8,CASE WHEN $6::numeric>=$5::numeric THEN 'installed' ELSE 'planned' END,$9)`, [request.params.projectId, catalogItemId, line.projectSystemId, insertedLine.rows[0].id, line.quantity, installed, programmed, line.unit, `הזמנת Priority ${order.priorityOrderNumber}`]);
           equipmentAdded += 1;
         }
       }
