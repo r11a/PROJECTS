@@ -255,6 +255,7 @@ async function seedDemoProjects() {
     const legacyStages = { planning:'waiting',installation:'installation_b',programming:'activation_programming',handover:'finishes',completed:'post_delivery' };
     const seededProject = {
       projectSize:'medium', contractorProgress:'waiting', documentFolder:'', projectClassification:'private_house',
+      projectCategory:'smart_home', projectCategoryCustom:'', projectProfile:{},
       projectIcon:'', projectColor:'#6957df',
       financeMode:'total', paymentTerms:'', depositAmount:0, depositPaid:false, financeBreakdown:[],
       installationHoursTarget:0, programmingHoursTarget:0,

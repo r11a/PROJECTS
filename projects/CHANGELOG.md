@@ -2,6 +2,7 @@
 
 ## 0.37.0
 
+- Fixed fresh-install startup by supplying the required category and profile defaults for demo projects.
 - Redesigned dashboard and personal workspace with a shared violet visual system, portfolio progress ring, contextual action cards, and an explained next-task recommendation.
 - Unified project headers, tabs, keyboard focus, and responsive light/dark surfaces.
 - Added shareable workspace/project URLs, browser back/forward navigation, and project tab restoration.
