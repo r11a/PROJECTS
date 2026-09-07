@@ -98,6 +98,24 @@ test.describe.serial('PROJECTS critical paths', () => {
     expect(response.status()).toBe(415);
   });
 
+  test('prevents a stale task edit from overwriting the current database version', async ({ page }) => {
+    await webLogin(page);
+    const taskResponse = await page.request.get('/api/operations/tasks');
+    expect(taskResponse.ok()).toBeTruthy();
+    const task = (await taskResponse.json()).tasks.find(item => item.status === 'open' && !item.dependency_task_id);
+    expect(task).toBeTruthy();
+    expect(task.version).toBeGreaterThan(0);
+    const title = `Versioned task ${Date.now()}`;
+    const saved = await page.request.patch(`/api/operations/tasks/${task.id}`, { data:{title,expectedVersion:task.version} });
+    expect(saved.ok()).toBeTruthy();
+    expect((await saved.json()).task.version).toBeGreaterThan(task.version);
+    const stale = await page.request.patch(`/api/operations/tasks/${task.id}`, { data:{title:'Stale title must not persist',expectedVersion:task.version} });
+    expect(stale.status()).toBe(409);
+    expect((await stale.json()).code).toBe('EDIT_CONFLICT');
+    const current = (await (await page.request.get('/api/operations/tasks')).json()).tasks.find(item => item.id === task.id);
+    expect(current.title).toBe(title);
+  });
+
   test('previews, edits and atomically imports a Priority XLSX order', async ({ page }) => {
     await webLogin(page);
     const clientsResponse = await page.request.get('/api/clients');

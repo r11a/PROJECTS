@@ -156,7 +156,11 @@ export function ProjectWorkspace({
   linkedTaskId = "",
   onLinkedTaskHandled,
 }) {
-  const [tab, setTab] = useState("overview");
+  const availableTabs = ['overview','tasks','gantt','reviews','hours','systems','team','priority','forms','finance','activity'];
+  const readTab = () => { const value = new URLSearchParams(window.location.search).get('tab'); return availableTabs.includes(value) && (value !== 'finance' || user.financeAccess !== false) ? value : 'overview'; };
+  const [tab, setTab] = useState(readTab);
+  useEffect(() => { const restore = () => setTab(readTab()); window.addEventListener('popstate', restore); return () => window.removeEventListener('popstate', restore); }, [project.id]);
+  useEffect(() => { const url = new URL(window.location.href); if (url.searchParams.get('project') === String(project.id)) { url.searchParams.set('tab', tab); window.history.replaceState({}, '', url); } }, [tab, project.id]);
   const [workspace, setWorkspace] = useState({
     tasks: [],
     milestones: [],
@@ -218,7 +222,7 @@ export function ProjectWorkspace({
   }, [project.id]);
   useEffect(() => {
     const live = (event) => {
-      if (["tasks","project_milestones","project_payments","project_equipment","project_system_board","project_system_columns","project_professionals","client_files","project_updates","project_site_reviews","project_meeting_summaries","project_time_entries","priority_orders","priority_order_lines"].includes(event.detail?.table)) load();
+      if (!event.detail?.table || ["tasks","project_milestones","project_payments","project_equipment","project_system_board","project_system_columns","project_professionals","client_files","project_updates","project_site_reviews","project_meeting_summaries","project_time_entries","priority_orders","priority_order_lines"].includes(event.detail?.table)) load();
     };
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);
@@ -433,6 +437,7 @@ export function ProjectWorkspace({
   ].filter(([key])=>key!=="finance"||user.financeAccess!==false);
   return (
     <div className="project-detail project-workspace">
+      <div className="project-breadcrumb"><button onClick={()=>setPage("projects")}>פרויקטים</button><span>/</span><span>{project.name}</span><small>{project.id}</small></div>
       <div className="project-hero panel">
         <div className="project-identity">
           <div className="project-home-icon" style={{background:`${project.projectColor||'#6957df'}20`,color:project.projectColor||'#6957df'}}>
@@ -1688,7 +1693,7 @@ function CommercialProjectGantt({ tasks, milestones, project, projects, professi
   const saveSchedule = async (item, dates) => {
     try {
       const base = item.kind === "task" ? "/operations/tasks" : "/operations/milestones";
-      await api(`${base}/${item.id}`, { method:"PATCH", body:JSON.stringify(item.kind === "task" ? dates : { dueDate:dates.dueDate, color:dates.color }) });
+      await api(`${base}/${item.id}`, { method:"PATCH", body:JSON.stringify(item.kind === "task" ? {...dates,expectedVersion:item.version} : { dueDate:dates.dueDate, color:dates.color }) });
       if(dates.mentionUserIds?.length)await api('/mentions',{method:'POST',body:JSON.stringify({userIds:dates.mentionUserIds,subject:`תיוג במשימה ${item.title}`,body:`תויגת במשימה ${item.title}. התאריכים עודכנו ל-${dates.startDate} עד ${dates.dueDate}.`,linkedUrl:`?project=${encodeURIComponent(project.id)}&task=${encodeURIComponent(item.id)}`})});
       setNotice("תאריכי המשימה עודכנו");
       if (typeof onDataChanged === "function") await onDataChanged();

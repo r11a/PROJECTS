@@ -178,16 +178,20 @@ export function TaskEditor({
     setSubmitting(true);
     const payload = {
       ...form,
+      ...(!isMilestone && initial?.version !== undefined ? { expectedVersion: initial.version } : {}),
       projectId: form.projectId || initial?.project_id,
       startDate: form.startDate || initial?.start_date,
       dueDate: form.dueDate || initial?.due_date,
-      assigneeProfessionalId: (form.assigneeProfessionalIds || [form.assigneeProfessionalId]).filter(Boolean)[0] || null,
-      assigneeProfessionalIds: (form.assigneeProfessionalIds || [form.assigneeProfessionalId]).filter(Boolean),
-      ownerProfessionalId: form.ownerProfessionalId || null,
-      parentTaskId: form.parentTaskId || null,
+      assigneeProfessionalId: (form.assigneeProfessionalIds || form.assignees?.map(item => String(item.id)) || [form.assigneeProfessionalId ?? form.assignee_professional_id]).filter(Boolean)[0] || null,
+      assigneeProfessionalIds: (form.assigneeProfessionalIds || form.assignees?.map(item => String(item.id)) || [form.assigneeProfessionalId ?? form.assignee_professional_id]).filter(Boolean),
+      ownerProfessionalId: form.ownerProfessionalId !== undefined ? form.ownerProfessionalId : (form.owner_professional_id || null),
+      parentTaskId: form.parentTaskId !== undefined ? form.parentTaskId : (form.parent_task_id || null),
     };
-    onClose();
-    await onSave(payload);
+    try {
+      const saved = await onSave(payload);
+      if (saved !== false) onClose();
+    } catch (error) { setNotice(error.message); }
+    finally { setSubmitting(false); }
   };
   return (
     <Modal
@@ -400,7 +404,7 @@ export function TaskEditor({
           <button type="button" className="ops-secondary" onClick={onClose}>
             ביטול
           </button>
-          <button className="ops-primary" disabled={submitting}>
+          <button type="submit" className="ops-primary" disabled={submitting}>
             {submitting ? "שומר..." : initial?.id ? "שמירת שינויים" : "יצירת משימה"}
           </button>
         </div>
@@ -501,7 +505,7 @@ export function TasksWorkspace({
   }, [tasks, milestones]);
   useEffect(() => {
     const live = (event) => {
-      if (!["tasks", "milestones", "projects", "professionals"].includes(event.detail?.table)) return;
+      if (event.detail?.table && !["tasks", "milestones", "projects", "professionals"].includes(event.detail?.table)) return;
       load({ silent: true });
     };
     window.addEventListener("projects:live-change", live);
@@ -1017,7 +1021,7 @@ export function FinanceWorkspace({
   }, [projectId]);
   useEffect(() => {
     const live = (event) => {
-      if (["projects", "project_payments"].includes(event.detail?.table)) load();
+      if (!event.detail?.table || ["projects", "project_payments"].includes(event.detail?.table)) load();
     };
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);
@@ -1255,7 +1259,7 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
   useEffect(() => {
     let timer;
     const live = (event) => {
-      if (!["projects","tasks","project_payments","project_equipment","equipment_catalog","client_files","professionals","ai_usage_log"].includes(event.detail?.table)) return;
+      if (event.detail?.table && !["projects","tasks","project_payments","project_equipment","equipment_catalog","client_files","professionals","ai_usage_log"].includes(event.detail?.table)) return;
       clearTimeout(timer);
       timer = setTimeout(() => loadReports(true), 180);
     };

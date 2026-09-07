@@ -141,7 +141,7 @@ export function MasterDataWorkspace({
       const relevant = initialTab === "equipment"
         ? ["equipment_catalog", "equipment_categories", "settings"]
         : ["professionals", "professional_roles", "settings", "users"];
-      if (relevant.includes(event.detail?.table)) load();
+      if (!event.detail?.table || relevant.includes(event.detail?.table)) load();
     };
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);

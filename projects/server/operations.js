@@ -163,10 +163,18 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
   });
 
   router.patch('/operations/tasks/:id', requireRoles('admin', 'manager', 'technician'), async (request, response) => {
-    const current = await pool.query('SELECT * FROM tasks WHERE id=$1', [request.params.id]);
+    const db = await pool.connect();
+    let committed = false;
+    let released = false;
+    try {
+    await db.query('BEGIN');
+    const current = await db.query('SELECT * FROM tasks WHERE id=$1 FOR UPDATE', [request.params.id]);
     if (!current.rowCount) return response.status(404).json({ error: 'המשימה לא נמצאה' });
     const row = current.rows[0];
-    if (!(await mayEditProject(pool, request, row.project_id))) return response.status(403).json({error:'רק מנהל הפרויקט המשויך רשאי לערוך משימות בפרויקט'});
+    if (!(await mayEditProject(db, request, row.project_id))) return response.status(403).json({error:'רק מנהל הפרויקט המשויך רשאי לערוך משימות בפרויקט'});
+    if (request.body.expectedVersion !== undefined && Number(request.body.expectedVersion) !== row.version) {
+      return response.status(409).json({ code:'EDIT_CONFLICT', error:'המשימה עודכנה על ידי משתמש אחר. השינויים שלך נשארו בטופס; יש לפתוח מחדש את הגרסה המעודכנת לפני שמירה.', currentVersion:row.version });
+    }
     const status = TASK_STATUSES.includes(request.body.status) ? request.body.status : row.status;
     const dependencyId=Object.prototype.hasOwnProperty.call(request.body,'dependencyTaskId')?(request.body.dependencyTaskId||null):row.dependency_task_id;
     const hasStartDate = Object.prototype.hasOwnProperty.call(request.body, 'startDate');
@@ -175,23 +183,26 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     const nextDue = hasDueDate ? normalizeDateOnly(request.body.dueDate) : row.due_date;
     if ((hasStartDate && !nextStart) || (hasDueDate && !nextDue)) return response.status(400).json({ error: 'התאריך שנשלח אינו תקין' });
     if(String(request.body.dependencyTaskId||'')===String(request.params.id))return response.status(400).json({error:'משימה אינה יכולה להיות תלויה בעצמה'});
-    if(dependencyId){const dependency=await pool.query("SELECT project_id,status FROM tasks WHERE id=$1",[dependencyId]);if(!dependency.rowCount||dependency.rows[0].project_id!==row.project_id||!['open','in_progress'].includes(dependency.rows[0].status))return response.status(400).json({error:'משימת התלות חייבת להיות פתוחה או בביצוע ובאותו פרויקט'});}
+    if(dependencyId){const dependency=await db.query("SELECT project_id,status FROM tasks WHERE id=$1",[dependencyId]);if(!dependency.rowCount||dependency.rows[0].project_id!==row.project_id||!['open','in_progress'].includes(dependency.rows[0].status))return response.status(400).json({error:'משימת התלות חייבת להיות פתוחה או בביצוע ובאותו פרויקט'});}
     const parentTaskId=Object.prototype.hasOwnProperty.call(request.body,'parentTaskId')?(request.body.parentTaskId||null):row.parent_task_id;
     if(String(parentTaskId||'')===String(request.params.id))return response.status(400).json({error:'משימה אינה יכולה להיות תת־משימה של עצמה'});
-    if(parentTaskId){const parent=await pool.query('SELECT project_id,parent_task_id FROM tasks WHERE id=$1',[parentTaskId]);if(!parent.rowCount||String(parent.rows[0].project_id)!==String(row.project_id)||String(parent.rows[0].parent_task_id||'')===String(request.params.id))return response.status(400).json({error:'שיוך משימת האב אינו תקין או יוצר מעגל'});}
+    if(parentTaskId){const parent=await db.query('SELECT project_id,parent_task_id FROM tasks WHERE id=$1',[parentTaskId]);if(!parent.rowCount||String(parent.rows[0].project_id)!==String(row.project_id)||String(parent.rows[0].parent_task_id||'')===String(request.params.id))return response.status(400).json({error:'שיוך משימת האב אינו תקין או יוצר מעגל'});}
     if (nextStart && nextDue && String(nextStart).slice(0,10) > String(nextDue).slice(0,10)) return response.status(400).json({ error: 'תאריך ההתחלה אינו יכול להיות אחרי תאריך היעד' });
     const durationHours=Math.max(0,Number(request.body.durationHours ?? request.body.estimatedHours ?? row.duration_hours ?? row.estimated_hours)||0);
     const allDay=request.body.allDay ?? row.all_day;
-    const fallbackAssignees=(await pool.query('SELECT professional_id FROM task_assignees WHERE task_id=$1',[request.params.id])).rows.map((item)=>item.professional_id);
+    const fallbackAssignees=(await db.query('SELECT professional_id FROM task_assignees WHERE task_id=$1',[request.params.id])).rows.map((item)=>item.professional_id);
     const assigneeIds=normalizedAssigneeIds(request.body,fallbackAssignees);
     const primaryAssignee=assigneeIds[0]||null;
-    const result = await pool.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,owner_professional_id=$6,start_date=$7,due_date=$8,start_time=$9,end_time=$10,all_day=$11,duration_hours=$12,estimated_hours=$12,task_type=$13,dependency_task_id=$14,parent_task_id=$15,critical=$16,color=$17,
-      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$18 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, request.body.assigneeProfessionalId ?? row.assignee_professional_id,request.body.ownerProfessionalId ?? row.owner_professional_id, nextStart, nextDue, allDay?null:(request.body.startTime ?? row.start_time), allDay?null:(request.body.endTime ?? row.end_time), allDay, durationHours, request.body.taskType ?? row.task_type, dependencyId,parentTaskId,request.body.critical ?? row.critical, request.body.color ?? row.color, request.params.id]);
+    const result = await db.query(`UPDATE tasks SET title=$1,description=$2,status=$3,priority=$4,assignee_professional_id=$5,owner_professional_id=$6,start_date=$7,due_date=$8,start_time=$9,end_time=$10,all_day=$11,duration_hours=$12,estimated_hours=$12,task_type=$13,dependency_task_id=$14,parent_task_id=$15,critical=$16,color=$17,
+      completed_at=CASE WHEN $3='done' THEN COALESCE(completed_at,NOW()) ELSE NULL END,updated_at=NOW() WHERE id=$18 RETURNING *`, [request.body.title ?? row.title, request.body.description ?? row.description, status, request.body.priority ?? row.priority, Object.prototype.hasOwnProperty.call(request.body,'assigneeProfessionalIds') ? primaryAssignee : (request.body.assigneeProfessionalId ?? row.assignee_professional_id),request.body.ownerProfessionalId ?? row.owner_professional_id, nextStart, nextDue, allDay?null:(request.body.startTime ?? row.start_time), allDay?null:(request.body.endTime ?? row.end_time), allDay, durationHours, request.body.taskType ?? row.task_type, dependencyId,parentTaskId,request.body.critical ?? row.critical, request.body.color ?? row.color, request.params.id]);
     if(Object.prototype.hasOwnProperty.call(request.body,'assigneeProfessionalIds')){
-      await pool.query('UPDATE tasks SET assignee_professional_id=$1 WHERE id=$2',[primaryAssignee,request.params.id]);
-      await replaceTaskAssignees(pool,request.params.id,assigneeIds,request.user.id);
+      await replaceTaskAssignees(db,request.params.id,assigneeIds,request.user.id);
     }
-    await syncProjectMetrics(pool, row.project_id);
+    await syncProjectMetrics(db, row.project_id);
+    await db.query('COMMIT');
+    committed = true;
+    db.release();
+    released = true;
     await audit(request, 'update', 'task', request.params.id, request.body);
     if(status!==row.status) {
       await executeAutomations({
@@ -212,6 +223,9 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
     }
     if(Object.prototype.hasOwnProperty.call(request.body,'assigneeProfessionalIds')||String(nextDue)!==String(row.due_date)||String(request.body.startTime||'')!==String(row.start_time||''))await notifyTaskSafely(pushService,result.rows[0].id,'updated',request.user);
     response.json({ task: result.rows[0] });
+    } finally {
+      try { if (!committed) await db.query('ROLLBACK'); } finally { if (!released) db.release(); }
+    }
   });
 
   router.delete('/operations/tasks/:id', requireRoles('admin','manager','technician'), async (request, response) => {

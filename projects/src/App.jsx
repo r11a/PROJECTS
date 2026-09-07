@@ -1,4 +1,4 @@
-import { Component, useEffect, useMemo, useRef, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -76,27 +76,25 @@ import {
 import L from "leaflet";
 import { passwordsMatch } from "./features/auth/passwordPolicy";
 import { activity, clients, milestones, stageMeta } from "./data";
-import {
-  AlertCenter,
-  CalendarWorkspace,
-  ClientsWorkspace,
-  OperationalSettings,
-} from "./Operational";
-import { FormsWorkspace } from "./FormsWorkspace";
-import { GisWorkspace } from "./GisWorkspace";
-import { MasterDataWorkspace } from "./MasterDataWorkspace";
+const AlertCenter = lazy(() => import("./Operational").then(module => ({ default: module.AlertCenter })));
+const CalendarWorkspace = lazy(() => import("./Operational").then(module => ({ default: module.CalendarWorkspace })));
+const ClientsWorkspace = lazy(() => import("./Operational").then(module => ({ default: module.ClientsWorkspace })));
+const OperationalSettings = lazy(() => import("./Operational").then(module => ({ default: module.OperationalSettings })));
+const FormsWorkspace = lazy(() => import("./FormsWorkspace").then(module => ({ default: module.FormsWorkspace })));
+const GisWorkspace = lazy(() => import("./GisWorkspace").then(module => ({ default: module.GisWorkspace })));
+const MasterDataWorkspace = lazy(() => import("./MasterDataWorkspace").then(module => ({ default: module.MasterDataWorkspace })));
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { AppModal, ModalPortal } from "./AppModal";
 import packageJson from "../package.json";
 import { cacheApiResponse, cachedApiResponse, discardOfflineFailure, flushOfflineQueue, initializeOfflineSync, offlineEntries, offlineStatus, queueOfflineMutation, retryOfflineFailures } from "./offlineQueue";
-import {
-  FinanceWorkspace,
-  ReportsWorkspace,
-  TasksWorkspace,
-} from "./Workspaces";
-import { ProjectWorkspace } from "./ProjectWorkspace";
-import { MyWorkWorkspace, PortfolioControlWorkspace } from "./ProductivityWorkspace";
+const FinanceWorkspace = lazy(() => import("./Workspaces").then(module => ({ default: module.FinanceWorkspace })));
+const ReportsWorkspace = lazy(() => import("./Workspaces").then(module => ({ default: module.ReportsWorkspace })));
+const TasksWorkspace = lazy(() => import("./Workspaces").then(module => ({ default: module.TasksWorkspace })));
+const ProjectWorkspace = lazy(() => import("./ProjectWorkspace").then(module => ({ default: module.ProjectWorkspace })));
+const MyWorkWorkspace = lazy(() => import("./ProductivityWorkspace").then(module => ({ default: module.MyWorkWorkspace })));
+const PortfolioControlWorkspace = lazy(() => import("./ProductivityWorkspace").then(module => ({ default: module.PortfolioControlWorkspace })));
 import { localDateValue } from "./dateTime";
+import { useWorkspaceNavigation } from "./features/navigation/useWorkspaceNavigation";
 import { RiskCenter } from "./features/risk-center/RiskCenter";
 import "./project-category.css";
 
@@ -185,7 +183,7 @@ const openNavigation = (project, provider) => {
   window.open(url, "_blank", "noopener,noreferrer");
   return true;
 };
-import { GanttWorkspace } from "./GanttWorkspace";
+const GanttWorkspace = lazy(() => import("./GanttWorkspace").then(module => ({ default: module.GanttWorkspace })));
 import { MessageCenter } from "./Messages";
 import { AiChat, AiChatBoundary } from "./AiChat";
 import "./operational.css";
@@ -375,11 +373,16 @@ function ProjectMarker({ project, onOpen }) {
 }
 
 function App() {
-  const [page, setPage] = useState("dashboard");
+  const [navigation, setPage] = useWorkspaceNavigation();
+  const page = navigation.page;
   const [projects, setProjects] = useState([]);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [startupError, setStartupError] = useState("");
+  const [referenceFailures, setReferenceFailures] = useState([]);
+  const [referenceLoading, setReferenceLoading] = useState(true);
+  const referenceRequest = useRef(0);
+  const liveConnected = useRef(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [linkedTaskId, setLinkedTaskId] = useState("");
   const [search, setSearch] = useState("");
@@ -426,7 +429,7 @@ function App() {
   const [notice, setNotice] = useState("");
   const [insights, setInsights] = useState(null);
   const [insightsRefreshing, setInsightsRefreshing] = useState(false);
-  const [alertsOpen, setAlertsOpen] = useState(true);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const hiddenAlertSignature = useRef("");
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [aiChatOpen, setAiChatOpen] = useState(false);
@@ -459,35 +462,25 @@ function App() {
   }, [user, page]);
 
   const loadReferenceData = async () => {
-    const [
-      settingsResult,
-      teamResult,
-      clientsResult,
-      professionalsResult,
-      equipmentResult,
-      templatesResult,
-    ] = await Promise.all([
-      api("/settings"),
-      api("/team"),
-      api("/clients"),
-      api("/professionals"),
-      api("/equipment-catalog"),
-      api("/project-templates"),
-    ]);
-    setConfiguration(settingsResult);
-    setTeam(teamResult.users);
-    setClientOptions(clientsResult.clients);
-    setProfessionals(professionalsResult.professionals);
-    setEquipmentCatalog(equipmentResult.items);
-    setProjectTemplates(templatesResult.templates);
-    return {
-      settingsResult,
-      teamResult,
-      clientsResult,
-      professionalsResult,
-      equipmentResult,
-      templatesResult,
-    };
+    const requestId = ++referenceRequest.current;
+    setReferenceLoading(true);
+    const sources = [
+      ["/settings", "הגדרות", setConfiguration],
+      ["/team", "משתמשים", result => setTeam(result.users)],
+      ["/clients", "לקוחות", result => setClientOptions(result.clients)],
+      ["/professionals", "אנשי מקצוע", result => setProfessionals(result.professionals)],
+      ["/equipment-catalog", "קטלוג", result => setEquipmentCatalog(result.items)],
+      ["/project-templates", "תבניות", result => setProjectTemplates(result.templates)],
+    ];
+    const results = await Promise.allSettled(sources.map(([path]) => api(path)));
+    if (requestId !== referenceRequest.current) return;
+    const failures = [];
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") sources[index][2](result.value);
+      else failures.push(sources[index][1]);
+    });
+    setReferenceFailures(failures);
+    setReferenceLoading(false);
   };
   const refreshCurrentUser = async (changedUser) => {
     if (changedUser && String(changedUser.id) === String(user?.id)) {
@@ -556,7 +549,7 @@ function App() {
       const result = await api(`/ai/insights${force ? "?refresh=1" : ""}`);
       setInsights(result);
       const signature = result.alerts.map((alert) => alert.key).sort().join("|");
-      if (signature && signature !== hiddenAlertSignature.current) setAlertsOpen(true);
+      // New insights update the badge quietly; the user chooses when to open them.
       if (!signature) hiddenAlertSignature.current = "";
       return result;
     } finally {
@@ -568,9 +561,9 @@ function App() {
     api("/auth/me")
       .then(({ user: currentUser }) => {
         setUser(currentUser);
-        return Promise.all([api("/projects"), loadReferenceData(), loadTaskCount()]).then(
-          ([result]) => setProjects(result.projects),
-        );
+        loadReferenceData();
+        loadTaskCount().catch(() => {});
+        return api("/projects").then(result => setProjects(result.projects));
       })
       .catch((error) => {
         if (error.status === 401) setUser(null);
@@ -592,7 +585,7 @@ function App() {
   useEffect(() => {
     if (!user) return undefined;
     const refreshWhenActive = () => {
-      if (document.visibilityState === "visible" && navigator.onLine) loadProjects().catch(() => {});
+      if (!liveConnected.current && document.visibilityState === "visible" && navigator.onLine) loadProjects().catch(() => {});
     };
     const timer = window.setInterval(refreshWhenActive, 20000);
     window.addEventListener("focus", refreshWhenActive);
@@ -634,9 +627,12 @@ function App() {
         ));
       }, 120);
     };
+    stream.addEventListener("open", () => { liveConnected.current = true; changed({data:"{}"}); });
+    stream.addEventListener("error", () => { liveConnected.current = false; });
     stream.addEventListener("change", changed);
     return () => {
       clearTimeout(timer);
+      liveConnected.current = false;
       stream.close();
     };
   }, [user?.id]);
@@ -680,7 +676,7 @@ function App() {
         .catch(() => {});
     load();
     const live = (event) => {
-      if (event.detail?.table === "user_messages") load();
+      if (!event.detail?.table || event.detail?.table === "user_messages") load();
     };
     window.addEventListener("projects:live-change", live);
     return () => {
@@ -695,7 +691,7 @@ function App() {
     refresh();
     const timer = setInterval(refresh, 60000);
     const live = (event) => {
-      if (["projects","tasks","payments"].includes(event.detail?.table)) refresh();
+      if (!event.detail?.table || ["projects","tasks","payments"].includes(event.detail?.table)) refresh();
     };
     window.addEventListener("projects:live-change", live);
     return () => {
@@ -737,9 +733,10 @@ function App() {
   useEffect(()=>{let disposed=false;offlineStatus().then(value=>!disposed&&setOfflineState(value));const changed=event=>setOfflineState(current=>({...current,...event.detail}));window.addEventListener("projects:offline-status",changed);return()=>{disposed=true;window.removeEventListener("projects:offline-status",changed)}},[]);
   useEffect(()=>{if(!user?.id)return undefined;const cleanup=initializeOfflineSync(apiRoot);return typeof cleanup==='function'?cleanup:undefined},[user?.id]);
 
-  const openProject = (project) => {
+  const openProject = (project, taskId = "") => {
     setSelectedProject(project);
-    setPage("project");
+    setLinkedTaskId(taskId);
+    setPage("project", { projectId: project.id, taskId });
     setSidebarOpen(false);
   };
   const openMessageLink = (linkedUrl) => {
@@ -756,15 +753,15 @@ function App() {
       return;
     }
     setLinkedTaskId(taskId);
-    openProject(target);
+    openProject(target, taskId);
     setMessagesOpen(false);
   };
-  useEffect(()=>{
-    if(!user||!projects.length)return;
-    const params=new URLSearchParams(window.location.search);const projectId=params.get('project');const taskId=params.get('task')||'';
-    if(!projectId)return;const target=projects.find(item=>String(item.id)===projectId);if(target)openProject(target);
-    if(target)setLinkedTaskId(taskId);params.delete('project');params.delete('task');const query=params.toString();window.history.replaceState({},'',`${window.location.pathname}${query?`?${query}`:''}${window.location.hash}`);
-  },[user?.id,projects.length]);
+  useEffect(() => {
+    if (!user || navigation.page !== 'project') return;
+    const target = projects.find(item => String(item.id) === navigation.projectId);
+    if (target) { setSelectedProject(target); setLinkedTaskId(navigation.taskId); }
+    else if (projects.length) { setSelectedProject(null); setPage('projects'); setNotice('הפרויקט המבוקש אינו זמין'); }
+  }, [user?.id, navigation.projectId, navigation.taskId, navigation.page, projects.length]);
   const updateProject = async (id, patch) => {
     try {
       const { project } = await api(`/projects/${encodeURIComponent(id)}`, {
@@ -846,15 +843,14 @@ function App() {
     });
     setUser(result.user);
     if (result.user.mustChangePassword) return;
-    const [projectResult] = await Promise.all([
-      api("/projects"),
-      loadReferenceData(),
-    ]);
+    loadReferenceData();
+    const projectResult = await api("/projects");
     setProjects(projectResult.projects);
   };
 
   const logout = async () => {
     await api("/auth/logout", { method: "POST" });
+    referenceRequest.current += 1;
     setUser(null);
     setProjects([]);
   };
@@ -971,7 +967,7 @@ function App() {
     : 0;
 
   return (
-    <div className={`app-shell${darkMode ? " theme-dark" : ""}`}>
+    <div className={`app-shell${darkMode ? " theme-dark" : ""}`} data-workspace={page}>
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div
           className="brand"
@@ -1208,6 +1204,8 @@ function App() {
             {["admin", "manager"].includes(user.role) && (
               <button
                 className="primary-button"
+                disabled={referenceLoading}
+                title={referenceLoading ? "מכינים את נתוני הפרויקט" : "יצירת פרויקט"}
                 onClick={() => setNewProjectOpen(true)}
               >
                 <Plus size={18} />
@@ -1218,7 +1216,9 @@ function App() {
         </header>
 
         <WorkspaceErrorBoundary key={`${page}:${selectedProject?.id || ""}`} page={page}>
+        <Suspense fallback={<div className="workspace-loading" role="status"><span className="loading-orbit"/><strong>מכינים את סביבת העבודה</strong><span>עוד רגע, הכול במקום.</span></div>}>
         <div className="page-content">
+          {referenceFailures.length > 0 && <div className="reference-warning" role="status"><AlertTriangle size={18}/><span>חלק מהמידע אינו זמין: {referenceFailures.join("، ")}</span><button onClick={() => loadReferenceData()}>ניסיון נוסף</button></div>}
           {page === "dashboard" && (
             <Dashboard
               api={api}
@@ -1245,7 +1245,7 @@ function App() {
                 const isScheduledEvent = ["task", "milestone"].includes(event.type);
                 if (!linkedProject) return setNotice("הפרויקט המקושר לא נמצא");
                 setLinkedTaskId(isScheduledEvent ? eventId : "");
-                openProject(linkedProject);
+                openProject(linkedProject, isScheduledEvent ? eventId : "");
                 if (isScheduledEvent && eventId) window.setTimeout(() => window.dispatchEvent(new CustomEvent("projects:open-schedule-item", { detail: { id: eventId, type: event.type } })), 0);
               }}
             />
@@ -1332,7 +1332,7 @@ function App() {
             />
           )}
           {page === "project" && selectedProject && (
-            <ProjectWorkspace
+            <ProjectWorkspace key={selectedProject.id}
               project={
                 projects.find((p) => p.id === selectedProject.id) ||
                 selectedProject
@@ -1353,6 +1353,7 @@ function App() {
             />
           )}
         </div>
+        </Suspense>
         </WorkspaceErrorBoundary>
       </main>
       {newProjectOpen && (
@@ -1368,7 +1369,7 @@ function App() {
           user={user}
         />
       )}
-      {alertsOpen && insights?.alerts?.length > 0 && (
+      {alertsOpen && insights?.alerts?.length > 0 && (<Suspense fallback={null}>
         <AlertCenter
           alerts={insights.alerts}
           api={api}
@@ -1395,7 +1396,7 @@ function App() {
             await loadInsights(true);
           }}
         />
-      )}
+      </Suspense>)}
       {messagesOpen && (
         <MessageCenter
           api={api}
@@ -2150,10 +2151,9 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
     <div className="dashboard-page">
       <section className="welcome-row">
         <div>
-          <h2>
-            שלום, {user.displayName} <span>👋</span>
-          </h2>
-          <p>הנה תמונת המצב התפעולית המעודכנת.</p>
+          <span className="workspace-eyebrow">סביבת הניהול שלך <span> / </span> {new Date().toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'})}</span>
+          <h2>כל הפרויקטים.<br/><span className="welcome-accent">תמונה אחת ברורה.</span></h2>
+          <p>שלום {user.displayName}, הנה מה שמתקדם ומה שדורש את תשומת הלב שלך.</p>
         </div>
         <div className="welcome-actions">
           <button
@@ -2167,9 +2167,17 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
           <button className="dashboard-ai-button" onClick={generateInsights} disabled={insightsBusy||insightsRefreshing}><Sparkles size={18}/><span>{insightsBusy||insightsRefreshing?'מפיק תובנות…':'הפק תובנות'}</span></button>
           <div className="live-pill">
             <i />
-            הנתונים מעודכנים עכשיו
+            תמונת המצב שלך
           </div>
         </div>
+      </section>
+      <section className="command-overview" aria-label="מוקדי עבודה">
+        <div className="portfolio-pulse">
+          <div className="pulse-ring" style={{'--progress': Math.max(0,Math.min(100,avg))}}><div><strong>{avg}<small>%</small></strong><span>התקדמות ממוצעת</span></div></div>
+          <div><span className="workspace-eyebrow">הקצב של העסק</span><h3>{active.length ? 'מתקדמים, פרויקט אחרי פרויקט.' : 'הפרויקט הבא מתחיל כאן.'}</h3><p>{active.length} פרויקטים פעילים · תמונה מחושבת מנתוני הפרויקטים</p><button className="text-action" onClick={() => setPage('projects')}>לכל הפרויקטים <ArrowLeft size={16}/></button></div>
+        </div>
+        {userCanAccess(user,'my-work') && <button className="command-card" onClick={() => setPage('my-work')}><span className="command-card-icon"><CheckCircle2 size={23}/></span><span className="workspace-eyebrow">הפוקוס שלך</span><strong>העבודה שלי</strong><span>משימות, חסמים והצעד הבא שלך.</span><span className="command-card-link">לסדר היום האישי <ArrowLeft size={16}/></span></button>}
+        {userCanAccess(user,'tasks') && <button className="command-card attention" onClick={() => setPage('tasks')}><span className="command-card-icon"><Clock3 size={23}/></span><span className="workspace-eyebrow">דורש טיפול</span><strong>{insights ? (insights.stats?.overdue || 0) : '—'} <small>משימות באיחור</small></strong><span>{insights?.stats?.overdue ? 'זה הזמן לבדוק מה מעכב את ההתקדמות.' : 'בדיקת המשימות והתאריכים במקום אחד.'}</span><span className="command-card-link">למרכז המשימות <ArrowLeft size={16}/></span></button>}
       </section>
       <div className="dashboard-section-title"><div><span>01</span><strong>מדדים מרכזיים</strong></div><small>תמונה מהירה של מצב כלל הפרויקטים</small></div>
       <section className="kpi-grid">

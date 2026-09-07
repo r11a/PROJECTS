@@ -3,3 +3,9 @@ dist/
 .env
 .env.*
 *.log
+
+# Local safety backups and browser verification artifacts
+/backups/
+/projects/test-results/
+/projects/playwright-report/
+/review/

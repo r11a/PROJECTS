@@ -30,7 +30,7 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
     load();
     api('/team').then(result=>setUsers(result.users||[])).catch(()=>{});
     const live = (event) => {
-      if (["tasks", "milestones"].includes(event.detail?.table)) load();
+      if (!event.detail?.table || ["tasks", "milestones"].includes(event.detail?.table)) load();
     };
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);
@@ -73,7 +73,7 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
   const saveSchedule = async (item, dates) => {
     try {
       const base = item.kind === "task" ? "/operations/tasks" : "/operations/milestones";
-      const body = item.kind === "task" ? dates : { dueDate:dates.dueDate, color:dates.color };
+      const body = item.kind === "task" ? {...dates,expectedVersion:item.version} : { dueDate:dates.dueDate, color:dates.color };
       await api(`${base}/${item.id}`, { method:"PATCH", body:JSON.stringify(body) });
       if(dates.mentionUserIds?.length)await api('/mentions',{method:'POST',body:JSON.stringify({userIds:dates.mentionUserIds,subject:`תיוג במשימה ${item.title}`,body:`תויגת במשימה ${item.title}. התאריכים עודכנו ל-${dates.startDate} עד ${dates.dueDate}.`,linkedUrl:`?project=${encodeURIComponent(item.project_id||'')}&task=${encodeURIComponent(item.id)}`})});
       setNotice("תאריכי המשימה עודכנו");

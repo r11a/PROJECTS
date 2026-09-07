@@ -1,4 +1,5 @@
 import express from 'express';
+import { createLiveListener } from './liveListener.js';
 import helmet from 'helmet';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
@@ -65,9 +66,7 @@ await ensureDatabase();
 const pool = new Pool(databaseConfig());
 const geocoder = createGeocoder(pool);
 const liveResponses = new Set();
-const liveListener = await pool.connect();
-await liveListener.query('LISTEN projects_live_change');
-liveListener.on('notification', (message) => {
+const broadcastLiveChange = (message) => {
   const payload = `event: change\ndata: ${message.payload || '{}'}\n\n`;
   for (const response of liveResponses) {
     if (response.destroyed || response.writableEnded) {
@@ -81,8 +80,14 @@ liveListener.on('notification', (message) => {
       console.warn('Removed unavailable live update client:', error.message);
     }
   }
+};
+const liveListener = createLiveListener({
+  createClient: () => new Client(databaseConfig()),
+  onNotification: broadcastLiveChange,
+  onError: error => console.error('Live update listener error', error.message),
+  onReconnect: () => broadcastLiveChange({ payload: '{}' }),
 });
-liveListener.on('error', (error) => console.error('Live update listener error', error.message));
+await liveListener.start();
 
 async function runMigrations() {
   await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -1096,6 +1101,7 @@ const server = app.listen(PORT, '127.0.0.1', () => console.log(`PROJECTS API lis
 
 async function shutdown() {
   server.close();
+  await liveListener.stop();
   await pool.end();
   process.exit(0);
 }

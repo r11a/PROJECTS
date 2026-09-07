@@ -453,7 +453,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
   }, []);
   useEffect(() => {
     const live = (event) => {
-      if (["tasks", "milestones", "projects", "calendar_events"].includes(event.detail?.table)) load();
+      if (!event.detail?.table || ["tasks", "milestones", "projects", "calendar_events"].includes(event.detail?.table)) load();
     };
     window.addEventListener("projects:live-change", live);
     return () => window.removeEventListener("projects:live-change", live);
@@ -1079,7 +1079,7 @@ export function ClientsWorkspace({
   }, []);
   useEffect(() => {
     const live = (event) => {
-      if (!["clients", "client_contacts", "client_files", "client_labels", "projects"].includes(event.detail?.table)) return;
+      if (event.detail?.table && !["clients", "client_contacts", "client_files", "client_labels", "projects"].includes(event.detail?.table)) return;
       loadClients(query, { silent: true });
       if (selectedId) loadDetail(selectedId);
     };

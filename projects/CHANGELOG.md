@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.37.0
+
+- Redesigned dashboard and personal workspace with a shared violet visual system, portfolio progress ring, contextual action cards, and an explained next-task recommendation.
+- Unified project headers, tabs, keyboard focus, and responsive light/dark surfaces.
+- Added shareable workspace/project URLs, browser back/forward navigation, and project tab restoration.
+- Lazy-loaded workspaces and isolated optional startup data failures with an explicit retry action.
+- Alerts now update quietly instead of interrupting the initial workspace.
+- Task edits use transactional row locking and version checks; failed saves retain the form. Migration 045 adds task versions without removing existing data.
+- Live database notifications reconnect automatically; periodic project polling is a fallback when the live stream is unavailable.
+- Added browser regression tests for desktop/mobile, light/dark, navigation, edit conflicts, and modal focus, plus transaction and reconnect behavior tests.
+
 ## 0.36.13
 
 - Changed the master systems catalog so every system type and nested system starts collapsed by default.
