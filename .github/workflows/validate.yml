@@ -64,7 +64,9 @@ jobs:
         working-directory: projects
         env:
           PROJECTS_BASE_URL: http://127.0.0.1:8686
-        run: npm run test:e2e
+        run: |
+          trap 'docker logs --tail 150 projects-smoke' ERR
+          npm run test:e2e
       - name: Smoke test authenticated APIs
         run: |
           curl --fail --silent --cookie-jar /tmp/projects-cookies \

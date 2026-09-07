@@ -148,7 +148,7 @@ test.describe.serial('PROJECTS critical paths', () => {
     const importResponse = await page.request.post(`/api/projects/${encodeURIComponent(project.id)}/priority-orders/import`, {
       data:{ previewId:preview.previewId,confirmCustomerMismatch:true,mode:'create',lines },
     });
-    expect(importResponse.ok()).toBeTruthy();
+    expect(importResponse.ok(), await importResponse.text()).toBeTruthy();
     const imported = (await importResponse.json()).import;
     expect(imported.selectedRows).toBe(5);
     expect(imported.installationHoursAdded).toBe(24);
