@@ -153,8 +153,31 @@ test('calendar controls align and show task performers; catalog search and manua
   await page.getByRole('button',{name:'עריכת ITEM',exact:true}).click();
   let dialog=page.getByRole('dialog');await dialog.getByLabel('שם קטגוריה').fill('קטגוריה חדשה');await dialog.getByRole('button',{name:'שמירה',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button',{name:'הוספת ITEM',exact:true}).click();dialog=page.getByRole('dialog');
-  await dialog.getByLabel('חיפוש פריט קטלוג').fill('בקר');await expect(dialog.locator('select[name=catalogItemId] option')).toHaveCount(2);
+  await expect(dialog.getByLabel('חיפוש פריט קטלוג')).toHaveCount(0);await dialog.getByRole('combobox',{name:'פריט קטלוג',exact:true}).fill('בקר ראשי · 5');await expect(dialog.locator('input[name=catalogItemId]')).toHaveValue('5');
   await dialog.getByRole('checkbox').check();await dialog.getByLabel('שם הפריט').fill('ציוד ידני');await dialog.locator('select[name=projectSystemId]').selectOption('8');
   await page.route('**/api/projects/PRJ-101/equipment',route=>{expect(route.request().postDataJSON().manualName).toBe('ציוד ידני');return route.fulfill({json:{equipment:{id:2}}});});
   await dialog.getByRole('button',{name:'הוספה לפרויקט',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+
+test('project hours include drawing and record uploads show a foreground status with resized images',async({page})=>{
+  await mockApi(page);
+  await page.goto('/?page=project&project=PRJ-101&tab=hours');
+  await page.getByRole('button',{name:'דיווח שעות',exact:true}).click();
+  await expect(page.locator('select[name=activityType] option[value=drawing]')).toHaveText('שרטוט תכניות');
+  await page.getByRole('dialog').getByRole('button',{name:'ביטול',exact:true}).click();
+  const original=Buffer.from(await page.evaluate(()=>{const c=document.createElement('canvas');c.width=2800;c.height=1800;const ctx=c.getContext('2d'),pixels=ctx.createImageData(c.width,c.height);for(let i=0;i<pixels.data.length;i+=4){const n=(i*17)%251;pixels.data[i]=n;pixels.data[i+1]=(i/4)%255;pixels.data[i+2]=100;pixels.data[i+3]=255;}ctx.putImageData(pixels,0,0);return c.toDataURL('image/png').split(',')[1];}),'base64');
+  expect(original.length).toBeGreaterThan(250*1024);
+  await page.route('**/api/projects/PRJ-101/site-reviews',route=>route.fulfill({json:{review:{id:77}}}));
+  let releaseUpload;let uploaded;const uploadHeld=new Promise(resolve=>releaseUpload=resolve);
+  await page.route('**/api/documents',async route=>{const body=route.request().postDataBuffer(),header=body.indexOf('name="file"'),start=body.indexOf('\r\n\r\n',header)+4,end=body.lastIndexOf('\r\n--');uploaded=body.subarray(start,end);await uploadHeld;await route.fulfill({json:{document:{id:9}}});});
+  await page.goto('/?page=project&project=PRJ-101&tab=reviews');await page.getByRole('button',{name:'ביקורת',exact:true}).click();
+  let dialog=page.getByRole('dialog');await dialog.locator('textarea[name=summary]').fill('תיעוד תמונה');await dialog.locator('input[name=attachments]').setInputFiles({name:'site.png',mimeType:'image/png',buffer:original});
+  await dialog.getByRole('button',{name:'שמירת ביקורת',exact:true}).click();
+  await expect(page.locator('.record-upload-shield')).toBeVisible();await expect.poll(()=>uploaded?.length||0).toBeGreaterThan(0);
+  expect(await page.locator('.record-upload-overlay').evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})).toBeTruthy();
+  expect(uploaded.length).toBeLessThan(original.length);
+  const dimensions=await page.evaluate(async base64=>{const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0)),image=await createImageBitmap(new Blob([bytes]));const result=[image.width,image.height];image.close();return result;},uploaded.toString('base64'));
+  expect(Math.max(...dimensions)).toBe(2048);expect(dimensions[0]/dimensions[1]).toBeCloseTo(2800/1800,2);
+  releaseUpload();await expect(page.locator('.record-upload-shield')).toHaveCount(0);await expect(page.getByRole('dialog')).toHaveCount(0);
 });

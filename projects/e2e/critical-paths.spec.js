@@ -196,6 +196,11 @@ test.describe.serial('PROJECTS critical paths', () => {
     workspace=await (await page.request.get(`${base}/workspace`)).json();
     expect(workspace.equipment.some(item=>item.name==='רכיב ידני לבדיקה'&&item.system_type_name==='קטגוריה מעודכנת')).toBeTruthy();
     expect(workspace.timeEntries.some(item=>item.activity_type==='drawing'&&Number(item.hours)===2)).toBeTruthy();
+    for(const legacy of [system,catalog.items.find(item=>item.itemType==='system_type'&&item.active)]){
+      const added=await page.request.post(`${base}/equipment`,{data:{catalogItemId:legacy.id,quantity:1}});expect(added.ok(),await added.text()).toBeTruthy();
+      const renamed=await page.request.patch(`${base}/system-board/${legacy.id}`,{data:{title:'ITEM שונה',categoryName:'שם קטגוריה נשמר',color:'#6957df',sortOrder:0,propagateColor:false}});expect(renamed.ok(),await renamed.text()).toBeTruthy();
+      const refreshed=await (await page.request.get(`${base}/workspace`)).json();const saved=refreshed.equipment.find(item=>String(item.catalog_item_id)===String(legacy.id));expect(saved.system_name).toBe('ITEM שונה');expect(saved.system_type_name).toBe('שם קטגוריה נשמר');
+    }
     expect(workspace.files.map(item=>String(item.id))).toEqual([String(unrelated.id)]);
   });
 

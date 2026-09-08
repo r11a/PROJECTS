@@ -256,3 +256,5 @@
 .main-area .calendar-grid>button>div .calendar-event-text{height:auto;min-height:30px;width:100%;align-items:flex-start;border-radius:0;font-size:11px!important;line-height:14px}
 .main-area .calendar-event-text :is(b,small){display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .calendar-date-picker>span:not(.he-date-input){white-space:nowrap}
+
+.record-upload-shield{position:fixed;inset:0;z-index:6000;background:#11182770;cursor:progress}.record-upload-shield .record-upload-overlay{z-index:6001}.record-upload-overlay span{overflow-wrap:anywhere}

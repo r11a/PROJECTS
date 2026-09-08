@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.37.2
+
+- Show record save/upload progress above modal dialogs and resize supported photos locally to at most 2048px before upload, preserving aspect ratio and falling back to the original when necessary.
+- Use the shared time-activity list in project hour reports so drawing plans is available.
+- Fix ITEM naming for existing system/category catalog entries, persist names after reload, and show save failures inside the editor.
+- Replace the separate catalog search with one editable selection list.
+
 ## 0.37.1
 
 - Site reviews now atomically create a plan-update task assigned to the review author, starting today and due in seven days; repeated edits reuse the linked task.
