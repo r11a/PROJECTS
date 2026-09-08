@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.37.1
+
+- Site reviews now atomically create a plan-update task assigned to the review author, starting today and due in seven days; repeated edits reuse the linked task.
+- Deleting a review or meeting also moves its linked attachments to the existing document trash.
+- Review and meeting attachments remain visible above the mobile save actions. Meeting email drafts open directly through the device mail handler with selected recipients, subject and body.
+- Added shared Hebrew date pickers with DD/MM/YYYY display, drawing-plan time entries, and task type beside the title.
+- Aligned calendar controls and display task performers in calendar cells. Removed pointer-only chart focus borders while retaining keyboard focus.
+- Added project ITEM category editing, catalog search and manual equipment entry with catalog registration.
+- Migration 046 extends supported task/time categories and preserves existing data.
+
 ## 0.37.0
 
 - Fixed Priority equipment import by explicitly treating quantity comparisons as numeric values.

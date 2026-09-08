@@ -542,7 +542,7 @@ export async function createOperationalRouter({ pool, authenticate, requireRoles
     const projectId = String(request.query.projectId || '');
     const assigneeId = String(request.query.assigneeId || '');
     const [result, projects] = await Promise.all([
-      pool.query(`SELECT h.*,COALESCE(u.display_name,task_user.display_name) assignee_name,
+      pool.query(`SELECT h.*,CASE WHEN h.source_type='task' THEN COALESCE((SELECT string_agg(person.display_name,', ' ORDER BY person.display_name) FROM task_assignees ta JOIN professionals person ON person.id=ta.professional_id WHERE ta.task_id=calendar_task.id),task_professional.display_name,task_user.display_name,u.display_name) ELSE u.display_name END assignee_name,
         CASE WHEN h.user_id=$5 OR task_user.id=$5 OR EXISTS(SELECT 1 FROM task_assignees own_ta JOIN professionals own_person ON own_person.id=own_ta.professional_id WHERE own_ta.task_id=calendar_task.id AND own_person.linked_user_id=$5) THEN calendar_viewer.avatar_color ELSE COALESCE(task_user.avatar_color,u.avatar_color,h.color) END assignee_color,
         COALESCE(task_user.avatar_icon,u.avatar_icon,h.icon) assignee_icon,p.name project_name
         FROM calendar_history h LEFT JOIN users u ON u.id=h.user_id LEFT JOIN projects p ON p.id=h.project_id

@@ -1,3 +1,4 @@
+import { DateInput } from "./DateInput";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
@@ -684,7 +685,7 @@ function ProfessionalEditor({ value, roles, users, customFields=[], onClose, onS
             }
           />
         </label>
-        {customFields.map(field=><label key={field.id} className={field.fieldType==='boolean'?'custom-check':''}>{field.label}{field.fieldType==='boolean'?<input type="checkbox" checked={Boolean(form.customValues?.[field.fieldKey])} onChange={event=>setForm({...form,customValues:{...(form.customValues||{}),[field.fieldKey]:event.target.checked}})}/>:field.fieldType==='select'?<select required={field.required} value={form.customValues?.[field.fieldKey]||''} onChange={event=>setForm({...form,customValues:{...(form.customValues||{}),[field.fieldKey]:event.target.value}})}><option value="">בחירה</option>{(field.options||[]).map(option=><option key={option}>{option}</option>)}</select>:<input required={field.required} type={field.fieldType==='phone'?'tel':field.fieldType} value={form.customValues?.[field.fieldKey]||''} onChange={event=>setForm({...form,customValues:{...(form.customValues||{}),[field.fieldKey]:event.target.value}})}/>}</label>)}
+        {customFields.map(field=><label key={field.id} className={field.fieldType==='boolean'?'custom-check':''}>{field.label}{field.fieldType==='boolean'?<input type="checkbox" checked={Boolean(form.customValues?.[field.fieldKey])} onChange={event=>setForm({...form,customValues:{...(form.customValues||{}),[field.fieldKey]:event.target.checked}})}/>:field.fieldType==='select'?<select required={field.required} value={form.customValues?.[field.fieldKey]||''} onChange={event=>setForm({...form,customValues:{...(form.customValues||{}),[field.fieldKey]:event.target.value}})}><option value="">בחירה</option>{(field.options||[]).map(option=><option key={option}>{option}</option>)}</select>:<DateInput required={field.required} type={field.fieldType==='phone'?'tel':field.fieldType} value={form.customValues?.[field.fieldKey]||''} onChange={event=>setForm({...form,customValues:{...(form.customValues||{}),[field.fieldKey]:event.target.value}})}/>}</label>)}
         <div className="wide form-actions">
           <button type="button" className="ops-secondary" onClick={onClose}>
             ביטול

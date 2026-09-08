@@ -1,3 +1,4 @@
+import { DateInput } from "./DateInput";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -80,6 +81,7 @@ const stageNames = {
   waiting: "בהמתנה",
   mobilization: "בהנעה",
   planning: "תכנון",
+  drawing: "שרטוט תכניות",
   infrastructure: "תשתיות",
   threading: "השחלות",
   threading_done: "בוצעו השחלות",
@@ -201,6 +203,36 @@ export function TaskEditor({
       className="task-editor-modal"
     >
       <form className="work-form" onSubmit={submit}>
+        <label className="task-title-field">
+          כותרת
+          <input
+            required
+            autoFocus
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            placeholder={
+              isMilestone
+                ? "לדוגמה: אישור תוכניות לביצוע"
+                : "תיאור קצר וברור של הפעולה"
+            }
+          />
+        </label>
+        {!isMilestone && (            <label>
+              סוג משימה
+              <select
+                value={form.taskType || form.task_type}
+                onChange={(e) => setForm({ ...form, taskType: e.target.value })}
+              >
+                <option value="task">משימה</option>
+                <option value="service">שירות</option>
+                <option value="procurement">רכש</option>
+                <option value="followup">מעקב</option>
+                <option value="supervision">פיקוח</option>
+                <option value="meeting">פגישה</option><option value="planning">תכנון</option><option value="inspection">ביקורת</option>
+                <option value="installation">התקנה</option>
+                <option value="quotation">הצעת מחיר</option>
+              </select>
+            </label>)}
         {!initial?.id && !fixedProjectId && (
           <label>
             פרויקט
@@ -218,24 +250,10 @@ export function TaskEditor({
             </select>
           </label>
         )}
-        <label className="wide">
-          כותרת
-          <input
-            required
-            autoFocus
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            placeholder={
-              isMilestone
-                ? "לדוגמה: אישור תוכניות לביצוע"
-                : "תיאור קצר וברור של הפעולה"
-            }
-          />
-        </label>
         {!isMilestone && (
           <label className="task-schedule-field">
             תאריך התחלה
-            <input
+            <DateInput
               required
               type="date"
               value={String(form.startDate || form.start_date || "").slice(
@@ -248,7 +266,7 @@ export function TaskEditor({
         )}
         <label className="task-schedule-field">
           {isMilestone ? "תאריך יעד" : "תאריך סיום"}
-          <input
+          <DateInput
             required
             type="date"
             min={!isMilestone ? String(form.startDate || form.start_date || "").slice(0, 10) : undefined}
@@ -346,22 +364,7 @@ export function TaskEditor({
               <input type="checkbox" checked={Boolean(form.critical)} onChange={(e)=>setForm({...form,critical:e.target.checked})}/>
               משימה קריטית
             </label>
-            <label>
-              סוג
-              <select
-                value={form.taskType || form.task_type}
-                onChange={(e) => setForm({ ...form, taskType: e.target.value })}
-              >
-                <option value="task">משימה</option>
-                <option value="service">שירות</option>
-                <option value="procurement">רכש</option>
-                <option value="followup">מעקב</option>
-                <option value="supervision">פיקוח</option>
-                <option value="meeting">פגישה</option>
-                <option value="installation">התקנה</option>
-                <option value="quotation">הצעת מחיר</option>
-              </select>
-            </label>
+
           </>
         )}
         {!isMilestone && (
@@ -952,7 +955,7 @@ function PaymentEditor({ projects, initial, onClose, onSave }) {
         </label>
         <label>
           מועד
-          <input
+          <DateInput
             type="date"
             value={String(form.dueDate || form.due_date || "").slice(0, 10)}
             onChange={(e) => setForm({ ...form, dueDate: e.target.value })}

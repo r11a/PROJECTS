@@ -232,3 +232,21 @@
 .overview-contact-rows>div,.overview-contact-rows>div:first-child{min-height:56px;padding:9px 10px;border:1px solid color-mix(in srgb,var(--line,#e5e7ed) 72%,transparent)!important;border-radius:11px;background:var(--surface-soft,#f8f9fb)}
 .theme-dark .project-hero .hero-metrics{background:#202226}.theme-dark .project-hero .hero-metrics>div{background:#292c31;border-color:#3f4349!important}.theme-dark .overview-data-grid>div,.theme-dark .overview-contact-rows>div{background:#292c31;border-color:#3f4349!important}
 @media(max-width:850px){.project-hero .hero-metrics{padding:9px;gap:7px}.project-hero .hero-metrics>div,.project-hero .hero-metrics>div:nth-child(n){min-height:84px;padding:10px}.overview-data-grid{grid-template-columns:1fr}.overview-data-grid>div,.overview-data-grid>div:nth-child(n){border:1px solid color-mix(in srgb,var(--line,#e5e7ed) 72%,transparent)!important}}
+
+/* Record forms keep attachments and actions in the same scroll flow. */
+.app-modal .work-form.execution-record-form,.app-modal .work-form.meeting-summary-form{padding-bottom:24px;flex-shrink:0}
+.app-modal .work-form.execution-record-form>.form-actions,.app-modal .work-form.meeting-summary-form>.form-actions{position:static!important;inset:auto;z-index:auto;margin-top:16px;flex-shrink:0;padding-bottom:max(12px,env(safe-area-inset-bottom))}
+.app-modal .execution-record-form input[type=file],.app-modal .meeting-summary-form input[type=file]{height:auto;min-height:48px;width:100%;padding:10px;white-space:normal}
+.calendar-toolbar :is(button,select,.calendar-view-picker,.calendar-date-picker){box-sizing:border-box;height:40px;min-height:40px;font:inherit;font-size:13px}
+.calendar-toolbar .calendar-view-picker{padding:0 8px;align-items:center}
+.calendar-toolbar .calendar-view-picker select{height:38px!important;min-height:38px!important}
+.calendar-toolbar .calendar-date-picker{width:auto;display:flex;gap:6px;overflow:visible}
+.calendar-date-picker>.he-date-input{width:164px}
+.calendar-date-picker .he-date-input>input[type=text]{position:static;opacity:1;inset:auto;width:124px;cursor:text;padding:6px;pointer-events:auto}
+.calendar-date-picker .he-date-input>button{height:38px;min-height:38px}
+.calendar-grid>button>div .calendar-event-text{display:flex;flex-direction:column;gap:2px;overflow:hidden;min-width:0;padding:0;background:transparent;color:inherit;border:0}
+.calendar-grid>button>div .calendar-event-text small{display:block;font-size:10px;font-weight:500;overflow:hidden;text-overflow:ellipsis;color:var(--muted,#73798b)}
+.stage-chart-wrap .recharts-wrapper:focus:not(:focus-visible),.stage-chart-wrap .recharts-surface:focus:not(:focus-visible),.stage-chart-wrap .recharts-sector:focus:not(:focus-visible){outline:none}
+.stage-chart-wrap :focus-visible{outline:2px solid var(--accent,#6957df);outline-offset:3px}
+.meeting-email-draft header a{display:inline-flex;align-items:center;gap:7px;background:#6856da;color:#fff;padding:10px 13px;border-radius:10px;text-decoration:none;font-weight:800}
+@media(max-width:620px){.calendar-toolbar :is(button,select,.calendar-view-picker,.calendar-date-picker){height:44px;min-height:44px}.calendar-toolbar .calendar-view-picker select{height:42px!important;min-height:42px!important}.task-editor-modal .task-title-field{grid-column:1/-1}}

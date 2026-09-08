@@ -84,3 +84,70 @@ test('reference failure is isolated, and failed edits retain the form and keyboa
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('.next-action-card button')).toBeFocused();
 });
+
+
+test('Hebrew dates, visible mobile attachments and review save close the form',async({page},testInfo)=>{
+  await mockApi(page);
+  await page.route('**/api/projects/PRJ-101/site-reviews',route=>{expect(route.request().postDataJSON().planUpdateRequired).toBe(true);return route.fulfill({json:{review:{id:77}}});});
+  await page.setViewportSize({width:390,height:844});
+  await page.goto('/?page=project&project=PRJ-101&tab=reviews');
+  await page.getByRole('button',{name:'ביקורת',exact:true}).click();
+  let dialog=page.getByRole('dialog');
+  await dialog.locator('textarea[name=summary]').fill('נדרש שינוי תכנית לאחר ביקורת');
+  await dialog.locator('input[name=planUpdateRequired]').check();
+  await dialog.getByRole('button',{name:'פתיחת לוח תאריכים'}).click();
+  const calendar=page.getByRole('dialog',{name:'בחירת תאריך'});
+  await expect(calendar.getByText('ראשון',{exact:true})).toBeVisible();
+  await calendar.getByRole('combobox',{name:'חודש',exact:true}).selectOption('8');
+  await calendar.getByRole('combobox',{name:'שנה',exact:true}).selectOption('2026');
+  await calendar.getByRole('button',{name:'15/09/2026',exact:true}).click();
+  await expect(dialog.locator('input[type=text]').first()).toHaveValue('15/09/2026');
+  await expect(dialog.locator('input[name=reviewDate]')).toHaveValue('2026-09-15');
+  const file=dialog.locator('input[type=file][name=attachments]');await file.scrollIntoViewIfNeeded();
+  expect(await file.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})).toBeTruthy();
+  await page.screenshot({path:testInfo.outputPath('review-mobile.png')});
+  await dialog.getByRole('button',{name:'שמירת ביקורת',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button',{name:'פגישה',exact:true}).click();
+  dialog=page.getByRole('dialog');
+  const meetingFile=dialog.locator('input[name=attachments]');await meetingFile.scrollIntoViewIfNeeded();
+  expect(await meetingFile.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})).toBeTruthy();
+  await page.screenshot({path:testInfo.outputPath('meeting-mobile.png')});
+});
+
+test('meeting mail draft includes edited Hebrew text and selected recipients without waiting for audit',async({page})=>{
+  await mockApi(page);
+  await page.route('**/api/projects/PRJ-101/email-recipients',route=>route.fulfill({json:{recipients:[{id:'contact-1',name:'לקוח',email:'client@example.com'},{id:'professional-2',name:'מנהל',email:'manager@example.com'}]}}));
+  await page.route('**/api/ai/meeting-actions',route=>route.fulfill({json:{tasks:[],email:{subject:'סיכום & החלטות',body:'שלום,\nעדכון תכנית'}}}));
+  await page.goto('/?page=project&project=PRJ-101&tab=reviews');
+  await page.getByRole('button',{name:'פגישה',exact:true}).click();const dialog=page.getByRole('dialog');
+  await dialog.locator('textarea[name=summary]').fill('יש לעדכן את התכנית');
+  await dialog.getByRole('button',{name:'הצע משימות וטיוטת מייל',exact:true}).click();
+  await dialog.getByRole('group',{name:'נמענים',exact:true}).getByRole('checkbox').first().check();
+  await dialog.getByRole('group',{name:'עותק (CC)',exact:true}).getByRole('checkbox').nth(1).check();
+  const link=dialog.getByRole('link',{name:'פתח טיוטה ב־Outlook'}),href=await link.getAttribute('href');
+  const url=new URL(href);expect(decodeURIComponent(url.pathname)).toBe('client@example.com');expect(url.searchParams.get('cc')).toBe('manager@example.com');expect(url.searchParams.get('subject')).toBe('סיכום & החלטות');expect(url.searchParams.get('body')).toBe('שלום,\nעדכון תכנית');
+});
+
+
+test('calendar controls align and show task performers; catalog search and manual entry work',async({page},testInfo)=>{
+  await mockApi(page);
+  await page.route('**/api/calendar?**',route=>route.fulfill({json:{projects,events:[{id:'task-41',type:'task',title:'בדיקת תכנית',startAt:new Date().toISOString(),endAt:new Date().toISOString(),assigneeName:'רונן ודניאל',allDay:true,color:'#6957df'}]}}));
+  await page.goto('/?page=calendar');
+  await expect(page.locator('.calendar-grid')).toBeVisible();await expect(page.locator('.calendar-event-text small').first()).toHaveText('רונן ודניאל');
+  const heights=await page.locator('.calendar-navigation>button,.calendar-view-picker,.calendar-date-picker').evaluateAll(nodes=>nodes.map(node=>Math.round(node.getBoundingClientRect().height)));
+  expect(new Set(heights).size).toBe(1);
+  await page.screenshot({path:testInfo.outputPath('calendar-desktop.png')});
+  const equipment=[{id:5,name:'בקר ראשי',itemType:'component',active:true,parentId:8},{id:8,name:'בית חכם',itemType:'system',active:true}];
+  await page.route('**/api/equipment-catalog',route=>route.fulfill({json:{items:equipment}}));
+  await page.route('**/api/projects/PRJ-101/workspace',route=>route.fulfill({json:{tasks:[],milestones:[],payments:[],team:[],equipment:[{id:1,catalog_item_id:5,name:'בקר ראשי',system_id:8,system_name:'בית חכם',system_type_name:'מערכות',quantity:1}],forms:[],files:[],updates:[],activity:[],reviews:[],meetings:[],timeEntries:[],priorityOrders:[],systemColumns:[],systemFieldSettings:[]}}));
+  await page.route('**/api/projects/PRJ-101/system-board/8',route=>{expect(route.request().postDataJSON().categoryName).toBe('קטגוריה חדשה');return route.fulfill({json:{system:{}}});});
+  await page.goto('/?page=project&project=PRJ-101&tab=systems');
+  await page.getByRole('button',{name:'עריכת ITEM',exact:true}).click();
+  let dialog=page.getByRole('dialog');await dialog.getByLabel('שם קטגוריה').fill('קטגוריה חדשה');await dialog.getByRole('button',{name:'שמירה',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button',{name:'הוספת ITEM',exact:true}).click();dialog=page.getByRole('dialog');
+  await dialog.getByLabel('חיפוש פריט קטלוג').fill('בקר');await expect(dialog.locator('select[name=catalogItemId] option')).toHaveCount(2);
+  await dialog.getByRole('checkbox').check();await dialog.getByLabel('שם הפריט').fill('ציוד ידני');await dialog.locator('select[name=projectSystemId]').selectOption('8');
+  await page.route('**/api/projects/PRJ-101/equipment',route=>{expect(route.request().postDataJSON().manualName).toBe('ציוד ידני');return route.fulfill({json:{equipment:{id:2}}});});
+  await dialog.getByRole('button',{name:'הוספה לפרויקט',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
+});

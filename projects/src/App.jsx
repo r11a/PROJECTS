@@ -1,3 +1,4 @@
+import { DateInput } from "./DateInput";
 import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
@@ -4232,7 +4233,7 @@ function NewProjectModal({
               <div className="form-row">
                 <label>
                   תאריך התחלה
-                  <input
+                  <DateInput
                     type="date"
                     required
                     value={form.startDate}
@@ -4243,7 +4244,7 @@ function NewProjectModal({
                 </label>
                 <label>
                   יעד מסירה
-                  <input
+                  <DateInput
                     type="date"
                     min={form.startDate}
                     value={form.targetDate}

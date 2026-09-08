@@ -1,3 +1,4 @@
+import { DateInput } from "../../DateInput";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, FileText, Headphones, ListPlus, Mic, Pause, Play, RotateCcw, RotateCw, Sparkles, Square, Trash2 } from "lucide-react";
 import "./voice-notes.css";
@@ -40,7 +41,7 @@ function VoicePlayer({note,api,apiRoot,projectId,setNotice,canDelete,onDelete,on
       {projectId&&<button type="button" title="הפיכה למשימה" aria-label="הפיכה למשימה" onClick={()=>setTaskMode(!taskMode)}><ListPlus/></button>}
     </div>
     {showText&&<div className="voice-transcript">{note.ai_summary&&<><strong>סיכום AI</strong><p>{note.ai_summary}</p></>}<strong>תמלול</strong><p>{note.transcript||'לא נוצר תמלול אוטומטי. האודיו המקורי נשמר.'}</p></div>}
-    {taskMode&&<div className="voice-task"><input value={task.title} onChange={(event)=>setTask({...task,title:event.target.value})}/><input type="date" value={task.dueDate} onChange={(event)=>setTask({...task,dueDate:event.target.value})}/><button type="button" onClick={createTask}>יצירת משימה</button></div>}
+    {taskMode&&<div className="voice-task"><input value={task.title} onChange={(event)=>setTask({...task,title:event.target.value})}/><DateInput type="date" value={task.dueDate} onChange={(event)=>setTask({...task,dueDate:event.target.value})}/><button type="button" onClick={createTask}>יצירת משימה</button></div>}
     <footer><b>{note.recorded_by_name} · {note.project_name||voiceContextLabel(note)}</b><span>{new Date(note.created_at).toLocaleString('he-IL')} · {Math.round(Number(note.duration_seconds))} שניות</span></footer>
   </article>;
 }

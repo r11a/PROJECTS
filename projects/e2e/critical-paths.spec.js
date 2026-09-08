@@ -162,4 +162,41 @@ test.describe.serial('PROJECTS critical paths', () => {
     expect(workspace.equipment.length).toBeGreaterThanOrEqual(2);
     expect(workspace.priorityOrders.some((order) => order.id === imported.orderId)).toBeTruthy();
   });
+  test('review follow-up, linked document deletion, drawing hours and manual equipment persist', async ({page})=>{
+    await webLogin(page);
+    const clients=await (await page.request.get('/api/clients')).json();
+    const created=await page.request.post('/api/projects',{data:{name:`CI Workflow ${Date.now()}`,clientId:clients.clients[0].id}});
+    expect(created.ok(),await created.text()).toBeTruthy();const project=(await created.json()).project;
+    const base=`/api/projects/${encodeURIComponent(project.id)}`;
+    const me=(await (await page.request.get('/api/auth/me')).json()).user;
+    const reviewResult=await page.request.post(`${base}/site-reviews`,{data:{reviewDate:'2026-09-08',summary:'בדיקת תכנית',planUpdateRequired:true,hours:1}});
+    expect(reviewResult.ok(),await reviewResult.text()).toBeTruthy();const review=(await reviewResult.json()).review;
+    let workspace=await (await page.request.get(`${base}/workspace`)).json();
+    const task=workspace.tasks.find(item=>String(item.id)===String(review.plan_update_task_id));
+    expect(task.title).toBe('עדכון תכנית לאחר פגישה');expect(String(task.assignee_id)).toBe(String(me.id));
+    expect(String(task.assignee_professional_id)).toBe(String(task.owner_professional_id));
+    expect((new Date(task.due_date)-new Date(task.start_date))/86400000).toBe(7);
+    const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Jerusalem'}).format(new Date());
+    expect(String(task.start_date).slice(0,10)).toBe(today);
+    for(let i=0;i<2;i++){const edit=await page.request.patch(`${base}/site-reviews/${review.id}`,{data:{planUpdateRequired:true,summary:'עריכה ללא כפילות'}});expect(edit.ok(),await edit.text()).toBeTruthy();}
+    workspace=await (await page.request.get(`${base}/workspace`)).json();expect(workspace.tasks.filter(item=>item.title===task.title)).toHaveLength(1);
+    const upload=async(type,id)=>{const result=await page.request.post('/api/documents',{multipart:{projectId:project.id,title:`CI linked ${type}`,relatedEntityType:type,relatedEntityId:String(id),file:{name:'meeting.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD3sAAAAASUVORK5CYII=','base64')}}});expect(result.ok(),await result.text()).toBeTruthy();return (await result.json()).document;};
+    const reviewFile=await upload('site_review',review.id),unrelated=await upload('',0);
+    expect((await page.request.delete(`${base}/site-reviews/${review.id}`)).ok()).toBeTruthy();
+    expect((await page.request.get(`/api/documents/${reviewFile.id}/download`)).status()).toBe(404);
+    expect((await page.request.get(`/api/documents/${unrelated.id}/download`)).ok()).toBeTruthy();
+    const meetingResult=await page.request.post(`${base}/meetings`,{data:{meetingAt:'2026-09-08T10:00',summary:'סיכום פגישה'}});expect(meetingResult.ok(),await meetingResult.text()).toBeTruthy();const meeting=(await meetingResult.json()).meeting;
+    const meetingFile=await upload('meeting_summary',meeting.id);
+    expect((await page.request.delete(`${base}/meetings/${meeting.id}`)).ok()).toBeTruthy();
+    expect((await page.request.get(`/api/documents/${meetingFile.id}/download`)).status()).toBe(404);
+    const hours=await page.request.post(`${base}/time-entries`,{data:{activityType:'drawing',workDate:'2026-09-08',hours:2}});expect(hours.ok(),await hours.text()).toBeTruthy();
+    const catalog=await (await page.request.get('/api/equipment-catalog')).json(),system=catalog.items.find(item=>item.itemType==='system'&&item.active);
+    const equipment=await page.request.post(`${base}/equipment`,{data:{manualName:'רכיב ידני לבדיקה',projectSystemId:system.id,quantity:2}});expect(equipment.ok(),await equipment.text()).toBeTruthy();
+    const category=await page.request.patch(`${base}/system-board/${system.id}`,{data:{categoryName:'קטגוריה מעודכנת'}});expect(category.ok(),await category.text()).toBeTruthy();
+    workspace=await (await page.request.get(`${base}/workspace`)).json();
+    expect(workspace.equipment.some(item=>item.name==='רכיב ידני לבדיקה'&&item.system_type_name==='קטגוריה מעודכנת')).toBeTruthy();
+    expect(workspace.timeEntries.some(item=>item.activity_type==='drawing'&&Number(item.hours)===2)).toBeTruthy();
+    expect(workspace.files.map(item=>String(item.id))).toEqual([String(unrelated.id)]);
+  });
+
 });

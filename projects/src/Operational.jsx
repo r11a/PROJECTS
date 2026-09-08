@@ -1,3 +1,4 @@
+import { DateInput } from "./DateInput";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TimeSelect } from "./TimeSelect";
 import {
@@ -644,7 +645,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
             <label className="calendar-date-picker" title="בחירת תאריך">
               <CalendarDays size={15} />
               <span>בחירת תאריך</span>
-              <input
+              <DateInput
                 type="date"
                 value={localKey(cursor)}
                 onChange={(event) => chooseDate(event.target.value)}
@@ -713,10 +714,10 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
                           style={{
                             "--event": event.assigneeColor || event.color,
                           }}
-                          title={event.title}
+                          title={`${event.title} · ${event.assigneeName || "ללא מבצע"}`}
                         >
                           <i />
-                          {event.title}
+                          <span className="calendar-event-text">{event.title}<small>{event.assigneeName || "ללא מבצע"}</small></span>
                         </span>
                       ))}
                       {dayEvents.length > 3 && (
@@ -934,7 +935,7 @@ function CalendarEventModal({ api, onClose, onDone, setNotice, workCalendar = {}
             </label>
             <label>
               מועד
-              <input
+              <DateInput
                 type="datetime-local"
                 required
                 value={form.startAt}
@@ -1533,7 +1534,7 @@ function ClientFormModal({
               <label key={field.id}>
                 {field.label}
                 {field.required && <b>חובה</b>}
-                <input
+                <DateInput
                   type={
                     field.fieldType === "number"
                       ? "number"
@@ -1770,7 +1771,7 @@ function LegacyClientFormModal({
               <label key={field.id}>
                 {field.label}
                 {field.required && <b>חובה</b>}
-                <input
+                <DateInput
                   type={
                     field.fieldType === "number"
                       ? "number"
@@ -2711,7 +2712,7 @@ function TaskForm({ clientId, api, onDone, setNotice }) {
       </label>
       <label>
         יעד <b>חובה</b>
-        <input
+        <DateInput
           required
           type="date"
           value={form.dueDate}
@@ -2792,7 +2793,7 @@ function InspectionForm({ clientId, api, onDone, setNotice }) {
       </label>
       <label>
         תאריך
-        <input
+        <DateInput
           type="date"
           value={form.inspectionDate}
           onChange={(e) => setForm({ ...form, inspectionDate: e.target.value })}

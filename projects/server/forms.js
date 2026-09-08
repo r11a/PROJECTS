@@ -3,7 +3,7 @@ import express from 'express';
 const TEMPLATE_CATEGORIES = ['general', 'inspection', 'handover', 'infrastructure', 'change_order'];
 const FIELD_TYPES = ['text', 'textarea', 'number', 'date', 'checkbox', 'select', 'phone', 'email'];
 const STATUSES = ['draft', 'completed', 'approved'];
-const TIME_ACTIVITY_TYPES = ['planning','supervision','technician','installation','threading','programming','training'];
+const TIME_ACTIVITY_TYPES = ['planning','drawing','supervision','technician','installation','threading','programming','training'];
 
 function normalizeFields(fields) {
   if (!Array.isArray(fields)) return [];
