@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.38.0
+
+- Add technical equipment research to chat for KNX switches/controllers, speakers, alarms, smart home, multimedia, cameras and networking. Resolve Hebrew project questions locally and select exact catalog models without sending customer or financial context to web search.
+- Use the configured OpenAI or Gemini provider's real search tool, show inline citations and source links, and retrieve bounded product images/PDF links from source pages with public-address-only fetching. Missing models and ungrounded responses remain explicitly unverified.
+- Offer zero-token search links, deduplicate products and concurrent searches, limit each search to one model, and retain verified responses for seven days across restarts. Provider search fees are separate from token cost estimates.
+- Fix ITEM deletion for inherited catalog groups as well as explicit assignments; retain moved items and shared catalog records. Display deletion errors inside the editor and allow retry.
+
 ## 0.37.2
 
 - Show record save/upload progress above modal dialogs and resize supported photos locally to at most 2048px before upload, preserving aspect ratio and falling back to the original when necessary.

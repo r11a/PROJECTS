@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp,rm } from 'node:fs/promises';
+import { mkdtemp,rm,readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import express from 'express';
@@ -77,7 +77,7 @@ test('AI router completes settings, provider test, async chat polling and usage 
   const pool=new AiPool();
   const authenticate=(request,_response,next)=>{ request.user={ id:7,role:'admin',displayName:'Test Admin' };next(); };
   const requireRoles=()=> (_request,_response,next)=>next();
-  const router=await createAiRouter({ pool,authenticate,requireRoles,audit:async ()=>{},dataDir });
+  const router=await createAiRouter({ pool,authenticate,requireRoles,audit:async ()=>{},dataDir,researchSourceLoader:async sources=>sources });
   const app=express();
   app.use(express.json());
   app.use('/api',router);
@@ -143,4 +143,24 @@ test('AI router completes settings, provider test, async chat polling and usage 
   const budgetResponse=await originalFetch(`${base}/ai/chat`,{ method:'POST',headers:{ 'content-type':'application/json' },body:JSON.stringify({ question:'שאלה נוספת',history:[] }) });
   assert.equal(budgetResponse.status,402);
   assert.match((await budgetResponse.json()).error,/תקציב/);
+
+  pool.global.monthlyBudgetUsd=10;
+  let researchCalls=0;
+  globalThis.fetch=async(url,options)=>{
+    if(String(url).startsWith(base))return originalFetch(url,options);
+    researchCalls++;const prompt=JSON.parse(options.body).contents[0].parts[0].text;
+    assert.doesNotMatch(prompt,/לוי|secret|payment/);assert.match(prompt,/M1/);
+    return new Response(JSON.stringify({candidates:[{content:{parts:[{text:'רוחב 80 מ״מ'}]},groundingMetadata:{groundingChunks:[{web:{uri:'https://manufacturer.com/M1',title:'Manufacturer'}}],groundingSupports:[{segment:{endIndex:Buffer.byteLength('רוחב 80 מ״מ')},groundingChunkIndices:[0]}]}}]}));
+  };
+  const researchBody={mode:'equipment',manufacturer:'Maker',model:'M1',question:'מה המידות בפרויקט לוי?',history:[{role:'user',text:'secret payment'}]};
+  const askResearch=async(body=researchBody,prefix=base)=>{
+    const response=await originalFetch(`${prefix}/ai/chat/stream`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+    return (await response.text()).split('\n\n').filter(block=>block.startsWith('data:')).map(block=>JSON.parse(block.slice(5))).find(item=>item.type==='answer');
+  };
+  const free=await askResearch({...researchBody,freeSearch:true});assert.equal(researchCalls,0);assert.equal(free.research.products[0].links.length,4);
+  const found=await askResearch();assert.equal(researchCalls,1);assert.equal(found.research.sources.length,1);
+  const cached=await askResearch({...researchBody,freeSearch:true});assert.equal(researchCalls,1);assert.equal(cached.research.cached,true);assert.equal(cached.answer,found.answer);
+  for(let i=0;i<30;i++){try{if(JSON.parse(await readFile(path.join(dataDir,'equipment-research-cache.json'),'utf8')).length)break;}catch{}await new Promise(resolve=>setTimeout(resolve,10));}
+  app.use('/api/restarted',await createAiRouter({pool,authenticate,requireRoles,audit:async()=>{},dataDir,researchSourceLoader:async sources=>sources}));
+  const restored=await askResearch(researchBody,`${base}/restarted`);assert.equal(restored.research.cached,true);assert.equal(researchCalls,1);
 });

@@ -202,6 +202,22 @@ test.describe.serial('PROJECTS critical paths', () => {
       const refreshed=await (await page.request.get(`${base}/workspace`)).json();const saved=refreshed.equipment.find(item=>String(item.catalog_item_id)===String(legacy.id));expect(saved.system_name).toBe('ITEM שונה');expect(saved.system_type_name).toBe('שם קטגוריה נשמר');
     }
     expect(workspace.files.map(item=>String(item.id))).toEqual([String(unrelated.id)]);
+    const manualRow=(await equipment.json()).equipment;
+    const researchResponse=await page.request.post('/api/ai/chat/stream',{data:{question:`מה המידות של המפסקים בפרויקט ${project.name}?`,mode:'equipment',projectId:project.id,manufacturer:'Maker',model:'CI-M1',freeSearch:true}});
+    expect(researchResponse.ok()).toBeTruthy();
+    const researchAnswer=(await researchResponse.text()).split('\n\n').filter(block=>block.startsWith('data:')).map(block=>JSON.parse(block.slice(5))).find(item=>item.type==='answer');
+    expect(researchAnswer.research.products[0].model).toBe('CI-M1');expect(researchAnswer.research.products[0].links).toHaveLength(4);
+    const inherited=await page.request.post(`${base}/equipment`,{data:{catalogItemId:manualRow.catalog_item_id,quantity:1}});expect(inherited.ok(),await inherited.text()).toBeTruthy();
+    const moved=await page.request.patch(`${base}/equipment/${manualRow.id}`,{data:{projectSystemId:catalog.items.find(item=>item.itemType==='system_type'&&item.active).id}});expect(moved.ok(),await moved.text()).toBeTruthy();
+    const beforeDelete=await (await page.request.get(`${base}/workspace`)).json();
+    const removed=beforeDelete.equipment.filter(item=>String(item.system_id)===String(system.id));
+    const retained=beforeDelete.equipment.filter(item=>String(item.system_id)!==String(system.id));
+    expect(removed.length).toBeGreaterThanOrEqual(2);
+    expect(retained.length).toBeGreaterThan(0);
+    expect((await page.request.delete(`${base}/system-board/${system.id}`)).ok()).toBeTruthy();
+    const afterDelete=await (await page.request.get(`${base}/workspace`)).json();
+    expect(afterDelete.equipment.map(item=>item.id).sort()).toEqual(retained.map(item=>item.id).sort());
+    expect((await (await page.request.get('/api/equipment-catalog')).json()).items.some(item=>item.id===system.id)).toBeTruthy();
   });
 
 });

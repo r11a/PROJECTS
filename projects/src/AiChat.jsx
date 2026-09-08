@@ -2,6 +2,7 @@ import { Component, useEffect, useRef, useState } from "react";
 import { ArrowLeft, CircleHelp, Eraser, Mic, Send, Sparkles, X } from "lucide-react";
 import { ModalPortal } from "./AppModal";
 import "./ai-chat-actions.css";
+import { equipmentCategories, ResearchText, ResearchResults } from './EquipmentResearch';
 
 const helpDestinations = [
   { page:"my-work",label:"פתח את העבודה שלי",pattern:/העבודה שלי|סדר היום|עדיפויות אישיות/i },
@@ -34,6 +35,17 @@ const helpGroups = [
 export function AiChat({ apiRoot, onClose, onNavigate }) {
   const [messages,setMessages] = useState([{ role:"assistant", text:"שלום, אני הסוכן החכם של PROJECTS. אפשר לשאול אותי על פרויקטים, משימות, גבייה, מערכות או על השימוש בתוכנה." }]);
   const [question,setQuestion] = useState("");
+  const [equipmentMode,setEquipmentMode]=useState(false);
+  const [equipmentDetailsOpen,setEquipmentDetailsOpen]=useState(true);
+  const [product,setProduct]=useState({manufacturer:'',model:'',category:'',projectId:''});
+  const [projects,setProjects]=useState([]);
+  const [freeSearch,setFreeSearch]=useState(false);
+  useEffect(()=>{
+    if(!equipmentMode)return;
+    const controller=new AbortController();
+    fetch(`${apiRoot}/projects`,{credentials:'same-origin',signal:controller.signal}).then(r=>r.ok?r.json():{}).then(data=>setProjects(data.projects||[])).catch(()=>{});
+    return ()=>controller.abort();
+  },[equipmentMode,apiRoot]);
   const [busy,setBusy] = useState(false);
   const [helpOpen,setHelpOpen] = useState(false);
   const [listening,setListening] = useState(false);
@@ -47,11 +59,11 @@ export function AiChat({ apiRoot, onClose, onNavigate }) {
     return ()=>cancelAnimationFrame(frame);
   },[messages,busy]);
 
-  const streamAnswer = async (text,history) => {
+  const streamAnswer = async (text,history,options={}) => {
     const response=await fetch(`${apiRoot}/ai/chat/stream`,{
       method:"POST",credentials:"same-origin",cache:"no-store",
       headers:{ "Content-Type":"application/json","Accept":"text/event-stream" },
-      body:JSON.stringify({ question:text,history }),
+      body:JSON.stringify({ question:text,...(equipmentMode||options.mode==='equipment'?{mode:'equipment',...product,freeSearch}:{history,freeSearch}),...options }),
     });
     if (!response.ok) {
       const raw=await response.text();
@@ -84,9 +96,9 @@ export function AiChat({ apiRoot, onClose, onNavigate }) {
     return completed;
   };
 
-  const ask = async (event) => {
+  const ask = async (event,options={}) => {
     event?.preventDefault();
-    const text = question.trim();
+    const text = (options.question||question).trim();
     if (!text || busy) return;
     const history = messages.filter((item)=>["user","assistant"].includes(item.role)).slice(-6).map((item)=>({ role:item.role, text:item.text }));
     setMessages((current)=>[...current,{ role:"user",text }]);
@@ -94,8 +106,9 @@ export function AiChat({ apiRoot, onClose, onNavigate }) {
     setHelpOpen(false);
     setBusy(true);
     try {
-      const result=await streamAnswer(text,history);
-      setMessages((current)=>[...current,{ role:"assistant",text:result.answer,meta:`${result.providerName} · ${result.model}`,actions:destinationsFor(text) }]);
+      const result=await streamAnswer(text,history,options);
+      if(result.research?.sources?.length)setEquipmentDetailsOpen(false);
+      setMessages((current)=>[...current,{ role:"assistant",text:result.answer,research:result.research,question:text,meta:`${result.providerName} · ${result.model}${result.research?.sources?.length?` · ${new Date(result.generatedAt).toLocaleDateString('he-IL')}`:''}`,actions:result.research?[]:destinationsFor(text) }]);
     } catch (error) {
       setMessages((current)=>[...current,{ role:"error",text:error.message,meta:"אפשר לבדוק את החיבור תחת הגדרות ומערכת › סוכן AI" }]);
     } finally { setBusy(false); }
@@ -134,10 +147,21 @@ export function AiChat({ apiRoot, onClose, onNavigate }) {
       <aside className="ai-chat" onMouseDown={(event)=>event.stopPropagation()} dir="rtl">
         <header>
           <span><Sparkles size={21}/></span>
-          <div><strong>הסוכן החכם</strong><small>תשובות מתוך נתוני PROJECTS · קריאה בלבד</small></div>
+          <div><strong>הסוכן החכם</strong><small>נתוני הפרויקטים ומידע טכני לציוד</small></div>
           <button type="button" className={helpOpen ? "active" : ""} onClick={()=>setHelpOpen(!helpOpen)} title="עזרה ודוגמאות"><CircleHelp size={19}/><b>עזרה</b></button>
           <button type="button" onClick={onClose} title="סגירה"><X size={21}/></button>
         </header>
+        <section className="equipment-controls" hidden={helpOpen}>
+          <div className="equipment-mode" role="group" aria-label="מצב הסוכן"><button type="button" aria-pressed={!equipmentMode} disabled={busy} onClick={()=>setEquipmentMode(false)}>הפרויקטים שלי</button><button type="button" aria-pressed={equipmentMode} disabled={busy} onClick={()=>setEquipmentMode(true)}>מידע טכני לציוד</button></div>
+          {equipmentMode&&<details open={equipmentDetailsOpen} onToggle={event=>setEquipmentDetailsOpen(event.currentTarget.open)}><summary>פרטי הציוד {product.model&&`· ${product.manufacturer} ${product.model}`}</summary><div className="equipment-fields">
+            <label>פרויקט<select aria-label="פרויקט לחיפוש ציוד" disabled={busy} value={product.projectId} onChange={e=>setProduct({...product,projectId:e.target.value,manufacturer:'',model:''})}><option value="">זיהוי מתוך השאלה / הזנה ידנית</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+            <label>סוג ציוד<select disabled={busy} value={product.category} onChange={e=>setProduct({...product,category:e.target.value})}><option value="">זיהוי מתוך השאלה</option>{equipmentCategories.map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+            <label>יצרן<input disabled={busy} value={product.manufacturer} maxLength={120} placeholder="או זיהוי מתוך הפרויקט" onChange={e=>setProduct({...product,manufacturer:e.target.value})}/></label>
+            <label>דגם מדויק<input disabled={busy} value={product.model} maxLength={160} placeholder="ללא ניחוש לפי שם הפריט" onChange={e=>setProduct({...product,model:e.target.value})}/></label>
+          </div></details>}
+          <label className="equipment-cost">חיפוש ציוד<select aria-label="אופן החיפוש" disabled={busy} value={freeSearch?'free':'ai'} onChange={e=>setFreeSearch(e.target.value==='free')}><option value="ai">חסכוני · AI עם מקורות</option><option value="free">קישורים בלבד · ללא טוקנים</option></select></label>
+          {equipmentMode&&<button className="equipment-example" type="button" onClick={()=>setQuestion('מה המידות של המפסקים בפרויקט של לוי?')}>לדוגמה: מה המידות של המפסקים בפרויקט של לוי?</button>}
+        </section>
         {helpOpen && <section className="ai-chat-help">
           <div><strong>עזרה חכמה ומדריך מלא למערכת</strong><small>הסוכן מכיר את מטרת כל מסך, טאב ופעולה, את סדר העבודה ואת הקשרים בין המודולים. לחיצה על דוגמה תעביר אותה לשורת השאלה.</small></div>
           {helpGroups.map((group)=><article key={group.title}><h4>{group.title}</h4><div>{group.examples.map((example)=><button type="button" key={example} onClick={()=>useExample(example)}>{example}</button>)}</div></article>)}
@@ -146,7 +170,7 @@ export function AiChat({ apiRoot, onClose, onNavigate }) {
         <div className="ai-chat-thread" ref={threadRef}>
           {messages.map((message,index)=><article key={index} className={message.role}>
             {message.role !== "user" && <span><Sparkles size={15}/></span>}
-            <div><p>{message.text}</p>{message.actions?.length>0&&<nav className="ai-chat-actions">{message.actions.map((action)=><button type="button" key={action.page} onClick={()=>typeof onNavigate==='function'&&onNavigate(action.page)}>{action.label}<ArrowLeft size={14}/></button>)}</nav>}{message.meta && <small>{message.meta}</small>}</div>
+            <div><ResearchText text={message.text} research={message.research}/><ResearchResults research={message.research} busy={busy} onProject={projectId=>{setProduct(current=>({...current,projectId,manufacturer:'',model:''}));ask(null,{mode:'equipment',projectId,manufacturer:'',model:'',question:message.question});}} onProduct={selected=>{setEquipmentMode(true);setProduct(current=>({...current,manufacturer:selected.manufacturer,model:selected.model}));if(selected.manufacturer&&selected.model){setFreeSearch(false);ask(null,{mode:'equipment',manufacturer:selected.manufacturer,model:selected.model,freeSearch:false,question:message.question});}else {setEquipmentDetailsOpen(true);setQuestion(message.question);}}}/>{message.actions?.length>0&&<nav className="ai-chat-actions">{message.actions.map((action)=><button type="button" key={action.page} onClick={()=>typeof onNavigate==='function'&&onNavigate(action.page)}>{action.label}<ArrowLeft size={14}/></button>)}</nav>}{message.meta && <small>{message.meta}</small>}</div>
           </article>)}
           {listening && <article className="assistant voice-listening"><span><Mic size={15}/></span><div><strong>מאזין…</strong><i/><i/><i/><i/><i/></div></article>}
           {busy && <article className="assistant thinking"><span><Sparkles size={15}/></span><div><i/><i/><i/></div></article>}
@@ -154,10 +178,10 @@ export function AiChat({ apiRoot, onClose, onNavigate }) {
         <form onSubmit={ask}>
           <button type="button" className="ai-chat-clear" onClick={()=>setMessages((current)=>current.slice(0,1))} title="ניקוי השיחה"><Eraser size={17}/></button>
           <button type="button" className={`ai-chat-mic ${listening?"listening":""}`} onClick={toggleVoice} disabled={busy} title={listening?"סיום ההאזנה":"שאלה בקול"}><Mic size={18}/></button>
-          <textarea value={question} onChange={(event)=>setQuestion(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();ask();}}} placeholder="שאלו על פרויקט, משימה, גבייה או שימוש במערכת..." rows="1" maxLength="1500"/>
+          <textarea value={question} onChange={(event)=>setQuestion(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();ask();}}} placeholder={equipmentMode?"שאלו על מידות, מפרט או התקנה...":"שאלו על פרויקט, ציוד או שימוש במערכת..."} rows="1" maxLength="1500"/>
           <button className="ai-chat-send" disabled={busy||!question.trim()} title="שליחה"><Send size={18}/></button>
         </form>
-        <footer>הנתונים נטענים מחדש בכל שאלה בהתאם להרשאות שלך. הסוכן עשוי לטעות; בהחלטות חשובות יש לאמת במסך המקור.</footer>
+        <footer>חיפוש ציוד: זיהוי מקומי, דגם אחד בכל חיפוש ותשובה שמורה לשבוע. חיפוש חדש עשוי לעלות לפי הספק; אומדן הטוקנים אינו כולל דמי חיפוש. יש לאמת מידות בשרטוט היצרן לפני ביצוע.</footer>
       </aside>
     </div>
     </ModalPortal>

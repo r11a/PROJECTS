@@ -4,6 +4,41 @@ import { test, expect } from '@playwright/test';
 // The real add-on critical paths retain the production service worker.
 test.use({serviceWorkers:'block'});
 
+test('equipment chat supports project questions, free links, model selection and cited research on mobile',async({page},testInfo)=>{
+  await mockApi(page);await page.setViewportSize({width:390,height:844});
+  const product={name:'מפסק חדר',manufacturer:'Maker',model:'M1',links:[{title:'דף נתונים PDF',url:'https://maker.example.com/M1.pdf'}]};
+  let calls=0;
+  await page.route('**/api/ai/chat/stream',route=>{
+    const body=route.request().postDataJSON();calls++;
+    expect(body.question).toContain('מידות');
+    if(calls===1){expect(body.freeSearch).toBe(true);return route.fulfill({contentType:'text/event-stream',body:`data: ${JSON.stringify({type:'answer',answer:'נמצא הדגם בפרויקט לוי',providerName:'PROJECTS',model:'ללא טוקנים',research:{project:{id:'p1',name:'לוי'},products:[product]}})}\n\n`});}
+    expect(body.manufacturer).toBe('Maker');expect(body.model).toBe('M1');expect(body.history).toBeUndefined();expect(body.freeSearch).toBe(false);
+    return route.fulfill({contentType:'text/event-stream',body:`data: ${JSON.stringify({type:'answer',answer:'רוחב 80 מ״מ',providerName:'Test provider',model:'test',generatedAt:'2026-09-08T10:00:00Z',research:{products:[product],sources:[{url:'https://maker.example.com/M1.pdf',title:'Maker datasheet'}],citations:[{end:11,source:0}],previews:[{url:'https://maker.example.com/M1.pdf',document:true,image:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD3sAAAAASUVORK5CYII='}],suggestions:'<script>parent.hacked=true</script><div>Google Search</div>'}})}\n\n`});
+  });
+  await page.goto('/');await page.getByRole('button',{name:'הסוכן החכם',exact:true}).click();
+  await page.getByLabel('אופן החיפוש').selectOption('free');
+  await page.locator('.ai-chat textarea').fill('מה המידות של המפסקים בפרויקט של לוי?');
+  await page.locator('.ai-chat textarea').press('Enter');
+  await expect(page.locator('.equipment-project')).toHaveText('ציוד בפרויקט לוי');
+  await page.getByRole('button',{name:'חיפוש AI עם מקורות',exact:true}).click();
+  await expect(page.locator('.ai-chat-thread sup a')).toHaveAttribute('href','https://maker.example.com/M1.pdf');
+  await expect(page.locator('.equipment-source img')).toBeVisible();
+  expect(await page.evaluate(()=>window.hacked)).toBeUndefined();
+  const send=page.locator('.ai-chat-send');expect(await send.evaluate(el=>{const r=el.getBoundingClientRect();return r.bottom<=innerHeight&&el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBeTruthy();
+  expect(await page.locator('.ai-chat').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBeTruthy();
+  await page.screenshot({path:testInfo.outputPath('equipment-research-mobile.png')});
+});
+
+test('ITEM deletion reports failure and removes the group after a successful retry',async({page})=>{
+  await mockApi(page);let deleted=false,calls=0;
+  await page.route('**/api/projects/PRJ-101/workspace',route=>route.fulfill({json:{tasks:[],milestones:[],payments:[],team:[],equipment:deleted?[]:[{id:1,name:'מפסק',system_id:8,system_name:'מערכת בדיקה',system_type_name:'בית חכם',quantity:1}],forms:[],files:[],updates:[],activity:[],reviews:[],meetings:[],timeEntries:[],priorityOrders:[],systemColumns:[],systemFieldSettings:[]}}));
+  await page.route('**/api/projects/PRJ-101/system-board/8',route=>{expect(route.request().method()).toBe('DELETE');calls++;if(calls===1)return route.fulfill({status:500,json:{error:'מחיקה נכשלה לבדיקה'}});deleted=true;return route.fulfill({status:204});});
+  page.on('dialog',dialog=>dialog.accept());
+  await page.goto('/?page=project&project=PRJ-101&tab=systems');await page.getByRole('button',{name:'עריכת ITEM',exact:true}).click();
+  await page.getByRole('button',{name:'מחיקת ITEM והרכיבים',exact:true}).click();await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('מחיקה נכשלה לבדיקה');
+  await page.getByRole('button',{name:'מחיקת ITEM והרכיבים',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.project-system-item')).toHaveCount(0);
+});
+
 // Isolated UI fixtures: these tests never write to a real project or account.
 const projects = [
   {id:'PRJ-101',name:'וילה בקיסריה',client:'משפחת כהן',location:'קיסריה',stage:'installation_a',progress:68,manager:'רונן',ownerInitials:'רל',value:385000,paid:268000,health:76,tasksDone:34,tasksTotal:48,systems:['KNX','Audio'],flag:'ממתין לחשמלאי',nextMilestone:'התקנת לוחות ובקרים',priority:'high'},

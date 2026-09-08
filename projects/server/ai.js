@@ -4,6 +4,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { readFile, writeFile } from 'node:fs/promises';
 import { buildOperationalInsights } from './insights.js';
 import { buildLiveSystemKnowledge } from './aiKnowledge.js';
+import { resolveEquipment, technicalQuestion, questionIntent, equipmentPrompt, extractGrounding, enrichSources, searchLinks } from './equipmentResearch.js';
 
 const INSIGHT_CACHE_TTL = 30 * 60 * 1000;
 const INSIGHT_REFRESH_COOLDOWN = 5 * 60 * 1000;
@@ -101,7 +102,7 @@ export function providerError(provider, status, payload) {
 
 const wait = (milliseconds) => new Promise((resolve)=>setTimeout(resolve,milliseconds));
 
-async function requestProvider(provider, model, apiKey, prompt, { test, responseJson }) {
+async function requestProvider(provider, model, apiKey, prompt, { test, responseJson, webSearch }) {
   const url = provider === 'gemini'
     ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
     : 'https://api.openai.com/v1/responses';
@@ -110,17 +111,18 @@ async function requestProvider(provider, model, apiKey, prompt, { test, response
     headers:{ 'Content-Type':'application/json', 'x-goog-api-key':apiKey },
     body:JSON.stringify({
       contents:[{ parts:[{ text:prompt }] }],
-      generationConfig:{ maxOutputTokens:test ? 128 : 900, ...(responseJson ? { responseMimeType:'application/json' } : {}) },
+      generationConfig:{ maxOutputTokens:test ? 128 : webSearch ? 2200 : 900, ...(responseJson ? { responseMimeType:'application/json' } : {}) },
+      ...(webSearch ? {tools:[{google_search:{}}]} : {}),
     }),
   } : {
     method:'POST',
     headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${apiKey}` },
-    body:JSON.stringify({ model, input:prompt, max_output_tokens:test ? 128 : 900 }),
+    body:JSON.stringify({ model, input:prompt, max_output_tokens:test ? 128 : webSearch ? 2200 : 900, ...(webSearch ? {tools:[{type:'web_search',search_context_size:'low'}],tool_choice:'required'} : {}) }),
   };
   let lastError;
   for (let attempt=0;attempt<2;attempt+=1) {
     try {
-      const response = await fetch(url,{ ...options,signal:AbortSignal.timeout(35000) });
+      const response = await fetch(url,{ ...options,signal:AbortSignal.timeout(webSearch ? 60000 : 35000) });
       if ((response.status === 408 || response.status === 429 || response.status >= 500) && attempt === 0) {
         await response.arrayBuffer().catch(()=>{});
         const retryAfter=Number(response.headers.get('retry-after'));
@@ -137,10 +139,10 @@ async function requestProvider(provider, model, apiKey, prompt, { test, response
   throw lastError || new Error('AI provider request failed');
 }
 
-export async function generateProviderText(provider, model, apiKey, prompt, { test = false, responseJson = false, onUsage } = {}) {
+export async function generateProviderText(provider, model, apiKey, prompt, { test = false, responseJson = false, onUsage, webSearch = false, onGrounding } = {}) {
   let response;
   try {
-    response = await requestProvider(provider,model,apiKey,prompt,{ test,responseJson });
+    response = await requestProvider(provider,model,apiKey,prompt,{ test,responseJson,webSearch });
   } catch (error) {
     if (error.name === 'TimeoutError') throw error;
     const message=`לא ניתן להתחבר אל ${PROVIDERS[provider].name}. בדקו של־Home Assistant יש גישה לאינטרנט ול־DNS.`;
@@ -176,6 +178,11 @@ export async function generateProviderText(provider, model, apiKey, prompt, { te
     const totalTokens = reportedTotal || inputTokens + outputTokens;
     const rates = MODEL_RATES[model] || { input:0,output:0 };
     await onUsage({ inputTokens,outputTokens,totalTokens,estimatedCostUsd:(inputTokens*rates.input+outputTokens*rates.output)/1_000_000 });
+  }
+  if(webSearch) {
+    const grounding=extractGrounding(provider,payload,text);
+    if(!grounding.sources.length || !grounding.citations.length) throw Object.assign(new Error('Missing web grounding'),{publicMessage:'לא התקבלו מקורות מאומתים לחיפוש. לא אציג מידות מתוך הזיכרון. אפשר לפתוח את קישורי החיפוש או לבחור בהגדרות מודל שתומך בחיפוש רשת.'});
+    onGrounding?.(grounding);
   }
   return text;
 }
@@ -391,10 +398,16 @@ export async function buildLocalChatAnswer(pool, question, user = { role:'admin'
   return '';
 }
 
-export async function createAiRouter({ pool, authenticate, requireRoles, audit, dataDir }) {
+export async function createAiRouter({ pool, authenticate, requireRoles, audit, dataDir, researchSourceLoader=enrichSources }) {
   const router = express.Router();
   const encryptionKey = await getEncryptionKey(dataDir);
   const runningChatJobs = new Set();
+  const researchFile=path.join(dataDir,'equipment-research-cache.json');
+  const researchCache=new Map();
+  const researchPending=new Map();
+  const researchUsers=new Set();
+  let cacheWrite=Promise.resolve();
+  try {for(const [key,value] of JSON.parse(await readFile(researchFile,'utf8')))if(Date.now()-value.timestamp<7*86400000)researchCache.set(key,value);}catch{}
   router.use(authenticate);
 
   const cleanChatJobs = () => pool.query(`DELETE FROM ai_chat_jobs
@@ -587,6 +600,48 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
     send({ type:'status',status:'working' });
     const heartbeat=setInterval(()=>{ if (!response.writableEnded && !response.destroyed) response.write(`: heartbeat ${Date.now()}\n\n`); },5000);
     try {
+      if(request.body?.mode==='equipment'||technicalQuestion(question)) {
+        const resolved=await resolveEquipment(pool,{...request.body,question});
+        const products=resolved.products.map(p=>({...p,links:searchLinks(p)}));
+        const research={...resolved,products};
+        if(products.length!==1||!products[0].manufacturer||!products[0].model) {
+          const answer=resolved.message||(products.some(p=>!p.manufacturer||!p.model)?'חסרים יצרן או דגם מדויק בחלק מהפריטים. השלימו אותם לפני חיפוש מידות; לא ניתן להסיק מידות משם כללי.':products.length>1?'אלה הדגמים שנמצאו בפרויקט. בחרו דגם לחיפוש ממוקד וחסכוני.':'קישורי חיפוש למוצר המדויק, ללא שימוש בטוקנים. ניתן לבחור חיפוש AI לקבלת סיכום עם מקורות.');
+          send({type:'answer',answer,research,providerName:'PROJECTS',model:'זיהוי מקומי · ללא טוקנים',generatedAt:new Date().toISOString()});return;
+        }
+        const product=products[0],intent=questionIntent(question);
+        const key=createHash('sha256').update(JSON.stringify([product.manufacturer.toLowerCase(),product.model.toLowerCase(),intent])).digest('hex');
+        const cached=researchCache.get(key);
+        if(cached&&Date.now()-cached.timestamp<7*86400000) {send({...cached.answer,research:{...cached.answer.research,...research,cached:true}});return;}
+        if(request.body?.freeSearch){send({type:'answer',answer:'קישורי חיפוש למוצר המדויק, ללא שימוש בטוקנים. בחרו חיפוש AI לקבלת סיכום עם מקורות.',research,providerName:'PROJECTS',model:'ללא טוקנים',generatedAt:new Date().toISOString()});return;}
+        if(researchUsers.has(request.user.id))throw Object.assign(new Error('Research busy'),{publicMessage:'חיפוש ציוד קודם עדיין מתבצע. המתינו לסיומו.'});
+        researchUsers.add(request.user.id);
+        try {
+          let work=researchPending.get(key);
+          if(!work) {
+            work=(async()=>{
+              const settings=await pool.query("SELECT value FROM app_settings WHERE key='ai'");
+              const global={activeProvider:'gemini',...(settings.rows[0]?.value||{})};
+              const selected=(await pool.query('SELECT provider,enabled,model,api_key_encrypted FROM ai_provider_settings WHERE provider=$1',[global.activeProvider])).rows[0];
+              if(!PROVIDERS[global.activeProvider]||!selected?.enabled||!selected.api_key_encrypted)throw Object.assign(new Error('AI unavailable'),{publicMessage:'לקבלת סיכום עם מקורות הפעילו ספק AI בהגדרות. לחיפוש ללא טוקנים בחרו ״קישורים בלבד״.'});
+              await enforceBudget(global);
+              let grounding;
+              const answer=await generateProviderText(global.activeProvider,selected.model,decrypt(selected.api_key_encrypted,encryptionKey),equipmentPrompt(product,intent),{webSearch:true,onGrounding:value=>{grounding=value;},onUsage:usageRecorder(request,global.activeProvider,selected.model,'chat')});
+              const previews=await researchSourceLoader(grounding.sources);
+              const response={type:'answer',answer,research:{...grounding,previews},providerName:PROVIDERS[global.activeProvider].name,model:selected.model,generatedAt:new Date().toISOString()};
+              researchCache.set(key,{timestamp:Date.now(),answer:response});
+              while(researchCache.size>24)researchCache.delete(researchCache.keys().next().value);
+              const snapshot=JSON.stringify([...researchCache]);
+              cacheWrite=cacheWrite.then(()=>writeFile(researchFile,snapshot,{mode:0o600})).catch(error=>console.error('Equipment cache save failed',error.message));
+              return response;
+            })();
+            researchPending.set(key,work);
+            work.finally(()=>researchPending.delete(key)).catch(()=>{});
+          }
+          const result=await work;
+          send({...result,research:{...result.research,...research}});return;
+        } catch(error) {send({type:'answer',answer:chatError(error).error,research,providerName:'PROJECTS',model:'קישורי חיפוש זמינים',generatedAt:new Date().toISOString()});return;}
+        finally {researchUsers.delete(request.user.id);}
+      }
       const localAnswer=await buildLocalChatAnswer(pool,question,request.user);
       if (localAnswer) {
         send({ type:'answer',answer:localAnswer,provider:'local',providerName:'PROJECTS',model:'מנוע נתונים מקומי',generatedAt:new Date().toISOString() });
