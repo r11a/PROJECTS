@@ -250,3 +250,9 @@
 .stage-chart-wrap :focus-visible{outline:2px solid var(--accent,#6957df);outline-offset:3px}
 .meeting-email-draft header a{display:inline-flex;align-items:center;gap:7px;background:#6856da;color:#fff;padding:10px 13px;border-radius:10px;text-decoration:none;font-weight:800}
 @media(max-width:620px){.calendar-toolbar :is(button,select,.calendar-view-picker,.calendar-date-picker){height:44px;min-height:44px}.calendar-toolbar .calendar-view-picker select{height:42px!important;min-height:42px!important}.task-editor-modal .task-title-field{grid-column:1/-1}}
+
+.main-area .calendar-grid>button>div{flex-direction:column;flex-wrap:nowrap}
+.main-area .calendar-grid>button>div>span{height:auto;min-height:38px;width:100%;padding:3px 5px;border-radius:5px;border-inline-start:3px solid var(--event);background:color-mix(in srgb,var(--event) 11%,var(--surface,#fff));font-size:11px!important}
+.main-area .calendar-grid>button>div .calendar-event-text{height:auto;min-height:30px;width:100%;align-items:flex-start;border-radius:0;font-size:11px!important;line-height:14px}
+.main-area .calendar-event-text :is(b,small){display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calendar-date-picker>span:not(.he-date-input){white-space:nowrap}

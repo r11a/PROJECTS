@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 
+// Route fixtures must remain owned by Playwright, including after navigation.
+// The real add-on critical paths retain the production service worker.
+test.use({serviceWorkers:'block'});
+
 // Isolated UI fixtures: these tests never write to a real project or account.
 const projects = [
   {id:'PRJ-101',name:'וילה בקיסריה',client:'משפחת כהן',location:'קיסריה',stage:'installation_a',progress:68,manager:'רונן',ownerInitials:'רל',value:385000,paid:268000,health:76,tasksDone:34,tasksTotal:48,systems:['KNX','Audio'],flag:'ממתין לחשמלאי',nextMilestone:'התקנת לוחות ובקרים',priority:'high'},
@@ -137,7 +141,8 @@ test('calendar controls align and show task performers; catalog search and manua
   await expect(page.locator('.calendar-grid')).toBeVisible();await expect(page.locator('.calendar-event-text small').first()).toHaveText('רונן ודניאל');
   const heights=await page.locator('.calendar-navigation>button,.calendar-view-picker,.calendar-date-picker').evaluateAll(nodes=>nodes.map(node=>Math.round(node.getBoundingClientRect().height)));
   expect(new Set(heights).size).toBe(1);
-  await page.screenshot({path:testInfo.outputPath('calendar-desktop.png')});
+  expect(await page.locator('.calendar-event-text small').first().evaluate(el=>el.getBoundingClientRect().bottom<=el.parentElement.parentElement.getBoundingClientRect().bottom)).toBeTruthy();
+  await page.screenshot({path:testInfo.outputPath('calendar-desktop.png'),animations:'disabled'});
   const equipment=[{id:5,name:'בקר ראשי',itemType:'component',active:true,parentId:8},{id:8,name:'בית חכם',itemType:'system',active:true}];
   await page.route('**/api/equipment-catalog',route=>route.fulfill({json:{items:equipment}}));
   await page.route('**/api/projects/PRJ-101/workspace',route=>route.fulfill({json:{tasks:[],milestones:[],payments:[],team:[],equipment:[{id:1,catalog_item_id:5,name:'בקר ראשי',system_id:8,system_name:'בית חכם',system_type_name:'מערכות',quantity:1}],forms:[],files:[],updates:[],activity:[],reviews:[],meetings:[],timeEntries:[],priorityOrders:[],systemColumns:[],systemFieldSettings:[]}}));

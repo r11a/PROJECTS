@@ -717,7 +717,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
                           title={`${event.title} · ${event.assigneeName || "ללא מבצע"}`}
                         >
                           <i />
-                          <span className="calendar-event-text">{event.title}<small>{event.assigneeName || "ללא מבצע"}</small></span>
+                          <span className="calendar-event-text"><b>{event.title}</b><small>{event.assigneeName || "ללא מבצע"}</small></span>
                         </span>
                       ))}
                       {dayEvents.length > 3 && (

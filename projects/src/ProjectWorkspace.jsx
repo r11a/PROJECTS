@@ -315,6 +315,7 @@ export function ProjectWorkspace({
       });
       setModal("");
       setNotice("הציוד נוסף לפרויקט");
+      if(f.get("manualName"))api("/equipment-catalog").then(result=>setReference(current=>({...current,equipment:result.items}))).catch(()=>{});
       load();
     } catch (err) {
       setNotice(err.message);
