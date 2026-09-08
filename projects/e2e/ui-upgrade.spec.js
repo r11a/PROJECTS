@@ -24,7 +24,7 @@ test('dynamic import highlights a detected project, maps multiple sheets, edits 
   await dialog.locator('.table-import-bulk').getByLabel('יצרן',{exact:true}).fill('Maker');await page.getByLabel('קבוצת עריכה').selectOption('Dome');await page.getByRole('button',{name:'החל על הקבוצה בתצוגה',exact:true}).click();
   await page.getByLabel('C1 דגם',{exact:true}).fill('M1');await expect(page.getByRole('button',{name:'אישור וייבוא לפרויקט',exact:true})).toBeDisabled();expect(commits).toBe(0);
   await page.getByRole('button',{name:'השווה מחדש',exact:true}).click();await expect(page.getByLabel('C2 יצרן',{exact:true})).toHaveValue('Maker');
-  await page.screenshot({path:testInfo.outputPath('dynamic-import-mobile.png'),fullPage:true});
+  await page.screenshot({path:testInfo.outputPath('dynamic-import-mobile.png')});
   await page.getByRole('button',{name:'אישור וייבוא לפרויקט',exact:true}).click();await expect(dialog.getByText('הייבוא הושלם והקובץ צורף לפרויקט')).toBeVisible();expect(commits).toBe(1);
 });
 

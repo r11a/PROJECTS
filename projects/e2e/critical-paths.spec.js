@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import {jsPDF} from 'jspdf';
 
 const hardenedPassword = 'Projects-CI-2026!';
 
@@ -248,5 +249,9 @@ test.describe.serial('PROJECTS critical paths', () => {
     const stale=await page.request.post('/api/table-import/commit',{data:{previewId:p.previewId,planId:plan.planId,confirm:true}});expect(stale.status()).toBe(409);plan=await compare(p);await save(p,plan);expect((await workspace()).files).toHaveLength(2);
     p=await inspect(`${project.name}\nid,task,hours,due\nW1,Installation work,2.5,2026-09-15`);plan=await compare(p);await save(p,plan);w=await workspace();expect(w.tasks.find(t=>t.title==='W1 · Installation work').estimated_hours).toBe('2.50');expect(w.timeEntries).toHaveLength(0);
     p=await inspect(`${project.name}\nid,task,hours,due\nW1,Installation work,3,2026-09-15`);plan=await compare(p);await save(p,plan);w=await workspace();expect(w.tasks.filter(t=>t.title==='W1 · Installation work')).toHaveLength(1);expect(Number(w.tasks.find(t=>t.title==='W1 · Installation work').estimated_hours)).toBe(3);expect(w.equipment.map(e=>e.id).sort()).toEqual(originalIds);
+    const pdf=new jsPDF();pdf.setFontSize(10);
+    for(let i=1;i<=2;i++){if(i>1)pdf.addPage();pdf.text(project.name,20,10);pdf.text('id',20,25);pdf.text('name',75,25);pdf.text('status',140,25);pdf.text(`PDF${i}`,20,35);pdf.text('Camera',75,35);pdf.text('installed',140,35);}
+    const pdfResponse=await page.request.post('/api/table-import/inspect',{multipart:{file:{name:'two-pages.pdf',mimeType:'application/pdf',buffer:Buffer.from(pdf.output('arraybuffer'))}}});expect(pdfResponse.ok(),await pdfResponse.text()).toBeTruthy();
+    p=await pdfResponse.json();expect(p.tables).toHaveLength(2);expect(p.tables.every(t=>t.enabled&&t.mapping.id!==undefined)).toBeTruthy();plan=await compare(p);expect(plan.plan.filter(r=>r.status==='new')).toHaveLength(2);await save(p,plan);expect((await workspace()).equipment).toHaveLength(4);
   });
 });
