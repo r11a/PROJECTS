@@ -220,4 +220,33 @@ test.describe.serial('PROJECTS critical paths', () => {
     expect((await (await page.request.get('/api/equipment-catalog')).json()).items.some(item=>item.id===system.id)).toBeTruthy();
   });
 
+  test('dynamic table import confirms before saving, reconciles changes and attaches each source file once',async({page})=>{
+    await webLogin(page);
+    const clients=await (await page.request.get('/api/clients')).json();
+    const response=await page.request.post('/api/projects',{data:{name:`CI Dynamic ${Date.now()}`,clientId:clients.clients[0].id}});expect(response.ok()).toBeTruthy();const project=(await response.json()).project;
+    const base=`/api/projects/${project.id}`;
+    const csv=notes=>`${project.name}\nid,name,category,status,notes,location,manufacturer,model\nC1,Camera,CI Import Cameras,waiting,${notes},Lobby,Maker,M1\nC2,Camera,CI Import Cameras,installed,,Hall,Maker,M1`;
+    const inspect=async text=>{const r=await page.request.post('/api/table-import/inspect',{multipart:{file:{name:'installations.csv',mimeType:'text/csv',buffer:Buffer.from(text)}}});expect(r.ok(),await r.text()).toBeTruthy();const p=await r.json();expect(p.detection.suggested).toBe(project.id);return p;};
+    const compare=async(p,choices={})=>{const r=await page.request.post('/api/table-import/plan',{data:{previewId:p.previewId,projectId:project.id,configs:p.tables.map(t=>({...t,rows:undefined,due:'2026-09-15'})),choices}});expect(r.ok(),await r.text()).toBeTruthy();return r.json();};
+    const save=async(p,plan,decisions={})=>{const r=await page.request.post('/api/table-import/commit',{data:{previewId:p.previewId,planId:plan.planId,confirm:true,decisions}});expect(r.ok(),await r.text()).toBeTruthy();return r.json();};
+    const workspace=async()=> (await page.request.get(`${base}/workspace`)).json();
+    let p=await inspect(csv('original')),plan=await compare(p,{'c1':{edits:{name:'Dome'}},'c2':{edits:{name:'Dome'}}});
+    expect(plan.plan.filter(r=>r.status==='new')).toHaveLength(2);expect((await workspace()).equipment).toHaveLength(0);expect((await workspace()).files).toHaveLength(0);
+    const noConfirm=await page.request.post('/api/table-import/commit',{data:{previewId:p.previewId,planId:plan.planId}});expect(noConfirm.status()).toBe(400);
+    await save(p,plan);let w=await workspace();expect(w.equipment).toHaveLength(2);expect(w.files).toHaveLength(1);expect(w.equipment[0].catalog_item_id).toBe(w.equipment[1].catalog_item_id);
+    expect((await (await page.request.get(`/api/documents/${w.files[0].id}/download`)).body()).toString()).toBe(csv('original'));
+    const originalIds=w.equipment.map(e=>e.id).sort();
+    p=await inspect(csv('original'));plan=await compare(p);expect(plan.duplicate).toBeTruthy();expect(plan.plan.every(r=>r.status==='unchanged')).toBeTruthy();await save(p,plan);
+    w=await workspace();expect(w.files).toHaveLength(1);expect(w.equipment.map(e=>e.id).sort()).toEqual(originalIds);
+    const c1=w.equipment.find(e=>e.tag==='C1'),c2=w.equipment.find(e=>e.tag==='C2');
+    expect((await page.request.patch(`${base}/equipment/${c1.id}`,{data:{notes:'manual edit'}})).ok()).toBeTruthy();
+    p=await inspect(csv('file edit'));plan=await compare(p);expect(plan.plan.find(r=>r.key==='c1').status).toBe('conflict');
+    const unresolved=await page.request.post('/api/table-import/commit',{data:{previewId:p.previewId,planId:plan.planId,confirm:true}});expect(unresolved.status()).toBe(400);
+    await save(p,plan,{c1:'keep'});w=await workspace();expect(w.equipment.find(e=>e.id===c1.id).notes).toBe('manual edit');expect(w.files).toHaveLength(2);
+    p=await inspect(csv('file edit'));plan=await compare(p);expect(plan.plan.every(r=>r.status==='unchanged')).toBeTruthy();
+    await page.request.patch(`${base}/equipment/${c2.id}`,{data:{notes:'changed after preview'}});
+    const stale=await page.request.post('/api/table-import/commit',{data:{previewId:p.previewId,planId:plan.planId,confirm:true}});expect(stale.status()).toBe(409);plan=await compare(p);await save(p,plan);expect((await workspace()).files).toHaveLength(2);
+    p=await inspect(`${project.name}\nid,task,hours,due\nW1,Installation work,2.5,2026-09-15`);plan=await compare(p);await save(p,plan);w=await workspace();expect(w.tasks.find(t=>t.title==='W1 · Installation work').estimated_hours).toBe('2.50');expect(w.timeEntries).toHaveLength(0);
+    p=await inspect(`${project.name}\nid,task,hours,due\nW1,Installation work,3,2026-09-15`);plan=await compare(p);await save(p,plan);w=await workspace();expect(w.tasks.filter(t=>t.title==='W1 · Installation work')).toHaveLength(1);expect(Number(w.tasks.find(t=>t.title==='W1 · Installation work').estimated_hours)).toBe(3);expect(w.equipment.map(e=>e.id).sort()).toEqual(originalIds);
+  });
 });

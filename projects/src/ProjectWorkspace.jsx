@@ -48,6 +48,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { summarizeTimeEntries, timeActivityLabels } from "./features/timeTracking/model";
 import { formatDateIL, localDateValue } from "./dateTime";
 import { PriorityImportWizard } from "./features/priority-import/PriorityImportWizard";
+import { TableImportWizard } from "./features/priority-import/TableImportWizard";
 import { MeetingSummaryForm } from "./features/meetings/MeetingSummaryForm";
 import { VoiceNotes, VoiceNotesToggle } from "./features/voice-notes/VoiceNotes";
 import { SmartTextArea } from "./features/smart-input/SmartTextArea";
@@ -835,7 +836,7 @@ export function ProjectWorkspace({
               <div className="inline-empty">טרם שויך צוות לפרויקט.</div>
             )}
           </section>}
-          {tab === "systems" && <ProjectSystemsBoard items={workspace.equipment} columns={workspace.systemColumns||[]} fieldSettings={workspace.systemFieldSettings||[]} canEdit={canEdit} canManage={canManage} user={user} api={api} apiRoot={apiRoot} projectId={project.id} onAdd={()=>setModal('equipment')} onReload={load} onDelete={deleteEquipment} setNotice={setNotice}/>}
+          {tab === "systems" && <>{['admin','manager'].includes(user.role)&&<div className="table-import-entry"><button onClick={()=>setModal('table-import')}>ייבוא טבלה וקובץ לפרויקט</button></div>}<ProjectSystemsBoard items={workspace.equipment} columns={workspace.systemColumns||[]} fieldSettings={workspace.systemFieldSettings||[]} canEdit={canEdit} canManage={canManage} user={user} api={api} apiRoot={apiRoot} projectId={project.id} onAdd={()=>setModal('equipment')} onReload={load} onDelete={deleteEquipment} setNotice={setNotice}/></>}
         </div>
       )}
       {tab === "priority" && (
@@ -1134,6 +1135,7 @@ export function ProjectWorkspace({
         />
       )}
       {modal === "priority-import" && <PriorityImportWizard project={project} api={api} onClose={()=>setModal("")} onImported={async()=>{await load();setNotice("הזמנת Priority יובאה ועדכנה את הפרויקט")}} />}
+      {modal === "table-import" && <TableImportWizard project={project} api={api} onClose={()=>setModal('')} onImported={async targetId=>{await load();setNotice(`הטבלה יובאה לפרויקט ${targetId}`)}}/>}
       {priorityOrderDetail && <AppModal title={`הזמנת Priority ${priorityOrderDetail.order.priorityOrderNumber}`} subtitle="תיעוד הייבוא לפרויקט" onClose={()=>setPriorityOrderDetail(null)} className="priority-order-detail">
         <div className="priority-order-detail-content">
           <header><div><span>לקוח</span><strong>{priorityOrderDetail.order.customerName}</strong></div><div><span>סטטוס</span><strong>{priorityOrderDetail.order.orderStatus||"—"}</strong></div><div><span>הצעת מחיר</span><strong>{priorityOrderDetail.order.quotationNumber||"—"}</strong></div>{priorityOrderDetail.order.totalAmount!==undefined&&<div><span>סה״כ</span><strong>{priorityMoney.format(priorityOrderDetail.order.totalAmount)}</strong></div>}</header>

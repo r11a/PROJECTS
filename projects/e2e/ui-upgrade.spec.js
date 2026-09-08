@@ -4,6 +4,30 @@ import { test, expect } from '@playwright/test';
 // The real add-on critical paths retain the production service worker.
 test.use({serviceWorkers:'block'});
 
+test('dynamic import highlights a detected project, maps multiple sheets, edits groups and requires final approval',async({page},testInfo)=>{
+  await mockApi(page);await page.setViewportSize({width:390,height:844});let commits=0,plans=0;
+  const tables=[{index:0,name:'Floor 0',enabled:true,kind:'equipment',headerRow:0,mapping:{id:0,name:1,type:2},rows:[['id','name','type'],['C1','Camera','Dome'],['C2','Camera','Dome']],systemName:'מצלמות'},{index:1,name:'Floor 1',enabled:true,kind:'equipment',headerRow:0,mapping:{id:0,name:1,type:2},rows:[['id','name','type'],['C3','Camera','Dome']],systemName:'מצלמות'}];
+  await page.route('**/api/table-import/inspect',route=>route.fulfill({json:{previewId:'preview',tables,projects,systems:[],fields:{id:'מזהה קבוע',name:'שם רכיב / עבודה',type:'סוג ציוד'},states:{},warnings:[],detection:{suggested:'PRJ-102',matches:[projects[1]]}}}));
+  await page.route('**/api/table-import/plan',route=>{
+    const body=route.request().postDataJSON();plans++;expect(body.projectId).toBe('PRJ-102');expect(body.configs).toHaveLength(2);
+    const plan=['C1','C2','C3'].map((id,i)=>({key:id.toLowerCase(),id,name:body.choices[id.toLowerCase()]?.edits?.name||'Camera',manufacturer:body.choices[id.toLowerCase()]?.edits?.manufacturer||'',model:body.choices[id.toLowerCase()]?.edits?.model||'',type:'Dome',floor:i===2?'Floor 1':'Floor 0',sheet:i===2?'Floor 1':'Floor 0',row:i+2,kind:'equipment',systemName:'מצלמות',status:'new',quantity:1,values:{quantity_installed:0},changes:[],conflicts:[]}));
+    return route.fulfill({json:{plan,planId:`plan-${plans}`,existingEquipment:[],existingTasks:[]}});
+  });
+  await page.route('**/api/table-import/commit',route=>{commits++;const body=route.request().postDataJSON();expect(body.confirm).toBe(true);expect(body.planId).toBe('plan-2');return route.fulfill({json:{projectId:'PRJ-102',summary:{created:3,updated:0,unchanged:0,skipped:0}}});});
+  await page.goto('/?page=project&project=PRJ-101&tab=systems');await page.getByRole('button',{name:'ייבוא טבלה וקובץ לפרויקט',exact:true}).click();
+  await page.getByLabel('קובץ לייבוא',{exact:true}).setInputFiles({name:'install.csv',mimeType:'text/csv',buffer:Buffer.from('id,name\nC1,Camera')});await page.getByRole('button',{name:'בדיקה והצעת מיפוי',exact:true}).click();
+  const dialog=page.getByRole('dialog');await expect(dialog.locator('.table-import-project.detected')).toBeVisible();await expect(page.getByLabel('פרויקט יעד לייבוא')).toHaveValue('PRJ-102');
+  await page.getByLabel('פרויקט יעד לייבוא').selectOption('PRJ-101');await expect(dialog.locator('.table-import-project.detected')).toHaveCount(0);await page.getByLabel('פרויקט יעד לייבוא').selectOption('PRJ-102');
+  await expect(dialog.locator('.table-import-mapping>details')).toHaveCount(2);expect(commits).toBe(0);
+  await page.getByRole('button',{name:'הצגת השינויים לפני אישור',exact:true}).click();
+  await page.getByLabel('סיכום רכיבים זהים לפי קומה').check();await expect(dialog.locator('.equipment-floor-groups summary')).toHaveCount(2);await expect(dialog.locator('.equipment-floor-groups summary').first()).toContainText('כמות 2');
+  await dialog.locator('.table-import-bulk').getByLabel('יצרן',{exact:true}).fill('Maker');await page.getByLabel('קבוצת עריכה').selectOption('Dome');await page.getByRole('button',{name:'החל על הקבוצה בתצוגה',exact:true}).click();
+  await page.getByLabel('C1 דגם',{exact:true}).fill('M1');await expect(page.getByRole('button',{name:'אישור וייבוא לפרויקט',exact:true})).toBeDisabled();expect(commits).toBe(0);
+  await page.getByRole('button',{name:'השווה מחדש',exact:true}).click();await expect(page.getByLabel('C2 יצרן',{exact:true})).toHaveValue('Maker');
+  await page.screenshot({path:testInfo.outputPath('dynamic-import-mobile.png'),fullPage:true});
+  await page.getByRole('button',{name:'אישור וייבוא לפרויקט',exact:true}).click();await expect(dialog.getByText('הייבוא הושלם והקובץ צורף לפרויקט')).toBeVisible();expect(commits).toBe(1);
+});
+
 test('equipment chat supports project questions, free links, model selection and cited research on mobile',async({page},testInfo)=>{
   await mockApi(page);await page.setViewportSize({width:390,height:844});
   const product={name:'מפסק חדר',manufacturer:'Maker',model:'M1',links:[{title:'דף נתונים PDF',url:'https://maker.example.com/M1.pdf'}]};

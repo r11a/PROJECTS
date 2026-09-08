@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.39.0
+
+- Add a local dynamic table import wizard under project systems/components: XLSX, ODS, CSV and text PDFs, independent header/mapping choices per sheet, project-name detection with a highlighted editable destination, and proposed category/system placement.
+- Require final approval before writing any project data. Compare stable identifiers across sheets and prior imports; preserve local edits, require conflict decisions, reject duplicate/range identifiers and keep missing/cancelled records without deleting them.
+- Allow name, manufacturer and model corrections per item, per type or in bulk. Retain approved corrections across subsequent imports. Work tables create planned tasks and estimated hours, never actual time reports.
+- Attach each original source file once per project, in the same commit as imported data. Keep import provenance and reject project changes made after preview; migration 047 adds source mappings without rewriting existing equipment.
+- Add expandable floor/equipment summaries with total, installed and remaining quantities in both the import preview and the project systems board, retaining individual identifiers for future updates.
+
 ## 0.38.0
 
 - Add technical equipment research to chat for KNX switches/controllers, speakers, alarms, smart home, multimedia, cameras and networking. Resolve Hebrew project questions locally and select exact catalog models without sending customer or financial context to web search.
