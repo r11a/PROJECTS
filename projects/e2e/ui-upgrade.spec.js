@@ -46,6 +46,8 @@ for(const theme of ['light','dark']) {
     await expect(page.locator('.command-overview')).toBeVisible();
     await expect(page.locator('.alert-backdrop')).toHaveCount(0);
     await expect(page.locator('.welcome-accent')).toHaveText('תמונה אחת ברורה.');
+    await page.locator('.stage-chart-wrap .recharts-surface').click({position:{x:105,y:180}});
+    expect(await page.locator('.stage-chart-wrap').evaluate(el=>{const active=document.activeElement;return !el.contains(active)||getComputedStyle(active).outlineStyle==='none'})).toBeTruthy();
     await page.screenshot({path:testInfo.outputPath(`dashboard-${theme}.png`),fullPage:true});
     await page.locator('.command-card').first().click();
     await expect(page.locator('.next-action-card')).toBeVisible();
