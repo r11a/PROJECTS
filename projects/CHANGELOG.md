@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.40.0
+
+- Add a read-only Check and Suggest mode in the existing chat, scoped to a selected project. Identify overdue/unassigned tasks, missing equipment manufacturer/model, installation gaps, invalid quantities and repeated equipment tags, with bounded evidence and links to the relevant project tab.
+- Run checks locally without AI tokens or provider credentials. Show scope, time, partial-result limits, retryable failures and explicit no-write behavior. Preserve existing chat and technical research modes.
+
 ## 0.39.0
 
 - Add a local dynamic table import wizard under project systems/components: XLSX, ODS, CSV and text PDFs, independent header/mapping choices per sheet, project-name detection with a highlighted editable destination, and proposed category/system placement.

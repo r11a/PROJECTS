@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { buildOperationalInsights } from './insights.js';
+import { loadProjectCheck } from './projectCheck.js';
 import { buildLiveSystemKnowledge } from './aiKnowledge.js';
 import { resolveEquipment, technicalQuestion, questionIntent, equipmentPrompt, extractGrounding, enrichSources, searchLinks } from './equipmentResearch.js';
 
@@ -409,6 +410,14 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
   let cacheWrite=Promise.resolve();
   try {for(const [key,value] of JSON.parse(await readFile(researchFile,'utf8')))if(Date.now()-value.timestamp<7*86400000)researchCache.set(key,value);}catch{}
   router.use(authenticate);
+  router.get('/ai/project-check', async (request, response) => {
+    const projectId = typeof request.query.projectId === 'string' ? request.query.projectId.trim() : '';
+    if (!projectId || projectId.length > 100) return response.status(400).json({error:'יש לבחור פרויקט לבדיקה'});
+    response.set('Cache-Control','no-store');
+    const result = await loadProjectCheck(pool, projectId);
+    if (!result) return response.status(404).json({error:'הפרויקט לא נמצא'});
+    response.json(result);
+  });
 
   const cleanChatJobs = () => pool.query(`DELETE FROM ai_chat_jobs
     WHERE expires_at<NOW() OR created_at<NOW()-INTERVAL '1 day'`);

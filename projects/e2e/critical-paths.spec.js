@@ -253,5 +253,12 @@ test.describe.serial('PROJECTS critical paths', () => {
     for(let i=1;i<=2;i++){if(i>1)pdf.addPage();pdf.text(project.name,20,10);pdf.text('id',20,25);pdf.text('name',75,25);pdf.text('status',140,25);pdf.text(`PDF${i}`,20,35);pdf.text('Camera',75,35);pdf.text('installed',140,35);}
     const pdfResponse=await page.request.post('/api/table-import/inspect',{multipart:{file:{name:'two-pages.pdf',mimeType:'application/pdf',buffer:Buffer.from(pdf.output('arraybuffer'))}}});expect(pdfResponse.ok(),await pdfResponse.text()).toBeTruthy();
     p=await pdfResponse.json();expect(p.tables).toHaveLength(2);expect(p.tables.every(t=>t.enabled&&t.mapping.id!==undefined)).toBeTruthy();plan=await compare(p);expect(plan.plan.filter(r=>r.status==='new')).toHaveLength(2);await save(p,plan);expect((await workspace()).equipment).toHaveLength(4);
+    const beforeCheck=await workspace();
+    const checkResponse=await page.request.get(`/api/ai/project-check?projectId=${encodeURIComponent(project.id)}`);
+    expect(checkResponse.ok(),await checkResponse.text()).toBeTruthy();const check=await checkResponse.json();
+    expect(check.project.id).toBe(project.id);expect(check.checked.equipment).toBe(4);expect(check.findings.some(f=>f.key==='specification')).toBeTruthy();
+    const afterCheck=await workspace();expect(afterCheck.equipment).toEqual(beforeCheck.equipment);expect(afterCheck.tasks).toEqual(beforeCheck.tasks);expect(afterCheck.files).toEqual(beforeCheck.files);
+    expect((await page.request.get('/api/ai/project-check')).status()).toBe(400);
+    expect((await page.request.get('/api/ai/project-check?projectId=missing-check-project')).status()).toBe(404);
   });
 });

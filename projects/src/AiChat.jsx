@@ -22,6 +22,23 @@ const helpDestinations = [
 ];
 const destinationsFor=(question)=>helpDestinations.filter((item)=>item.pattern.test(question)).slice(0,2).map(({page,label})=>({page,label}));
 
+function ProjectCheckResult({result}) {
+  return <section className="project-check-results" aria-label={`ממצאי בדיקה · ${result.project.name}`}>
+    <strong>{result.project.name}</strong>
+    <small>נבדקו {result.checked.tasks} משימות ו־{result.checked.equipment} רכיבים · {new Date(result.generatedAt).toLocaleString('he-IL')}</small>
+    {result.truncated&&<p role="alert">הבדיקה חלקית: מוצגות עד 1,001 רשומות מכל סוג. ייתכנו ממצאים נוספים.</p>}
+    {!result.findings.length&&<p>לא נמצאו ממצאים בבדיקות שבוצעו.</p>}
+    {result.findings.map(finding=><details key={finding.key} className={`project-check-finding ${finding.severity}`}>
+      <summary>{finding.title} <b>{finding.count}</b></summary>
+      <p>{finding.suggestion}</p>
+      <ul>{finding.items.map(item=><li key={item.id}><span>{item.label}</span>{item.detail&&<small>{item.detail}</small>}</li>)}</ul>
+      {finding.count>finding.items.length&&<small>מוצגות {finding.items.length} מתוך {finding.count} רשומות.</small>}
+      <a href={`?page=project&project=${encodeURIComponent(result.project.id)}&tab=${encodeURIComponent(finding.tab)}`}>פתיחת {finding.tab==='tasks'?'משימות':'מערכות ורכיבים'} בפרויקט</a>
+    </details>)}
+    <small>{result.scope}</small>
+  </section>;
+}
+
 const helpGroups = [
   { title:"פרויקטים", examples:["אילו פרויקטים דורשים תשומת לב?","תן לי תמונת מצב של הפרויקטים הפעילים","אילו פרויקטים נמצאים בשלב התקנות?"] },
   { title:"משימות ולוח שנה", examples:["אילו משימות באיחור?","מה צריך לבצע בשבוע הקרוב?","אצל מי יש עומס משימות?"] },
@@ -32,20 +49,24 @@ const helpGroups = [
   { title:"פעולות נפוצות", examples:["איך יוצרים פרויקט חדש שלב אחר שלב?","איך מפיקים ושומרים דוח PDF בפרויקט?","איך מדווחים שעות עבודה?","איך יוצרים תלות בין משימות?"] },
 ];
 
-export function AiChat({ apiRoot, onClose, onNavigate }) {
+export function AiChat({ apiRoot, onClose, onNavigate, initialProjectId = '' }) {
   const [messages,setMessages] = useState([{ role:"assistant", text:"שלום, אני הסוכן החכם של PROJECTS. אפשר לשאול אותי על פרויקטים, משימות, גבייה, מערכות או על השימוש בתוכנה." }]);
   const [question,setQuestion] = useState("");
   const [equipmentMode,setEquipmentMode]=useState(false);
+  const [checkMode,setCheckMode]=useState(false);
+  const [checkProject,setCheckProject]=useState(initialProjectId);
+  const [projectError,setProjectError]=useState('');
   const [equipmentDetailsOpen,setEquipmentDetailsOpen]=useState(true);
   const [product,setProduct]=useState({manufacturer:'',model:'',category:'',projectId:''});
   const [projects,setProjects]=useState([]);
   const [freeSearch,setFreeSearch]=useState(false);
   useEffect(()=>{
-    if(!equipmentMode)return;
+    if(!equipmentMode&&!checkMode)return;
     const controller=new AbortController();
-    fetch(`${apiRoot}/projects`,{credentials:'same-origin',signal:controller.signal}).then(r=>r.ok?r.json():{}).then(data=>setProjects(data.projects||[])).catch(()=>{});
+    setProjectError('');
+    fetch(`${apiRoot}/projects`,{credentials:'same-origin',signal:controller.signal}).then(r=>{if(!r.ok)throw new Error('לא ניתן לטעון פרויקטים. עברו למצב אחר וחזרו כדי לנסות שוב.');return r.json();}).then(data=>setProjects(data.projects||[])).catch(error=>{if(error.name!=='AbortError')setProjectError(error.message);});
     return ()=>controller.abort();
-  },[equipmentMode,apiRoot]);
+  },[equipmentMode,checkMode,apiRoot]);
   const [busy,setBusy] = useState(false);
   const [helpOpen,setHelpOpen] = useState(false);
   const [listening,setListening] = useState(false);
@@ -98,6 +119,7 @@ export function AiChat({ apiRoot, onClose, onNavigate }) {
 
   const ask = async (event,options={}) => {
     event?.preventDefault();
+    if(checkMode){await checkAndSuggest();return;}
     const text = (options.question||question).trim();
     if (!text || busy) return;
     const history = messages.filter((item)=>["user","assistant"].includes(item.role)).slice(-6).map((item)=>({ role:item.role, text:item.text }));
@@ -113,7 +135,20 @@ export function AiChat({ apiRoot, onClose, onNavigate }) {
       setMessages((current)=>[...current,{ role:"error",text:error.message,meta:"אפשר לבדוק את החיבור תחת הגדרות ומערכת › סוכן AI" }]);
     } finally { setBusy(false); }
   };
-  const useExample = (example) => { setQuestion(example); setHelpOpen(false); };
+  const checkAndSuggest = async () => {
+    if(busy || !checkProject)return;
+    setBusy(true);setHelpOpen(false);
+    const projectName=projects.find(p=>p.id===checkProject)?.name||checkProject;
+    setMessages(current=>[...current,{role:'user',text:`בדוק והצע · ${projectName}`}]);
+    try {
+      const response=await fetch(`${apiRoot}/ai/project-check?projectId=${encodeURIComponent(checkProject)}`,{credentials:'same-origin',cache:'no-store'});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error||'בדיקת הפרויקט נכשלה');
+      setMessages(current=>[...current,{role:'assistant',text:`בדיקת הפרויקט: ${result.project.name}`,check:result,meta:'בדיקה מקומית · ללא טוקנים · ללא שינוי נתונים'}]);
+    }catch(error){setMessages(current=>[...current,{role:'error',text:error.message}]);}
+    finally{setBusy(false);}
+  };
+  const useExample = (example) => { setQuestion(example); setHelpOpen(false);setCheckMode(false); };
   const toggleVoice = () => {
     if (listening) { recognitionRef.current?.stop();return; }
     const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -152,14 +187,16 @@ export function AiChat({ apiRoot, onClose, onNavigate }) {
           <button type="button" onClick={onClose} title="סגירה"><X size={21}/></button>
         </header>
         <section className="equipment-controls" hidden={helpOpen}>
-          <div className="equipment-mode" role="group" aria-label="מצב הסוכן"><button type="button" aria-pressed={!equipmentMode} disabled={busy} onClick={()=>setEquipmentMode(false)}>הפרויקטים שלי</button><button type="button" aria-pressed={equipmentMode} disabled={busy} onClick={()=>setEquipmentMode(true)}>מידע טכני לציוד</button></div>
+          <div className="equipment-mode" role="group" aria-label="מצב הסוכן"><button type="button" aria-pressed={!equipmentMode&&!checkMode} disabled={busy} onClick={()=>{setEquipmentMode(false);setCheckMode(false);}}>הפרויקטים שלי</button><button type="button" aria-pressed={equipmentMode} disabled={busy} onClick={()=>{setEquipmentMode(true);setCheckMode(false);}}>מידע טכני לציוד</button><button type="button" aria-pressed={checkMode} disabled={busy} onClick={()=>{setEquipmentMode(false);setCheckMode(true);}}>בדוק והצע</button></div>
+          {projectError&&<p role="alert">{projectError}</p>}
+          {checkMode&&<div className="project-check-controls"><label>פרויקט לבדיקה<select aria-label="פרויקט לבדיקה" disabled={busy} value={checkProject} onChange={e=>setCheckProject(e.target.value)}><option value="">בחרו פרויקט</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><p>בדיקת משימות וציוד עם הצעות לטיפול. אין צורך בחיבור AI.</p><button type="button" disabled={busy||!checkProject||!!projectError} onClick={checkAndSuggest}>{busy?'בודק את הפרויקט…':'בדוק את הפרויקט והצע טיפול'}</button></div>}
           {equipmentMode&&<details open={equipmentDetailsOpen} onToggle={event=>setEquipmentDetailsOpen(event.currentTarget.open)}><summary>פרטי הציוד {product.model&&`· ${product.manufacturer} ${product.model}`}</summary><div className="equipment-fields">
             <label>פרויקט<select aria-label="פרויקט לחיפוש ציוד" disabled={busy} value={product.projectId} onChange={e=>setProduct({...product,projectId:e.target.value,manufacturer:'',model:''})}><option value="">זיהוי מתוך השאלה / הזנה ידנית</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
             <label>סוג ציוד<select disabled={busy} value={product.category} onChange={e=>setProduct({...product,category:e.target.value})}><option value="">זיהוי מתוך השאלה</option>{equipmentCategories.map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
             <label>יצרן<input disabled={busy} value={product.manufacturer} maxLength={120} placeholder="או זיהוי מתוך הפרויקט" onChange={e=>setProduct({...product,manufacturer:e.target.value})}/></label>
             <label>דגם מדויק<input disabled={busy} value={product.model} maxLength={160} placeholder="ללא ניחוש לפי שם הפריט" onChange={e=>setProduct({...product,model:e.target.value})}/></label>
           </div></details>}
-          <label className="equipment-cost">חיפוש ציוד<select aria-label="אופן החיפוש" disabled={busy} value={freeSearch?'free':'ai'} onChange={e=>setFreeSearch(e.target.value==='free')}><option value="ai">חסכוני · AI עם מקורות</option><option value="free">קישורים בלבד · ללא טוקנים</option></select></label>
+          <label className="equipment-cost" hidden={checkMode}>חיפוש ציוד<select aria-label="אופן החיפוש" disabled={busy} value={freeSearch?'free':'ai'} onChange={e=>setFreeSearch(e.target.value==='free')}><option value="ai">חסכוני · AI עם מקורות</option><option value="free">קישורים בלבד · ללא טוקנים</option></select></label>
           {equipmentMode&&<button className="equipment-example" type="button" onClick={()=>setQuestion('מה המידות של המפסקים בפרויקט של לוי?')}>לדוגמה: מה המידות של המפסקים בפרויקט של לוי?</button>}
         </section>
         {helpOpen && <section className="ai-chat-help">
@@ -170,12 +207,12 @@ export function AiChat({ apiRoot, onClose, onNavigate }) {
         <div className="ai-chat-thread" ref={threadRef}>
           {messages.map((message,index)=><article key={index} className={message.role}>
             {message.role !== "user" && <span><Sparkles size={15}/></span>}
-            <div><ResearchText text={message.text} research={message.research}/><ResearchResults research={message.research} busy={busy} onProject={projectId=>{setProduct(current=>({...current,projectId,manufacturer:'',model:''}));ask(null,{mode:'equipment',projectId,manufacturer:'',model:'',question:message.question});}} onProduct={selected=>{setEquipmentMode(true);setProduct(current=>({...current,manufacturer:selected.manufacturer,model:selected.model}));if(selected.manufacturer&&selected.model){setFreeSearch(false);ask(null,{mode:'equipment',manufacturer:selected.manufacturer,model:selected.model,freeSearch:false,question:message.question});}else {setEquipmentDetailsOpen(true);setQuestion(message.question);}}}/>{message.actions?.length>0&&<nav className="ai-chat-actions">{message.actions.map((action)=><button type="button" key={action.page} onClick={()=>typeof onNavigate==='function'&&onNavigate(action.page)}>{action.label}<ArrowLeft size={14}/></button>)}</nav>}{message.meta && <small>{message.meta}</small>}</div>
+            <div>{message.check&&<ProjectCheckResult result={message.check}/>}<ResearchText text={message.text} research={message.research}/><ResearchResults research={message.research} busy={busy} onProject={projectId=>{setProduct(current=>({...current,projectId,manufacturer:'',model:''}));ask(null,{mode:'equipment',projectId,manufacturer:'',model:'',question:message.question});}} onProduct={selected=>{setEquipmentMode(true);setProduct(current=>({...current,manufacturer:selected.manufacturer,model:selected.model}));if(selected.manufacturer&&selected.model){setFreeSearch(false);ask(null,{mode:'equipment',manufacturer:selected.manufacturer,model:selected.model,freeSearch:false,question:message.question});}else {setEquipmentDetailsOpen(true);setQuestion(message.question);}}}/>{message.actions?.length>0&&<nav className="ai-chat-actions">{message.actions.map((action)=><button type="button" key={action.page} onClick={()=>typeof onNavigate==='function'&&onNavigate(action.page)}>{action.label}<ArrowLeft size={14}/></button>)}</nav>}{message.meta && <small>{message.meta}</small>}</div>
           </article>)}
           {listening && <article className="assistant voice-listening"><span><Mic size={15}/></span><div><strong>מאזין…</strong><i/><i/><i/><i/><i/></div></article>}
           {busy && <article className="assistant thinking"><span><Sparkles size={15}/></span><div><i/><i/><i/></div></article>}
         </div>
-        <form onSubmit={ask}>
+        <form onSubmit={ask} hidden={checkMode}>
           <button type="button" className="ai-chat-clear" onClick={()=>setMessages((current)=>current.slice(0,1))} title="ניקוי השיחה"><Eraser size={17}/></button>
           <button type="button" className={`ai-chat-mic ${listening?"listening":""}`} onClick={toggleVoice} disabled={busy} title={listening?"סיום ההאזנה":"שאלה בקול"}><Mic size={18}/></button>
           <textarea value={question} onChange={(event)=>setQuestion(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();ask();}}} placeholder={equipmentMode?"שאלו על מידות, מפרט או התקנה...":"שאלו על פרויקט, ציוד או שימוש במערכת..."} rows="1" maxLength="1500"/>

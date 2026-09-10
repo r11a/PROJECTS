@@ -4,6 +4,23 @@ import { test, expect } from '@playwright/test';
 // The real add-on critical paths retain the production service worker.
 test.use({serviceWorkers:'block'});
 
+test('check and suggest selects a project, retries errors and opens findings without AI or writes',async({page},testInfo)=>{
+  await mockApi(page);await page.setViewportSize({width:390,height:844});let checks=0;
+  await page.route('**/api/ai/project-check?*',route=>{
+    checks++;expect(route.request().method()).toBe('GET');expect(new URL(route.request().url()).searchParams.get('projectId')).toBe('PRJ-101');
+    if(checks===1)return route.fulfill({status:503,json:{error:'בדיקה נכשלה, נסו שוב'}});
+    return route.fulfill({json:{project:{id:'PRJ-101',name:'פרויקט לבדיקה'},generatedAt:new Date().toISOString(),checked:{tasks:2,equipment:3},scope:'לא בוצעו שינויים ולא נצרכו טוקנים.',findings:[{key:'overdue',severity:'danger',title:'משימות באיחור',count:1,tab:'tasks',suggestion:'בדקו את היעד והאחראי',items:[{id:1,label:'התקנת מצלמה',detail:'קומה 1'}]}]}});
+  });
+  await page.route('**/api/ai/chat/stream',()=>{throw new Error('Project checks must not invoke AI');});
+  await page.goto('/');await page.getByRole('button',{name:'הסוכן החכם',exact:true}).click();await page.getByRole('button',{name:'בדוק והצע',exact:true}).click();
+  const run=page.getByRole('button',{name:'בדוק את הפרויקט והצע טיפול'});await expect(run).toBeDisabled();
+  await page.getByLabel('פרויקט לבדיקה',{exact:true}).selectOption('PRJ-101');await run.click();await expect(page.getByText('בדיקה נכשלה, נסו שוב',{exact:true})).toBeVisible();await run.click();
+  await page.locator('.project-check-finding summary').click();await expect(page.getByText('התקנת מצלמה',{exact:true})).toBeVisible();
+  await expect(page.getByRole('link',{name:'פתיחת משימות בפרויקט'})).toHaveAttribute('href','?page=project&project=PRJ-101&tab=tasks');
+  expect(await page.locator('.ai-chat').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBeTruthy();
+  await page.screenshot({path:testInfo.outputPath('project-check-mobile.png')});
+});
+
 test('dynamic import highlights a detected project, maps multiple sheets, edits groups and requires final approval',async({page},testInfo)=>{
   await mockApi(page);await page.setViewportSize({width:390,height:844});let commits=0,plans=0;
   const tables=[{index:0,name:'Floor 0',enabled:true,kind:'equipment',headerRow:0,mapping:{id:0,name:1,type:2},rows:[['id','name','type'],['C1','Camera','Dome'],['C2','Camera','Dome']],systemName:'מצלמות'},{index:1,name:'Floor 1',enabled:true,kind:'equipment',headerRow:0,mapping:{id:0,name:1,type:2},rows:[['id','name','type'],['C3','Camera','Dome']],systemName:'מצלמות'}];
