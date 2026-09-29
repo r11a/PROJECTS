@@ -4,7 +4,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { readFile, writeFile } from 'node:fs/promises';
 import { buildOperationalInsights } from './insights.js';
 import { loadProjectCheck } from './projectCheck.js';
-import { buildLiveSystemKnowledge } from './aiKnowledge.js';
+import { buildLiveSystemKnowledge, buildProjectChatKnowledge, resolveChatProject } from './aiKnowledge.js';
 import { resolveEquipment, technicalQuestion, questionIntent, equipmentPrompt, extractGrounding, enrichSources, searchLinks } from './equipmentResearch.js';
 
 const INSIGHT_CACHE_TTL = 30 * 60 * 1000;
@@ -222,7 +222,8 @@ function insightPrompt(snapshot) {
 ${JSON.stringify(snapshot)}`;
 }
 
-export async function buildChatContext(pool, question, user = { role:'admin',id:null }) {
+export async function buildChatContext(pool, question, user = { role:'admin',id:null }, projectId = '') {
+  if (projectId) return {projectKnowledge:await buildProjectChatKnowledge(pool,projectId,user,question)};
   const normalized = String(question || '').toLowerCase();
   const canViewFinance = user?.financeAccess !== false;
   const wantsHelp = /(איך|איפה|כיצד).*(יוצר|מפיק|מגדיר|משתמש|מעלה|משתף|מוסיף|עורך|מוחק|פותח)|מה.*(עושה|המטרה)|הסבר|טאב|פעולה|עזרה|מדריך|how to|where.*setting|help|create|export/.test(normalized);
@@ -473,7 +474,7 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
       if (!job) return;
       const [providerResult,userResult]=await Promise.all([
         pool.query(`SELECT provider,enabled,model,api_key_encrypted FROM ai_provider_settings WHERE provider=$1`,[job.provider]),
-        pool.query('SELECT id,display_name,role FROM users WHERE id=$1',[job.user_id]),
+        pool.query('SELECT id,display_name,role,finance_access,permissions FROM users WHERE id=$1',[job.user_id]),
       ]);
       const selected=providerResult.rows[0];
       const definition=PROVIDERS[job.provider];
@@ -481,8 +482,9 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
         throw Object.assign(new Error('הסוכן אינו מוכן. יש לבדוק את הגדרות ספק ה-AI.'),{ publicMessage:'הסוכן אינו מוכן. יש לבדוק את הגדרות ספק ה-AI.' });
       }
       const jobUser=userResult.rows[0] || { id:job.user_id,role:'user',display_name:'' };
-      const context=await buildChatContext(pool,job.question,{ ...jobUser,displayName:jobUser.display_name });
-      const answer=(await generateProviderText(
+      const resolution=await resolveChatProject(pool,job.question);
+      const context=resolution.message?{}:await buildChatContext(pool,job.question,{ ...jobUser,financeAccess:jobUser.finance_access!==false,displayName:jobUser.display_name },resolution.project?.id);
+      const answer=resolution.message?`${resolution.message}\n${resolution.projects.map(project=>project.name).join('\n')}`:(await generateProviderText(
         job.provider,
         job.model || selected.model,
         decrypt(selected.api_key_encrypted,encryptionKey),
@@ -651,7 +653,11 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
         } catch(error) {send({type:'answer',answer:chatError(error).error,research,providerName:'PROJECTS',model:'קישורי חיפוש זמינים',generatedAt:new Date().toISOString()});return;}
         finally {researchUsers.delete(request.user.id);}
       }
-      const localAnswer=await buildLocalChatAnswer(pool,question,request.user);
+      const resolution=await resolveChatProject(pool,question,request.body?.projectId);
+      if (resolution.message) {
+        send({type:'answer',answer:resolution.message,projectChoices:resolution.projects,provider:'local',providerName:'PROJECTS',model:'זיהוי מקומי · ללא טוקנים',generatedAt:new Date().toISOString()});return;
+      }
+      const localAnswer=resolution.project?'':await buildLocalChatAnswer(pool,question,request.user);
       if (localAnswer) {
         send({ type:'answer',answer:localAnswer,provider:'local',providerName:'PROJECTS',model:'מנוע נתונים מקומי',generatedAt:new Date().toISOString() });
         return;
@@ -665,12 +671,12 @@ export async function createAiRouter({ pool, authenticate, requireRoles, audit, 
       const definition=PROVIDERS[global.activeProvider];
       if (!definition || !selected?.enabled || !selected.api_key_encrypted) throw Object.assign(new Error('הסוכן אינו מוכן'),{ publicMessage:'הסוכן אינו מוכן. יש להפעיל ספק ולשמור מפתח API תחת הגדרות ומערכת > סוכן AI.' });
       await enforceBudget(global);
-      const context=await buildChatContext(pool,question,request.user);
+      const context=await buildChatContext(pool,question,request.user,resolution.project?.id);
       const history=Array.isArray(request.body?.history) ? request.body.history : [];
       const answer=(await generateProviderText(global.activeProvider,selected.model,decrypt(selected.api_key_encrypted,encryptionKey),chatPrompt({ question,history,context }),{
         onUsage:usageRecorder(request,global.activeProvider,selected.model,'chat'),
       })).trim();
-      send({ type:'answer',answer:answer.slice(0,6000),provider:global.activeProvider,providerName:definition.name,model:selected.model,generatedAt:new Date().toISOString() });
+      send({ type:'answer',answer:answer.slice(0,6000),project:resolution.project?{id:resolution.project.id,name:resolution.project.name}:undefined,provider:global.activeProvider,providerName:definition.name,model:selected.model,generatedAt:new Date().toISOString() });
     } catch (error) {
       console.error('AI streaming chat failed',error.message);
       send({ type:'error',...chatError(error) });

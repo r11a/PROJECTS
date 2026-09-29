@@ -9,6 +9,7 @@ COPY vite.config.js ./
 COPY icon.png ./
 COPY public ./public
 COPY src ./src
+COPY shared ./shared
 RUN npm run build
 
 FROM node:22-alpine AS server-dependencies
@@ -23,6 +24,7 @@ RUN apk add --no-cache ca-certificates nginx nodejs poppler-utils postgresql17 p
 COPY --from=web-builder /build/dist /var/www/projects
 COPY --from=server-dependencies /build/node_modules /opt/projects/node_modules
 COPY server /opt/projects/server
+COPY shared /opt/projects/shared
 COPY migrations /opt/projects/migrations
 COPY src/data.js /opt/projects/src/data.js
 COPY package.json /opt/projects/package.json
@@ -32,7 +34,7 @@ RUN chmod +x /etc/services.d/nginx/run /etc/services.d/postgresql/run /etc/servi
     && rm -f /etc/nginx/http.d/default.conf
 
 LABEL \
-    io.hass.version="0.40.0" \
+    io.hass.version="0.41.0" \
   io.hass.type="app" \
   io.hass.arch="amd64"
 

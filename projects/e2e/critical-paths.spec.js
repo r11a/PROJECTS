@@ -261,4 +261,29 @@ test.describe.serial('PROJECTS critical paths', () => {
     expect((await page.request.get('/api/ai/project-check')).status()).toBe(400);
     expect((await page.request.get('/api/ai/project-check?projectId=missing-check-project')).status()).toBe(404);
   });
+
+  test('project access details persist and completed task hours reconcile once across edits and reopening',async({page})=>{
+    await webLogin(page);
+    const clients=await (await page.request.get('/api/clients')).json();
+    const created=await page.request.post('/api/projects',{data:{name:`CI Workflow ${Date.now()}`,clientId:clients.clients[0].id,floor:'3',apartmentNumber:'12B',entranceCode:'0123#'}});
+    expect(created.ok(),await created.text()).toBeTruthy();const project=(await created.json()).project;
+    expect(project.floor).toBe('3');expect(project.apartmentNumber).toBe('12B');expect(project.entranceCode).toBe('0123#');
+    const workspace=async()=>{const r=await page.request.get(`/api/projects/${project.id}/workspace`);expect(r.ok(),await r.text()).toBeTruthy();return r.json();};
+    expect(Array.isArray((await workspace()).contacts)).toBeTruthy();
+    const make=async extra=>{const r=await page.request.post('/api/operations/tasks',{data:{projectId:project.id,title:'CI hours task',startDate:'2026-10-01',dueDate:'2026-10-01',taskType:'installation',startTime:'08:00',endTime:'10:30',...extra}});expect(r.ok(),await r.text()).toBeTruthy();return (await r.json()).task;};
+    let task=await make({});expect(Number(task.duration_hours)).toBe(2.5);
+    const total=async()=> (await workspace()).timeEntries.filter(e=>e.source_type==='task'&&e.source_id===String(task.id)).reduce((sum,e)=>sum+Number(e.hours),0);
+    const update=async patch=>{const r=await page.request.patch(`/api/operations/tasks/${task.id}`,{data:{...patch,expectedVersion:task.version}});expect(r.ok(),await r.text()).toBeTruthy();task=(await r.json()).task;};
+    expect(await total()).toBe(0);await update({status:'done'});expect(await total()).toBe(2.5);
+    await update({status:'done'});expect(await total()).toBe(2.5);
+    await update({durationHours:4});expect(await total()).toBe(4);
+    await update({status:'open'});expect(await total()).toBe(0);
+    await update({status:'done'});expect(await total()).toBe(4);
+    const entry=(await workspace()).timeEntries.find(e=>e.source_type==='task'&&e.source_id===String(task.id));
+    expect((await page.request.patch(`/api/projects/${project.id}/time-entries/${entry.id}`,{data:{hours:7}})).status()).toBe(409);
+    expect((await page.request.delete(`/api/operations/tasks/${task.id}`)).ok()).toBeTruthy();expect(await total()).toBe(0);
+    task=await make({allDay:true,durationHours:1,status:'done'});expect(Number(task.duration_hours)).toBe(9);expect(task.start_time).toBeNull();expect(task.end_time).toBeNull();expect(await total()).toBe(9);
+    await update({status:'done'});expect(await total()).toBe(9);
+    const invalid=await page.request.post('/api/operations/tasks',{data:{projectId:project.id,title:'Invalid times',startDate:'2026-10-01',dueDate:'2026-10-01',startTime:'11:00',endTime:'10:00'}});expect(invalid.status()).toBe(400);
+  });
 });

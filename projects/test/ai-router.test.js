@@ -71,6 +71,22 @@ class AiPool {
   }
 }
 
+test('streaming project ambiguity returns local choices without provider settings or unrelated data',async context=>{
+  const dataDir=await mkdtemp(path.join(tmpdir(),'projects-ai-resolution-'));
+  context.after(()=>rm(dataDir,{recursive:true,force:true}));
+  const queries=[];
+  const pool={query:async sql=>{queries.push(sql);if(sql.includes('SELECT p.id,p.name,p.client'))return {rows:[{id:'a',name:'מלון סאן בת-ים'},{id:'b',name:'מלון סאן אילת'}]};return {rows:[]};}};
+  const router=await createAiRouter({pool,authenticate:(req,res,next)=>{req.user={id:7,role:'admin'};next();},requireRoles:()=> (req,res,next)=>next(),audit:async()=>{},dataDir});
+  const app=express();app.use(express.json());app.use(router);
+  const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+  context.after(()=>new Promise(resolve=>server.close(resolve)));
+  queries.length=0;
+  const response=await fetch(`http://127.0.0.1:${server.address().port}/ai/chat/stream`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({question:'סיכום פרויקט סאן'})});
+  const events=(await response.text()).trim().split('\n\n').map(block=>JSON.parse(block.replace(/^data:\s*/,'')));
+  const answer=events.find(event=>event.type==='answer');assert.equal(answer.provider,'local');assert.equal(answer.projectChoices.length,2);assert.match(answer.answer,/בחרו/);
+  assert.equal(queries.length,1);
+});
+
 test('AI router completes settings, provider test, async chat polling and usage logging', async (context) => {
   const dataDir=await mkdtemp(path.join(tmpdir(),'projects-ai-test-'));
   context.after(()=>rm(dataDir,{ recursive:true,force:true }));

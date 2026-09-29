@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createOperationsRouter } from '../server/operations.js';
 
-function fixture({version=3, failAssignments=false}={}) {
+function fixture({version=3, failAssignments=false, failAudit=false}={}) {
   const original={id:41,version,title:'Original',description:'Keep this',status:'open',priority:'normal',project_id:null,start_date:'2026-09-08',due_date:'2026-09-09',all_day:true};
   let persisted={...original}, working;
   const calls=[];
@@ -26,7 +26,7 @@ function fixture({version=3, failAssignments=false}={}) {
     },
     release(){calls.push('RELEASE');},
   };
-  const router=createOperationsRouter({pool:{connect:async()=>db},authenticate:(_q,_s,next)=>next(),requireRoles:()=> (_q,_s,next)=>next(),audit:async()=>{calls.push('AUDIT');}});
+  const router=createOperationsRouter({pool:{connect:async()=>db},authenticate:(_q,_s,next)=>next(),requireRoles:()=> (_q,_s,next)=>next(),audit:async()=>{calls.push('AUDIT');if(failAudit)throw new Error('Audit unavailable');}});
   const handler=router.stack.find(layer=>layer.route?.path==='/operations/tasks/:id' && layer.route.methods.patch).route.stack.at(-1).handle;
   const response={statusCode:200,status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
   return {calls,response,persisted:()=>persisted,run:body=>handler({params:{id:'41'},user:{id:1,role:'admin'},body},response)};
@@ -61,4 +61,10 @@ test('assignment failure rolls back the task edit as well',async()=>{
   assert.ok(f.calls.includes('ROLLBACK'));
   assert.ok(!f.calls.includes('COMMIT'));
   assert.equal(f.calls.at(-1),'RELEASE');
+});
+
+test('post-commit audit failure does not report the saved task as failed',async()=>{
+  const f=fixture({failAudit:true});await f.run({expectedVersion:3,title:'Saved despite audit'});
+  assert.equal(f.response.statusCode,200);assert.equal(f.response.body.task.title,'Saved despite audit');
+  assert.ok(f.calls.includes('COMMIT'));assert.ok(!f.calls.includes('ROLLBACK'));
 });

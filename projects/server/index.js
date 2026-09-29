@@ -125,7 +125,7 @@ const projectColumns = [
   'finance_mode', 'payment_terms', 'deposit_amount', 'deposit_paid', 'finance_breakdown',
 ];
 const inputToColumn = {
-  id: 'id', name: 'name', client: 'client', location: 'location', address: 'address', lat: 'lat', lng: 'lng',
+  id: 'id', name: 'name', client: 'client', location: 'location', address: 'address', floor: 'floor', apartmentNumber: 'apartment_number', entranceCode: 'entrance_code', lat: 'lat', lng: 'lng',
   stage: 'stage', progress: 'progress', manager: 'manager', ownerInitials: 'owner_initials', value: 'value',
   paid: 'paid', due: 'due', priority: 'priority', flag: 'flag', systems: 'systems',
   installationHoursTarget:'installation_hours_target',programmingHoursTarget:'programming_hours_target',
@@ -147,7 +147,7 @@ function withoutArabic(value = '') {
 
 function projectFromRow(row) {
   return {
-    id: row.id, serialCode:row.serial_code, name: row.name, client: row.client, location: row.location, address: withoutArabic(row.address),
+    id: row.id, serialCode:row.serial_code, name: row.name, client: row.client, location: row.location, address: withoutArabic(row.address), floor: row.floor || '', apartmentNumber: row.apartment_number || '', entranceCode: row.entrance_code || '',
     lat: Number(row.lat), lng: Number(row.lng), stage: row.stage, progress: Number(row.progress),
     manager: row.manager, ownerInitials: row.owner_initials, value: Number(row.value), paid: Number(row.paid),
     due: row.due, priority: row.priority, flag: row.flag, systems: Array.isArray(row.systems) ? row.systems : [], installationHoursTarget:Number(row.installation_hours_target||0),programmingHoursTarget:Number(row.programming_hours_target||0),
@@ -603,6 +603,7 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
     const geocoded=await geocodeAddress(request.body.address || selectedClient.address || request.body.location);
     const project = {
     id: request.body.id || `PRJ-${nextNumber.rows[0].value}`,
+    floor: String(request.body.floor || '').trim(), apartmentNumber: String(request.body.apartmentNumber || '').trim(), entranceCode: String(request.body.entranceCode || '').trim(),
     name: request.body.name || 'פרויקט חדש', client: selectedClient.name, location: request.body.location || selectedClient.city || '',
     address: withoutArabic(geocoded?.formattedAddress || request.body.address || selectedClient.address || request.body.location || ''), lat: geocoded?.lat ?? request.body.lat ?? 32.0853, lng: geocoded?.lng ?? request.body.lng ?? 34.7818,
     stage: request.body.stage || 'waiting', progress: STAGE_PROGRESS[request.body.stage || 'waiting'] ?? 0, manager: selectedManager?.display_name || '',
@@ -645,8 +646,8 @@ app.post('/api/projects', authenticate, requireRoles('admin', 'manager'), async 
         WHERE id=$4`, [request.body.templateId,template.rows[0].installation_hours_target,template.rows[0].programming_hours_target,project.id]);
     }
     await db.query('COMMIT');
-    await audit(request, 'create', 'project', project.id, { clientId: selectedClient.id });
-    await executeAutomations({ pool,triggerType:'project_created',entityType:'project',entityId:project.id,context:{ projectId:project.id,stage:project.stage,managerProfessionalId: selectedManager?.id || null },userId:request.user.id });
+    try { await audit(request, 'create', 'project', project.id, { clientId: selectedClient.id }); } catch (error) { console.error('Project created audit failed', error); }
+    try { await executeAutomations({ pool,triggerType:'project_created',entityType:'project',entityId:project.id,context:{ projectId:project.id,stage:project.stage,managerProfessionalId: selectedManager?.id || null },userId:request.user.id }); } catch (error) { console.error('Project created automation failed', error); }
     const createdProject = await pool.query('SELECT * FROM projects WHERE id=$1',[project.id]);
     response.status(201).json({ project: projectForUser(createdProject.rows[0], request.user) });
   } catch (error) {

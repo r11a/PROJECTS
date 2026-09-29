@@ -258,3 +258,17 @@
 .calendar-date-picker>span:not(.he-date-input){white-space:nowrap}
 
 .record-upload-shield{position:fixed;inset:0;z-index:6000;background:#11182770;cursor:progress}.record-upload-shield .record-upload-overlay{z-index:6001}.record-upload-overlay span{overflow-wrap:anywhere}
+
+/* Planning summary stays together, with charts contained within each column. */
+.dashboard-page .dashboard-grid.top{grid-template-columns:minmax(0,1fr)}
+.dashboard-page .dashboard-grid.top:empty{display:none}
+.schedule-workspace{display:grid;gap:16px;min-width:0}
+.schedule-tabs{justify-self:start;max-width:100%;overflow-x:auto}
+@media(min-width:1100px){
+  .dashboard-page .dashboard-grid.planning-overview{grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) minmax(0,1fr);align-items:stretch}
+  .dashboard-page .dashboard-grid.planning-overview.without-finance{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .planning-overview .stage-chart-wrap{height:auto;flex-wrap:wrap;justify-content:center;padding-bottom:16px}
+  .planning-overview .stage-chart-wrap>.recharts-responsive-container{width:100%!important}
+  .planning-overview .donut-center{right:auto;left:50%;top:108px;transform:translate(-50%,-50%)}
+  .planning-overview .chart-legend{width:100%;padding-inline:12px}
+}

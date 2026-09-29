@@ -104,7 +104,7 @@ async function mockApi(page, {theme='light', failReference=false, conflict=false
       '/team':{users:[]}, '/clients':{clients:[]}, '/professionals':{professionals:[]}, '/equipment-catalog':{items:[]}, '/project-templates':{templates:[]},
       '/operations/tasks/count':{count:8}, '/messages':{messages:[],unread:0},
       '/ai/insights':{alerts:[{key:'test-alert',title:'בדיקת חריגה',projectId:'PRJ-101'}],stats:{overdue:3,open:8},insights:[]},
-      '/risk-center':{projects:[]}, '/my-work':{sections:{overdue:[],today:[task],upcoming:[]},stats:{total:1,today:1,overdue:0},messages:[],attention:[],followUps:[]},
+      '/calendar':{projects,events:[]}, '/risk-center':{projects:[]}, '/my-work':{sections:{overdue:[],today:[task],upcoming:[]},stats:{total:1,today:1,overdue:0},messages:[],attention:[],followUps:[]},
       '/saved-views':{views:[]}, '/operations/tasks':{tasks:[task]}, '/operations/milestones':{milestones:[]},
       '/projects/PRJ-101/workspace':{tasks:[task],milestones:[],payments:[],team:[],equipment:[],forms:[],files:[],updates:[],activity:[],reviews:[],meetings:[],timeEntries:[],priorityOrders:[],systemColumns:[],systemFieldSettings:[]},
       '/projects/PRJ-101/bom':{items:[]}, '/mention-users':{users:[]},
@@ -256,4 +256,54 @@ test('project hours include drawing and record uploads show a foreground status 
   const dimensions=await page.evaluate(async base64=>{const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0)),image=await createImageBitmap(new Blob([bytes]));const result=[image.width,image.height];image.close();return result;},uploaded.toString('base64'));
   expect(Math.max(...dimensions)).toBe(2048);expect(dimensions[0]/dimensions[1]).toBeCloseTo(2800/1800,2);
   releaseUpload();await expect(page.locator('.record-upload-shield')).toHaveCount(0);await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('workspace navigation groups management and combines calendar with Gantt',async({page})=>{
+  await mockApi(page);
+  await page.setViewportSize({width:1440,height:1100});
+  await page.goto('/');
+  const nav=page.locator('.main-nav');
+  await expect(nav.getByRole('button',{name:'מפת GIS',exact:true})).toHaveCount(0);
+  await expect(nav.getByRole('button',{name:'מסמכים והקלטות',exact:true})).toHaveCount(0);
+  await expect(nav.getByRole('button',{name:'לוח גאנט',exact:true})).toHaveCount(0);
+  for(const name of ['לקוחות','אנשי מקצוע','מערכות ורכיבים']) {
+    const button=nav.getByRole('button',{name,exact:true});await expect(button).toBeVisible();
+    expect(await button.evaluate(el=>Boolean([...el.parentElement.children].slice(0,[...el.parentElement.children].indexOf(el)).find(item=>item.classList.contains('nav-second'))))).toBeTruthy();
+  }
+  const tops=await page.locator('.planning-overview>.panel').evaluateAll(nodes=>nodes.map(el=>Math.round(el.getBoundingClientRect().top)));
+  expect(tops).toHaveLength(3);expect(new Set(tops).size).toBe(1);
+  await nav.getByRole('button',{name:'יומן עבודה',exact:true}).click();
+  await expect(page.locator('.calendar-grid')).toBeVisible();
+  await page.locator('.schedule-tabs').getByRole('button',{name:'גאנט',exact:true}).click();
+  await expect(page.locator('.global-gantt-page')).toBeVisible();await expect(page.locator('.calendar-grid')).toHaveCount(0);
+  await page.locator('.schedule-tabs').getByRole('button',{name:'הצג הכל',exact:true}).click();
+  await expect(page.locator('.calendar-grid')).toBeVisible();await expect(page.locator('.global-gantt-page')).toBeVisible();
+  expect(await page.locator('.calendar-grid').evaluate(el=>el.getBoundingClientRect().bottom)).toBeLessThan(await page.locator('.global-gantt-page').evaluate(el=>el.getBoundingClientRect().top));
+  await page.locator('.schedule-tabs').getByRole('button',{name:'יומן',exact:true}).click();
+  await expect(page.locator('.calendar-grid')).toBeVisible();await expect(page.locator('.global-gantt-page')).toHaveCount(0);
+});
+
+for(const allDay of [false,true])test(`task scheduling saves ${allDay?'nine-hour full day':'explicit end time'} and remains closed after live refresh`,async({page})=>{
+  await mockApi(page);let payload,reads=0;
+  await page.route('**/api/operations/tasks/41',route=>{payload=route.request().postDataJSON();return route.fulfill({json:{task:{...task,...payload,version:4}}});});
+  await page.route('**/api/my-work**',route=>{reads++;return route.fulfill({json:{sections:{overdue:[],today:[task],upcoming:[]},stats:{total:1,today:1,overdue:0},messages:[],attention:[],followUps:[]}});});
+  await page.goto('/?page=my-work');await page.locator('.next-action-card button').click();
+  const dialog=page.getByRole('dialog');
+  await dialog.getByRole('combobox',{name:'שעת התחלה',exact:true}).selectOption('09:00');
+  await dialog.getByRole('combobox',{name:'שעת סיום',exact:true}).selectOption('11:30');
+  if(allDay){await dialog.getByLabel('יום מלא · 9 שעות עבודה').check();await expect(dialog.getByLabel('שעות משוערות',{exact:true})).toHaveValue('9');await expect(dialog.getByRole('combobox',{name:'שעת סיום',exact:true})).toBeDisabled();}
+  await dialog.locator('button[type=submit]').click();await expect(dialog).toHaveCount(0);
+  expect(payload.allDay).toBe(allDay);expect(payload.endTime).toBe(allDay?null:'11:30');
+  if(allDay)expect(payload.durationHours).toBe(9);
+  const previousReads=reads;await page.evaluate(()=>window.dispatchEvent(new CustomEvent('projects:live-change',{detail:{table:'tasks'}})));
+  await expect.poll(()=>reads).toBeGreaterThan(previousReads);await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('completed supervision task opens the linked project review form',async({page})=>{
+  await mockApi(page);
+  await page.route('**/api/operations/tasks/41',route=>route.fulfill({json:{task:{...task,version:4,status:'done',task_type:'supervision'}}}));
+  await page.goto('/?page=my-work');await page.locator('.next-action-card button').click();
+  const dialog=page.getByRole('dialog');await dialog.getByRole('combobox',{name:'סטטוס',exact:true}).selectOption('done');await dialog.locator('button[type=submit]').click();
+  await expect(page).toHaveURL(/project=PRJ-101/);await expect(page.getByRole('dialog').locator('textarea[name=summary]')).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('button',{name:'שמירת ביקורת',exact:true})).toBeVisible();
 });

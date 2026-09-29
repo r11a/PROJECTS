@@ -43,6 +43,7 @@ import { AppModal } from "./AppModal";
 import { createMilestoneDraft, createTaskDraft } from "./features/tasks/taskDefaults";
 import { localDateValue } from "./dateTime";
 import { TimeSelect } from "./TimeSelect";
+import { normalizeTaskSchedule } from '../shared/taskSchedule.js';
 
 const money = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -69,6 +70,7 @@ const taskPriority = {
   low: "נמוכה",
 };
 const taskPriorityRank = { urgent: 4, high: 3, normal: 2, low: 1 };
+const taskTypeLabels={task:'משימה',service:'שירות',procurement:'רכש',followup:'מעקב',supervision:'פיקוח',meeting:'פגישה',planning:'תכנון',inspection:'ביקורת',installation:'התקנה',quotation:'הצעת מחיר'};
 const milestoneStatus = {
   planned: "מתוכננת",
   in_progress: "בתהליך",
@@ -162,10 +164,20 @@ export function TaskEditor({
 }) {
   const isMilestone = kind === "milestone";
   const [form, setForm] = useState(
-    initial ||
+    initial ? {...initial,...(!isMilestone?{durationHours:initial.durationHours??(Number(initial.duration_hours)>0?initial.duration_hours:initial.estimatedHours??initial.estimated_hours??initial.duration_hours??'')}:{})} :
       (isMilestone ? createMilestoneDraft() : createTaskDraft()),
   );
   const [submitting, setSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const submitLock = useRef(false);
+  const changeTime = (field,value) => setForm(current => {
+    const next={...current,[field]:value};
+    try {
+      const schedule=normalizeTaskSchedule({startTime:next.startTime??next.start_time,endTime:next.endTime??next.end_time,startDate:next.startDate??next.start_date,dueDate:next.dueDate??next.due_date});
+      if(schedule.startTime&&schedule.endTime&&String(next.startDate??next.start_date).slice(0,10)===String(next.dueDate??next.due_date).slice(0,10)) {next.durationHours=schedule.durationHours;next.estimatedHours=schedule.durationHours;}
+    }catch{}
+    return next;
+  });
   const [assigneeSearch, setAssigneeSearch] = useState("");
   const selectedProjectId = String(fixedProjectId || form.projectId || initial?.project_id || "");
   const eligibleProfessionals = useMemo(() => professionals.filter((person) => {
@@ -176,7 +188,8 @@ export function TaskEditor({
   }).filter((person) => `${person.displayName || ""} ${person.jobTitle || ""} ${person.companyName || ""}`.toLocaleLowerCase("he").includes(assigneeSearch.trim().toLocaleLowerCase("he"))), [professionals, selectedProjectId, assigneeSearch]);
   const submit = async (event) => {
     event.preventDefault();
-    if (submitting) return;
+    if (submitLock.current) return;
+    submitLock.current=true;setSaveError('');
     setSubmitting(true);
     const payload = {
       ...form,
@@ -190,10 +203,17 @@ export function TaskEditor({
       parentTaskId: form.parentTaskId !== undefined ? form.parentTaskId : (form.parent_task_id || null),
     };
     try {
+      if(!isMilestone)Object.assign(payload,normalizeTaskSchedule({
+        ...payload,startTime:form.startTime??form.start_time,endTime:form.endTime??form.end_time,
+        allDay:form.allDay??form.all_day,durationHours:form.durationHours??form.duration_hours??form.estimatedHours??form.estimated_hours,
+      }));
       const saved = await onSave(payload);
-      if (saved !== false) onClose();
-    } catch (error) { setNotice(error.message); }
-    finally { setSubmitting(false); }
+      if (saved !== false) {
+        onClose();
+        if(!saved?.offlineQueued&&saved?.task?.status==='done'&&initial?.status!=='done'&&saved.task.task_type==='supervision')window.dispatchEvent(new CustomEvent('projects:supervision-completed',{detail:saved.task}));
+      } else setSaveError('השמירה לא הושלמה. יש לבדוק את הודעת השגיאה ולנסות שוב.');
+    } catch (error) { setSaveError(error.message);setNotice(error.message); }
+    finally { setSubmitting(false);submitLock.current=false; }
   };
   return (
     <Modal
@@ -203,6 +223,7 @@ export function TaskEditor({
       className="task-editor-modal"
     >
       <form className="work-form" onSubmit={submit}>
+        {saveError&&<p className="wide" role="alert">{saveError}</p>}
         <label className="task-title-field">
           כותרת
           <input
@@ -250,6 +271,7 @@ export function TaskEditor({
             </select>
           </label>
         )}
+        <div className="wide task-schedule-grid">
         {!isMilestone && (
           <label className="task-schedule-field">
             תאריך התחלה
@@ -276,16 +298,18 @@ export function TaskEditor({
         </label>
         {!isMilestone && <label className="task-schedule-field task-start-time">
           שעת התחלה
-          <TimeSelect allowEmpty min="08:00" max="18:00" disabled={Boolean(form.allDay ?? form.all_day)} value={form.startTime || form.start_time || ""} onChange={(e)=>setForm({...form,startTime:e.target.value})}/>
+          <TimeSelect allowEmpty disabled={Boolean(form.allDay ?? form.all_day)} value={form.startTime ?? form.start_time ?? ""} onChange={(e)=>changeTime('startTime',e.target.value)}/>
         </label>}
+        {!isMilestone && <label className="task-schedule-field task-end-time">שעת סיום<TimeSelect allowEmpty disabled={Boolean(form.allDay ?? form.all_day)} value={form.endTime ?? form.end_time ?? ''} onChange={e=>changeTime('endTime',e.target.value)}/></label>}
         {!isMilestone && <label className="task-schedule-field">
           שעות משוערות
-          <input type="number" min="0" step="0.5" inputMode="decimal" value={form.durationHours ?? form.duration_hours ?? form.estimatedHours ?? form.estimated_hours ?? ""} onChange={(e)=>setForm({...form,durationHours:e.target.value,estimatedHours:e.target.value})}/>
+          <input type="number" min="0" max="9999" step="0.25" inputMode="decimal" disabled={Boolean(form.allDay??form.all_day)} value={(form.allDay??form.all_day)?9:form.durationHours ?? form.duration_hours ?? form.estimatedHours ?? form.estimated_hours ?? ""} onChange={(e)=>setForm({...form,durationHours:e.target.value,estimatedHours:e.target.value})}/>
         </label>}
         {!isMilestone && <label className="check-label task-all-day-toggle">
-          <input type="checkbox" checked={Boolean(form.allDay ?? form.all_day)} onChange={(e)=>setForm({...form,allDay:e.target.checked,startTime:e.target.checked?"":form.startTime,endTime:e.target.checked?"":form.endTime})}/>
-          יום שלם
+          <input type="checkbox" checked={Boolean(form.allDay ?? form.all_day)} onChange={(e)=>setForm({...form,allDay:e.target.checked,startTime:e.target.checked?"":form.startTime,endTime:e.target.checked?"":form.endTime,...(e.target.checked?{durationHours:9,estimatedHours:9}:{})})}/>
+          יום מלא · 9 שעות עבודה
         </label>}
+        </div>
         <label>
           סטטוס
           <select
@@ -443,6 +467,7 @@ export function TasksWorkspace({
   const [editor, setEditor] = useState(null);
   const [loading, setLoading] = useState(true);
   const loadRequest = useRef(0);
+  const openedInitialTask = useRef(null);
   const load = useCallback(async ({ silent = false } = {}) => {
     const requestId = ++loadRequest.current;
     try {
@@ -472,10 +497,11 @@ export function TasksWorkspace({
     return () => clearTimeout(timer);
   }, [load]);
   useEffect(() => {
-    if (!initialTaskId || loading) return;
+    if (!initialTaskId) {openedInitialTask.current=null;return;}
+    if (loading || openedInitialTask.current===String(initialTaskId)) return;
     const normalizedId = String(initialTaskId);
     const task = tasks.find((item) => String(item.id) === normalizedId);
-    if (task) {
+    if (task) { openedInitialTask.current=normalizedId;
       setTab("tasks");
       setEditor({ kind: "task", item: task });
       if (typeof onInitialTaskOpened === "function") onInitialTaskOpened();
@@ -484,7 +510,7 @@ export function TasksWorkspace({
     const milestone = milestones.find(
       (item) => String(item.id) === normalizedId,
     );
-    if (milestone) {
+    if (milestone) { openedInitialTask.current=normalizedId;
       setTab("milestones");
       setEditor({ kind: "milestone", item: milestone });
       if (typeof onInitialTaskOpened === "function") onInitialTaskOpened();
@@ -595,7 +621,7 @@ export function TasksWorkspace({
         : "✓ השינויים נשמרו בהצלחה");
       load({ silent: true });
       if (typeof onDataChanged === "function") onDataChanged();
-      return true;
+      return result;
     } catch (e) {
       setNotice(e.message);
       return false;
@@ -786,6 +812,7 @@ export function TasksWorkspace({
                     projects.find((p) => p.id === item.project_id)?.name}{" "}
                   {item.description && `· ${item.description}`}
                 </span>
+                {tab==='tasks'&&item.status==='done'&&<small>{taskTypeLabels[item.task_type]||'משימה'} · התחלה: {dateText(item.start_date)} · סיום: {dateText(item.due_date)}</small>}
                 {tab === "tasks" && item.dependency_title && <small className="task-dependency">תלויה ב: {item.dependency_title}</small>}
                 {tab === "tasks" && item.parent_task_title && <small className="task-parent">תת־משימה של: {item.parent_task_title}</small>}
                 {tab === "tasks" && item.subtask_count > 0 && <small className="task-subtasks">{item.completed_subtask_count}/{item.subtask_count} תתי־משימות הושלמו</small>}
@@ -830,7 +857,7 @@ export function TasksWorkspace({
           <header><div><CheckCircle2 size={19}/><span><strong>משימות שהושלמו</strong><small>היסטוריית ביצוע לפי תאריך המשימה</small></span></div><em>{completedProjectTasks.length}</em></header>
           <div className="completed-task-table">
             {completedProjectTasks.map((item) => <button type="button" key={item.id} onClick={() => canEdit && setEditor({kind:"task",item})}>
-              <CheckCircle2 size={16}/><strong>{item.title}</strong><span>{item.assignees?.map((person)=>person.displayName).join(", ") || item.assignee_name || "ללא מבצע"}</span><time>{dateText(item.due_date)}</time>
+              <CheckCircle2 size={16}/><strong>{item.title}</strong><span>{item.assignees?.map((person)=>person.displayName).join(", ") || item.assignee_name || "ללא מבצע"}</span><span>{taskTypeLabels[item.task_type]||item.task_type||"משימה"}</span><time>התחלה: {dateText(item.start_date)}</time><time>סיום: {dateText(item.due_date)}</time>
             </button>)}
           </div>
         </section>

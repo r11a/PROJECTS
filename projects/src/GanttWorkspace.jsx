@@ -60,11 +60,11 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
   const save = async (value) => {
     try {
       const base = editor.kind === "task" ? "/operations/tasks" : "/operations/milestones";
-      await api(`${base}/${editor.item.id}`, { method: "PATCH", body: JSON.stringify(value) });
+      const result=await api(`${base}/${editor.item.id}`, { method: "PATCH", body: JSON.stringify(value) });
       setEditor(null);
       setNotice("המשימה נשמרה בהצלחה");
       load();
-      return true;
+      return result;
     } catch (error) {
       setNotice(error.message);
       return false;

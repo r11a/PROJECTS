@@ -55,6 +55,7 @@ export function AiChat({ apiRoot, onClose, onNavigate, initialProjectId = '' }) 
   const [equipmentMode,setEquipmentMode]=useState(false);
   const [checkMode,setCheckMode]=useState(false);
   const [checkProject,setCheckProject]=useState(initialProjectId);
+  const [chatProject,setChatProject]=useState(initialProjectId);
   const [projectError,setProjectError]=useState('');
   const [equipmentDetailsOpen,setEquipmentDetailsOpen]=useState(true);
   const [product,setProduct]=useState({manufacturer:'',model:'',category:'',projectId:''});
@@ -84,7 +85,7 @@ export function AiChat({ apiRoot, onClose, onNavigate, initialProjectId = '' }) 
     const response=await fetch(`${apiRoot}/ai/chat/stream`,{
       method:"POST",credentials:"same-origin",cache:"no-store",
       headers:{ "Content-Type":"application/json","Accept":"text/event-stream" },
-      body:JSON.stringify({ question:text,...(equipmentMode||options.mode==='equipment'?{mode:'equipment',...product,freeSearch}:{history,freeSearch}),...options }),
+      body:JSON.stringify({ question:text,...(equipmentMode||options.mode==='equipment'?{mode:'equipment',...product,freeSearch}:{history,freeSearch,projectId:chatProject}),...options }),
     });
     if (!response.ok) {
       const raw=await response.text();
@@ -129,8 +130,9 @@ export function AiChat({ apiRoot, onClose, onNavigate, initialProjectId = '' }) 
     setBusy(true);
     try {
       const result=await streamAnswer(text,history,options);
+      if(result.project?.id)setChatProject(result.project.id);
       if(result.research?.sources?.length)setEquipmentDetailsOpen(false);
-      setMessages((current)=>[...current,{ role:"assistant",text:result.answer,research:result.research,question:text,meta:`${result.providerName} · ${result.model}${result.research?.sources?.length?` · ${new Date(result.generatedAt).toLocaleDateString('he-IL')}`:''}`,actions:result.research?[]:destinationsFor(text) }]);
+      setMessages((current)=>[...current,{ role:"assistant",text:result.answer,research:result.research,projectChoices:result.projectChoices,question:text,meta:`${result.providerName} · ${result.model}${result.project?.name?` · ${result.project.name}`:''}${result.research?.sources?.length?` · ${new Date(result.generatedAt).toLocaleDateString('he-IL')}`:''}`,actions:result.research?[]:destinationsFor(text) }]);
     } catch (error) {
       setMessages((current)=>[...current,{ role:"error",text:error.message,meta:"אפשר לבדוק את החיבור תחת הגדרות ומערכת › סוכן AI" }]);
     } finally { setBusy(false); }
@@ -205,9 +207,9 @@ export function AiChat({ apiRoot, onClose, onNavigate, initialProjectId = '' }) 
           <p><b>טיפ:</b> אפשר לבקש מדריך צעד-אחר-צעד, הסבר על מסך מסוים או תשובה מתוך הנתונים החיים. לדוגמה: “הסבר לי איך לנהל ביקורת אתר בפרויקט” או “מה המשימות הפתוחות בפרויקט משפחת כהן בשבועיים הקרובים?”</p>
         </section>}
         <div className="ai-chat-thread" ref={threadRef}>
-          {messages.map((message,index)=><article key={index} className={message.role}>
+          {chatProject&&!equipmentMode&&!checkMode&&<button type="button" disabled={busy} onClick={()=>setChatProject("")}>נקה הקשר פרויקט</button>}{messages.map((message,index)=><article key={index} className={message.role}>
             {message.role !== "user" && <span><Sparkles size={15}/></span>}
-            <div>{message.check&&<ProjectCheckResult result={message.check}/>}<ResearchText text={message.text} research={message.research}/><ResearchResults research={message.research} busy={busy} onProject={projectId=>{setProduct(current=>({...current,projectId,manufacturer:'',model:''}));ask(null,{mode:'equipment',projectId,manufacturer:'',model:'',question:message.question});}} onProduct={selected=>{setEquipmentMode(true);setProduct(current=>({...current,manufacturer:selected.manufacturer,model:selected.model}));if(selected.manufacturer&&selected.model){setFreeSearch(false);ask(null,{mode:'equipment',manufacturer:selected.manufacturer,model:selected.model,freeSearch:false,question:message.question});}else {setEquipmentDetailsOpen(true);setQuestion(message.question);}}}/>{message.actions?.length>0&&<nav className="ai-chat-actions">{message.actions.map((action)=><button type="button" key={action.page} onClick={()=>typeof onNavigate==='function'&&onNavigate(action.page)}>{action.label}<ArrowLeft size={14}/></button>)}</nav>}{message.meta && <small>{message.meta}</small>}</div>
+            <div>{message.projectChoices?.length>0&&<nav className="ai-chat-actions">{message.projectChoices.map(project=><button type="button" key={project.id} disabled={busy} onClick={()=>{setChatProject(project.id);ask(null,{mode:"chat",projectId:project.id,question:message.question});}}>{project.name}</button>)}</nav>}{message.check&&<ProjectCheckResult result={message.check}/>}<ResearchText text={message.text} research={message.research}/><ResearchResults research={message.research} busy={busy} onProject={projectId=>{setProduct(current=>({...current,projectId,manufacturer:'',model:''}));ask(null,{mode:'equipment',projectId,manufacturer:'',model:'',question:message.question});}} onProduct={selected=>{setEquipmentMode(true);setProduct(current=>({...current,manufacturer:selected.manufacturer,model:selected.model}));if(selected.manufacturer&&selected.model){setFreeSearch(false);ask(null,{mode:'equipment',manufacturer:selected.manufacturer,model:selected.model,freeSearch:false,question:message.question});}else {setEquipmentDetailsOpen(true);setQuestion(message.question);}}}/>{message.actions?.length>0&&<nav className="ai-chat-actions">{message.actions.map((action)=><button type="button" key={action.page} onClick={()=>typeof onNavigate==='function'&&onNavigate(action.page)}>{action.label}<ArrowLeft size={14}/></button>)}</nav>}{message.meta && <small>{message.meta}</small>}</div>
           </article>)}
           {listening && <article className="assistant voice-listening"><span><Mic size={15}/></span><div><strong>מאזין…</strong><i/><i/><i/><i/><i/></div></article>}
           {busy && <article className="assistant thinking"><span><Sparkles size={15}/></span><div><i/><i/><i/></div></article>}

@@ -385,11 +385,13 @@ function App() {
   const referenceRequest = useRef(0);
   const liveConnected = useRef(false);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [supervisionTask, setSupervisionTask] = useState(null);
   const [linkedTaskId, setLinkedTaskId] = useState("");
   const [search, setSearch] = useState("");
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [stageFilter, setStageFilter] = useState("all");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [scheduleView, setScheduleView] = useState("calendar");
   const navigationSwipe = useRef(null);
   const SWIPE_EDGE_TRIGGER_PX = 30;
   const SWIPE_OPEN_THRESHOLD_PX = 72;
@@ -808,30 +810,32 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    const handleSupervision = (event) => {
+      const task = event.detail;
+      const target = projects.find((item) => String(item.id) === String(task?.project_id));
+      if (!target) return;
+      setSupervisionTask(task);
+      openProject(target);
+    };
+    window.addEventListener('projects:supervision-completed', handleSupervision);
+    return () => window.removeEventListener('projects:supervision-completed', handleSupervision);
+  }, [projects]);
+
   const createProject = async (project) => {
     try {
       const { equipmentItems = [], ...projectInput } = project;
-      const result = await api("/projects", {
-        method: "POST",
-        body: JSON.stringify(projectInput),
-      });
-      await Promise.all(
-        equipmentItems.map((item) =>
-          api(`/projects/${result.project.id}/equipment`, {
-            method: "POST",
-            body: JSON.stringify({
-              catalogItemId: item.id,
-              quantity: item.quantity,
-              status: "planned",
-            }),
-          }),
-        ),
-      );
-      await loadReferenceData();
+      const result = await api("/projects", {method: "POST", body: JSON.stringify(projectInput)});
       setProjects((current) => [result.project, ...current]);
       setNewProjectOpen(false);
-      setNotice("הפרויקט החדש נוצר");
       openProject(result.project);
+      setNotice("הפרויקט החדש נוצר");
+      const equipmentResults = await Promise.allSettled(equipmentItems.map((item) =>
+        api(`/projects/${result.project.id}/equipment`, {method: "POST", body: JSON.stringify({catalogItemId:item.id, quantity:item.quantity, status:"planned"})})
+      ));
+      const failures = equipmentResults.filter((item) => item.status === "rejected");
+      try { await loadReferenceData(); } catch (error) { setNotice(`הפרויקט נוצר, אך רענון הנתונים נכשל: ${error.message}`); }
+      if (failures.length) setNotice(`הפרויקט נוצר, אך ${failures.length} פריטי ציוד לא נשמרו. ניתן להוסיף אותם בכרטיס הפרויקט.`);
     } catch (error) {
       setNotice(error.message);
     }
@@ -1011,7 +1015,7 @@ function App() {
         </div>
         <nav className="main-nav">
           <span className="nav-label">סביבת עבודה</span>
-            {nav.filter(item=>userCanAccess(user,item.id)).map(({ id, label, icon: Icon }) => {
+            {nav.filter(item=>!["gis", "forms", "clients", "professionals", "catalog"].includes(item.id) && (userCanAccess(user,item.id) || (item.id === "calendar" && userCanAccess(user,"gantt")))).map(({ id, label, icon: Icon }) => {
             const badge =
               id === "projects"
                 ? projects.length
@@ -1022,12 +1026,12 @@ function App() {
               <button
                 key={id}
                 className={
-                  page === id || (page === "project" && id === "projects")
+                  page === id || (page === "gantt" && id === "calendar") || (page === "project" && id === "projects")
                     ? "active"
                     : ""
                 }
                 onClick={() => {
-                  setPage(id);
+                  setPage(id === "calendar" && !userCanAccess(user, "calendar") ? "gantt" : id);
                   setSelectedProject(null);
                   setSidebarOpen(false);
                 }}
@@ -1039,6 +1043,7 @@ function App() {
             );
           })}
           <span className="nav-label nav-second">ניהול</span>
+          {nav.filter(item => ["clients", "professionals", "catalog"].includes(item.id) && userCanAccess(user, item.id)).map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? "active" : ""} onClick={() => { setPage(id); setSelectedProject(null); setSidebarOpen(false); }}><Icon size={19}/><span>{label}</span></button>)}
           {userCanAccess(user,"tasks")&&<button
             className={page === "tasks" ? "active" : ""}
             onClick={() => {
@@ -1050,7 +1055,6 @@ function App() {
             <span>משימות ואבני דרך</span>
             {insights?.stats?.overdue > 0 && <em>{insights.stats.overdue}</em>}
           </button>}
-          {userCanAccess(user,"gantt")&&<button className={page === "gantt" ? "active" : ""} onClick={()=>{setPage('gantt');setSidebarOpen(false)}}><Activity size={19}/><span>לוח גאנט</span></button>}
           {userCanAccess(user,"control")&&<button className={page === "control" ? "active" : ""} onClick={()=>{setPage('control');setSidebarOpen(false)}}><Gauge size={19}/><span>בקרת ביצוע</span></button>}
           {userCanAccess(user,"reports")&&<button
             className={page === "reports" ? "active" : ""}
@@ -1232,7 +1236,11 @@ function App() {
               user={user}
             />
           )}
-          {page === "calendar" && (
+          {["calendar", "gantt"].includes(page) && <div className="schedule-workspace">
+            <div className="calendar-view-switch schedule-tabs" aria-label="תצוגת יומן עבודה">
+              {[["calendar", "יומן", "calendar"], ["gantt", "גאנט", "gantt"], ["all", "הצג הכל", "calendar"]].filter(([view, , resource]) => userCanAccess(user, resource) && (view !== "all" || userCanAccess(user, "gantt"))).map(([view, label]) => <button key={view} type="button" aria-pressed={(page === "gantt" ? "gantt" : userCanAccess(user, "calendar") ? scheduleView : "gantt") === view} className={(page === "gantt" ? "gantt" : userCanAccess(user, "calendar") ? scheduleView : "gantt") === view ? "active" : ""} onClick={() => { setScheduleView(view === "all" ? "all" : "calendar"); setPage(view === "gantt" ? "gantt" : "calendar"); }}>{label}</button>)}
+            </div>
+          {page === "calendar" && userCanAccess(user, "calendar") && scheduleView !== "gantt" && (
             <CalendarWorkspace
               api={api}
               apiRoot={apiRoot}
@@ -1251,6 +1259,8 @@ function App() {
               }}
             />
           )}
+          {userCanAccess(user, "gantt") && (page === "gantt" || scheduleView === "all" || !userCanAccess(user, "calendar")) && <GanttWorkspace api={api} setNotice={setNotice} user={user} projects={projects} professionals={professionals}/>}
+          </div>}
           {page === "my-work" && (
             <MyWorkWorkspace api={api} user={user} projects={projects} professionals={professionals} setNotice={setNotice} openProject={openProject}/>
           )}
@@ -1316,7 +1326,6 @@ function App() {
               setNotice={setNotice}
             />
           )}
-          {page==='gantt'&&<GanttWorkspace api={api} setNotice={setNotice} user={user} projects={projects} professionals={professionals}/>}
           {page==='control'&&<PortfolioControlWorkspace api={api} setNotice={setNotice} openProject={openProject} projects={projects}/>}
           {page === "reports" && (
             <ReportsWorkspace api={api} setNotice={setNotice} company={company} companyLogo={companyLogo} user={user} />
@@ -1334,6 +1343,8 @@ function App() {
           )}
           {page === "project" && selectedProject && (
             <ProjectWorkspace key={selectedProject.id}
+              supervisionTask={supervisionTask}
+              onSupervisionHandled={() => setSupervisionTask(null)}
               project={
                 projects.find((p) => p.id === selectedProject.id) ||
                 selectedProject
@@ -2275,6 +2286,9 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
             )}
           </div>
         </div>}
+      </section>
+      <div className="dashboard-section-title"><div><span>03</span><strong>תכנון וביצוע</strong></div><small>מגמות כספיות והמשימות הקרובות</small></div>
+      <section className={`dashboard-grid bottom planning-overview ${canViewFinance ? "" : "without-finance"}`}>
         <div className="panel stage-panel">
           <PanelHead title="התפלגות לפי שלב" subtitle="כלל הפרויקטים" />
           <div className="stage-chart-wrap">
@@ -2310,9 +2324,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
             </div>
           </div>
         </div>
-      </section>
-      <div className="dashboard-section-title"><div><span>03</span><strong>תכנון וביצוע</strong></div><small>מגמות כספיות והמשימות הקרובות</small></div>
-      <section className="dashboard-grid bottom">
+
         {canViewFinance && <div className="panel cash-panel">
           <PanelHead
             title="גבייה לפי פרויקט"
@@ -3732,6 +3744,7 @@ function NewProjectModal({
       item.roles.some((role) => role.key === "project_manager"),
   );
   const [step, setStep] = useState(1);
+  const savingProject = useRef(false);
   const [form, setForm] = useState({
     name: "",
     clientMode: "existing",
@@ -3744,6 +3757,7 @@ function NewProjectModal({
     clientAddress: "",
     clientCity: "",
     location: "",
+    floor: "", apartmentNumber: "", entranceCode: "",
     projectClassification: "private_house",
     projectCategory:"smart_home",projectCategoryCustom:"",projectProfile:{workflowLabel:"",systemsLabel:"",areasLabel:""},
     projectIcon: "home",
@@ -3765,8 +3779,9 @@ function NewProjectModal({
     depositPaid: false,
     systemBudgets: {},
   });
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
+    if (savingProject.current) return;
     const client = clients.find(
       (item) => String(item.id) === String(form.clientId),
     );
@@ -3792,11 +3807,13 @@ function NewProjectModal({
             city: form.clientCity,
           }
         : undefined;
-    onCreate({
+    savingProject.current = true;
+    try { await onCreate({
       name: form.name,
       clientId: client?.id || null,
       newClient,
       location: form.location || client?.city || form.clientCity || "",
+      floor: form.floor, apartmentNumber: form.apartmentNumber, entranceCode: form.entranceCode,
       projectClassification: form.projectClassification,
       projectCategory:form.projectCategory,projectCategoryCustom:form.projectCategory==='other'?form.projectCategoryCustom:"",projectProfile:form.projectCategory==='other'?form.projectProfile:{},
       projectIcon:form.projectIcon,
@@ -3834,7 +3851,7 @@ function NewProjectModal({
       health: 100,
       tasksDone: 0,
       tasksTotal: 0,
-    });
+    }); } finally { savingProject.current = false; }
   };
   const categories = equipment.filter(
     (item) => item.itemType === "system_type" && item.active,
@@ -4003,6 +4020,7 @@ function NewProjectModal({
                 </label>
               </div>
             )}
+            <div className="form-row">{[["floor","קומה"],["apartmentNumber","מספר דירה"],["entranceCode","קוד כניסה לבניין"]].map(([key,label])=><label key={key}>{label}<input value={form[key]} onChange={(event)=>setForm({...form,[key]:event.target.value})}/></label>)}</div>
             <div className="modal-actions">
               <button type="button" onClick={onClose}>
                 ביטול

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.41.0
+
+- Add project floor, apartment number and building entrance code; display client contacts with roles in the project overview. Close project creation immediately after successful persistence, independently of equipment/reference follow-ups.
+- Add task end time, paired dates/times, nine-hour all-day scheduling and automatic hour-bank entries for newly completed tasks. Reconcile changes/reopening/deletion without duplicates, preserve historical completed tasks, and protect generated entries from manual edits. Open the supervision form after an interactive supervision completion.
+- Preserve successful task saves even when post-commit audit/automation fails; keep failed forms open and prevent duplicate submissions. Show completed task types and both dates.
+- Resolve distinctive project/client words in chat, offer choices on ambiguity and retain a selected project with bounded, permission-aware workspace context.
+- Combine calendar and Gantt with calendar/Gantt/show-all tabs; hide GIS and document navigation by default; group clients, professionals and catalog under management; align the three dashboard overview panels on wide screens.
+- Remove the technician activity choice, retaining historical totals under general work, and place threading before installation.
+
 ## 0.40.0
 
 - Add a read-only Check and Suggest mode in the existing chat, scoped to a selected project. Identify overdue/unassigned tasks, missing equipment manufacturer/model, installation gaps, invalid quantities and repeated equipment tags, with bounded evidence and links to the relevant project tab.

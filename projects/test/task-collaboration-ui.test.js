@@ -14,7 +14,7 @@ test('tasks support multiple performers, half-hour planning and the extended tas
   assert.match(migration,/supervision.*inspection.*meeting/s);
   assert.match(server,/replaceTaskAssignees/);
   assert.match(ui,/assigneeProfessionalIds/);
-  assert.match(ui,/step="0\.5"/);
+  assert.match(ui,/step="0\.25"/);
   assert.match(ui,/>פיקוח</);
 });
 

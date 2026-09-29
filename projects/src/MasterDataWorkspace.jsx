@@ -890,7 +890,7 @@ function RoleManager({ roles,onClose, onSave,onDelete }) {
         className="master-form"
         onSubmit={async(event) => {
           event.preventDefault();
-          if(await onSave(form))reset();
+          if(await onSave(form))onClose();
         }}
       >
         <label>

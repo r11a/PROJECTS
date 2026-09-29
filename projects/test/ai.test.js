@@ -10,7 +10,54 @@ import {
   providerError,
   testProvider,
 } from '../server/ai.js';
-import { PRODUCT_HELP_GUIDE, buildLiveSystemKnowledge } from '../server/aiKnowledge.js';
+import { PRODUCT_HELP_GUIDE, buildLiveSystemKnowledge, matchProjectNames, resolveChatProject } from '../server/aiKnowledge.js';
+
+test('distinctive client words resolve locally while ambiguity requires a project choice',async()=>{
+  const projects=[{id:'sun',name:'מלון סאן בת-ים',client:'סאן'},{id:'sea',name:'מלון ים תל אביב',client_name:'קבוצת אופק'}];
+  assert.equal(matchProjectNames(projects,'מה המצב של סאן?')[0].id,'sun');
+  assert.equal(matchProjectNames(projects,'מה המצב של אופק?')[0].id,'sea');
+  assert.equal(matchProjectNames(projects,'מה המצב של המלון?').length,0);
+  assert.equal(matchProjectNames(projects,'סאנטה').length,0);
+  const pool={query:async()=>({rows:[...projects,{id:'sun2',name:'מלון סאן אילת'}]})};
+  const ambiguous=await resolveChatProject(pool,'סיכום סאן');
+  assert.equal(ambiguous.project,null);assert.equal(ambiguous.projects.length,2);assert.match(ambiguous.message,/בחרו/);
+  assert.equal((await resolveChatProject(pool,'סיכום סאן','sun2')).project.id,'sun2');
+  assert.equal((await resolveChatProject(pool,'ומה המשימות?','sun')).project.id,'sun');
+  assert.equal((await resolveChatProject(pool,'מה המצב של אופק?','sun')).project.id,'sea');
+  assert.match((await resolveChatProject(pool,'מה המצב?','missing')).message,/אינו זמין/);
+});
+
+test('selected project context is comprehensive, bounded, scoped and finance/secret safe',async()=>{
+  const queries=[];
+  const pool={query:async(sql,args)=>{queries.push(sql);assert.deepEqual(args,['sun']);return {rows:sql.includes('FROM tasks')?Array.from({length:61},(_,i)=>({id:i,title:'task',description:'x'.repeat(2000)})):[{name:'סאן',value:123,paid:10,entrance_code:'SECRET',api_key:'SECRET',updated_at:new Date('2026-01-01')}]};}};
+  const context=await buildChatContext(pool,'סיכום סאן',{financeAccess:false,permissions:{forms:'none'}},'sun');
+  assert.deepEqual(Object.keys(context),['projectKnowledge']);
+  for(const key of ['project','client','contacts','tasks','milestones','team','equipment','reviews','meetings','hours','updates','changes'])assert.ok(context.projectKnowledge[key],key);
+  assert.ok(context.projectKnowledge.tasks.truncated);
+  assert.ok(context.projectKnowledge.tasks.records.length<10);
+  assert.equal(context.projectKnowledge.project.records[0].updated_at,'2026-01-01T00:00:00.000Z');
+  assert.doesNotMatch(JSON.stringify(context),/SECRET|"paid"|"value"/);
+  assert.ok(queries.every(sql=>sql.includes('$1')&&sql.includes('LIMIT 61')));
+  assert.ok(!queries.some(sql=>/project_payments|client_files|voice_notes|form_records/.test(sql)));
+});
+
+test('focused project questions only query relevant domains and broad context stays below 18000 characters',async()=>{
+  const queries=[];
+  const pool={query:async sql=>{queries.push(sql);return {rows:Array.from({length:61},(_,id)=>({id,name:'סאן',title:'משימה',description:'x'.repeat(15000),notes:'y'.repeat(15000),details:{nested:'z'.repeat(15000)}}))};}};
+  const focused=await buildChatContext(pool,'מה המשימות באיחור בסאן?',{},'sun');
+  assert.ok(focused.projectKnowledge.tasks);
+  assert.equal(queries.length,2);
+  assert.ok(!queries.some(sql=>/project_payments|voice_notes|project_equipment/.test(sql)));
+  assert.ok(focused.projectKnowledge.notLoaded.includes('equipment'));
+  assert.ok(focused.projectKnowledge.tasks.truncated);
+  queries.length=0;
+  const broad=await buildChatContext(pool,'תמונת מצב סאן',{},'sun');
+  assert.ok(queries.length>10);
+  assert.ok(JSON.stringify(broad).length<=18000,JSON.stringify(broad).length);
+  assert.ok(broad.projectKnowledge.meetings.truncated);
+  assert.ok(broad.projectKnowledge.voiceNotes.truncated);
+  assert.ok(broad.projectKnowledge.updates.truncated);
+});
 
 test('project overview SQL filters AVG before ROUND', async () => {
   const queries=[];

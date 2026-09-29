@@ -125,6 +125,99 @@ function normalizeColumns(value) {
   return [];
 }
 
+const entityWords = value => String(value || '').normalize('NFKC').toLowerCase().replace(/["'״׳]/g,'').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+const genericNames = new Set(['בית','וילה','מלון','משפחת','פרויקט','פרוייקט','לקוח','חברה','בעמ','project','hotel']);
+
+// Resolve only against local names. Never ask a provider to guess an identity.
+export function matchProjectNames(projects, question, projectId) {
+  if (projectId) return projects.filter(project=>String(project.id)===String(projectId));
+  const words=entityWords(question);
+  return projects.filter(project=>[project.name,project.client,project.client_name].some(value=>{
+    const name=entityWords(value);
+    if (!name.length) return false;
+    if (` ${words.join(' ')} `.includes(` ${name.join(' ')} `)) return true;
+    return name.some(word=>word.length>=3&&!genericNames.has(word)&&words.some(query=>query===word||query===`של${word}`));
+  }));
+}
+
+export async function resolveChatProject(pool, question, projectId) {
+  const projects=(await pool.query(`SELECT p.id,p.name,p.client,c.name client_name FROM projects p LEFT JOIN clients c ON c.id=p.client_id ORDER BY p.name`)).rows;
+  const named=matchProjectNames(projects,question);
+  const selected=projectId?matchProjectNames(projects,question,projectId):[];
+  const matches=named.length&&(!projectId||!named.some(project=>String(project.id)===String(projectId)))?named:projectId?selected:named;
+  return { project:matches.length===1?matches[0]:null, projects:matches.map(({id,name})=>({id,name})),
+    message:matches.length>1?'נמצאו כמה פרויקטים מתאימים. בחרו את הפרויקט המדויק.':projectId&&!matches.length?'הפרויקט שנבחר אינו זמין. בחרו פרויקט אחר.':'' };
+}
+
+export async function buildProjectChatKnowledge(pool, projectId, user = {}, question = '') {
+  const canViewFinance=user.financeAccess!==false;
+  const queries={
+    project:'SELECT * FROM projects WHERE id=$1',
+    client:'SELECT c.name,c.phone,c.email,c.address,c.city,c.priority_customer_number,c.status FROM clients c JOIN projects p ON p.client_id=c.id WHERE p.id=$1',
+    contacts:'SELECT c.name,c.phone,c.email FROM client_contacts c JOIN projects p ON p.client_id=c.client_id WHERE p.id=$1 ORDER BY c.id',
+    tasks:`SELECT t.*,COALESCE(u.display_name,pr.display_name) assignee_name,d.title dependency_title FROM tasks t LEFT JOIN users u ON u.id=t.assignee_id LEFT JOIN professionals pr ON pr.id=t.assignee_professional_id LEFT JOIN tasks d ON d.id=t.dependency_task_id WHERE t.project_id=$1 ORDER BY (t.status='done'),t.due_date,t.id`,
+    milestones:'SELECT * FROM project_milestones WHERE project_id=$1 ORDER BY due_date,id',
+    team:'SELECT p.display_name,p.phone,p.email,r.name role_name,pp.notes FROM project_professionals pp JOIN professionals p ON p.id=pp.professional_id JOIN professional_role_types r ON r.id=pp.role_type_id WHERE pp.project_id=$1 ORDER BY pp.is_primary DESC,p.display_name',
+    equipment:'SELECT pe.*,e.name,e.manufacturer,e.model,e.code,s.name system_name FROM project_equipment pe JOIN equipment_catalog e ON e.id=pe.catalog_item_id LEFT JOIN equipment_catalog s ON s.id=COALESCE(pe.project_system_id,e.parent_id) WHERE pe.project_id=$1 ORDER BY pe.id',
+    reviews:'SELECT review_date,supervision_type,summary,follow_up,plan_update_required FROM project_site_reviews WHERE project_id=$1 ORDER BY review_date DESC',
+    meetings:'SELECT meeting_at,attendees,summary,follow_up FROM project_meeting_summaries WHERE project_id=$1 ORDER BY meeting_at DESC',
+    hours:'SELECT activity_type,work_date,hours,notes FROM project_time_entries WHERE project_id=$1 ORDER BY work_date DESC',
+    updates:'SELECT body,created_at FROM project_updates WHERE project_id=$1 ORDER BY created_at DESC',
+    baselines:'SELECT label,created_at FROM project_baselines WHERE project_id=$1 ORDER BY created_at DESC',
+    changes:canViewFinance?'SELECT title,status,price_impact,schedule_impact_days,updated_at FROM project_change_requests WHERE project_id=$1 ORDER BY updated_at DESC':'SELECT title,status,schedule_impact_days,updated_at FROM project_change_requests WHERE project_id=$1 ORDER BY updated_at DESC',
+  };
+  if(user.permissions?.forms!=='none') {
+    queries.documents='SELECT title,original_name,mime_type,category,created_at FROM client_files WHERE project_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC';
+    queries.forms='SELECT title,status,scheduled_for,activity_type,work_hours FROM form_records WHERE project_id=$1 ORDER BY updated_at DESC';
+    queries.voiceNotes='SELECT transcript,ai_summary,created_at FROM voice_notes WHERE project_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC';
+  }
+  if(canViewFinance) queries.payments='SELECT * FROM project_payments WHERE project_id=$1 ORDER BY due_date';
+  const domainPatterns={
+    client:/לקוח|כתובת|טלפון|דוא|מייל|client|address|phone|email/i,
+    contacts:/קשר|טלפון|דוא|מייל|contact|phone|email/i,
+    tasks:/משימ|איחור|לבצע|תלות|task|overdue/i,
+    milestones:/אבן דרך|אבני דרך|milestone/i,
+    team:/צוות|מבצע|אחראי|טכנאי|מנהל|איש מקצוע|team|assignee|manager/i,
+    equipment:/ציוד|מערכ|רכיב|מפסק|מצלמ|רמקול|knx|equipment|system/i,
+    reviews:/ביקור|פיקוח|inspection|review/i,
+    meetings:/פגיש|ישיב|meeting/i,
+    hours:/שעות|זמן עבודה|hours|time entr/i,
+    updates:/פעילות|עדכונ|עדכון|activity|update/i,
+    baselines:/baseline|בייסליין|תכנון מול/i,
+    changes:/בקשת שינוי|בקשות שינוי|change request/i,
+    documents:/מסמ|קבצ|קובץ|תמונ|וידאו|pdf|document|file/i,
+    forms:/טופס|טפסים|form/i,
+    voiceNotes:/הקלט|תמלול|voice|transcript/i,
+    payments:/כספ|תשלום|גבייה|יתרה|שקל|תקציב|payment|finance|budget/i,
+  };
+  const requested=Object.keys(domainPatterns).filter(key=>domainPatterns[key].test(question));
+  const broad=!requested.length||/תמונת מצב|סקירה כללית|כל המידע|כל הנתונים|כל הפרטים|הכל|הכול|overview|everything/i.test(question);
+  const selected=Object.entries(queries).filter(([key])=>key==='project'||broad||requested.includes(key));
+  const notLoaded=Object.keys(queries).filter(key=>!selected.some(([loaded])=>loaded===key));
+  // Every selected domain gets a share, so early domains cannot consume the budget.
+  const domainBudget=Math.min(6500,Math.floor(15000/selected.length));
+  const unavailable=[];
+  const entries=await Promise.all(selected.map(async([key,sql])=>{
+    try {
+      const rows=(await pool.query(`${sql} LIMIT 61`,[projectId])).rows;
+      let textTruncated=false;
+      const clean=value=>{if(value instanceof Date)return value.toISOString();if(Array.isArray(value)){if(value.length>60)textTruncated=true;return value.slice(0,60).map(clean);}if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!/(password|secret|token|api.?key|credential|entrance_code|stored_name|storage_path|document_folder)/i.test(key)).map(([key,item])=>[key,clean(item)]));if(typeof value==='string'&&value.length>1800){textTruncated=true;return value.slice(0,1800);}return value;};
+      const data=clean(rows.slice(0,60));
+      const permitted=canViewFinance?data:stripFinanceKnowledge(data);
+      const records=[];let size=0;
+      for (const record of permitted) {
+        let compact=record;
+        if (!records.length&&JSON.stringify(compact).length>domainBudget) {
+          compact={};for(const [field,value] of Object.entries(record)){const shortened=typeof value==='string'?value.slice(0,Math.max(40,Math.floor(domainBudget/12))):value;if(JSON.stringify({...compact,[field]:shortened}).length>domainBudget)continue;compact[field]=shortened;}textTruncated=true;
+        }
+        const length=JSON.stringify(compact).length;if(size+length>domainBudget)break;records.push(compact);size+=length;
+      }
+      return [key,{records,truncated:textTruncated||rows.length>records.length}];
+    } catch { unavailable.push(key);return [key,{records:[],unavailable:true}]; }
+  }));
+  return {...Object.fromEntries(entries),unavailable,notLoaded,restricted:requested.filter(key=>!queries[key]),scope:'נתוני הפרויקט בלבד, בתחומים הרלוונטיים לשאלה. עד 60 רשומות לתחום ובתקציב הקשר מוגבל. truncated מציין תוכן חלקי: אין להסיק ממנו סכומים או רשימות מלאות. notLoaded לא נטען; unavailable אינו מעיד שאין נתונים.',financeAccess:canViewFinance};
+}
+
 export async function buildLiveSystemKnowledge(pool, question, user = { role:'admin',id:null }) {
   const isAdmin = user?.role === 'admin';
   const canViewFinance = user?.financeAccess !== false;

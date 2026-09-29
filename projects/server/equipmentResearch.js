@@ -1,6 +1,7 @@
 import { lookup } from 'node:dns/promises';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
+import { matchProjectNames } from './aiKnowledge.js';
 
 export const equipmentCategories = [
   ['switches','מפסקים ובקרי KNX',/מפסק|מפסקים|לחצן|לחצנים|knx|בקרים|בקר\b/i],
@@ -23,10 +24,7 @@ export const searchLinks = product => {
 export async function resolveEquipment(pool, {question='',projectId,category,manufacturer,model}) {
   if (manufacturer && model) return {products:[{manufacturer:String(manufacturer).trim().slice(0,120),model:String(model).trim().slice(0,160),category:equipmentCategories.find(c=>c[0]===category)?.[1] || 'ציוד',name:`${manufacturer} ${model}`.slice(0,240)}]};
   const projects=(await pool.query('SELECT id,name,client FROM projects WHERE archived_at IS NULL ORDER BY name')).rows;
-  const q=norm(question);
-  const candidates=projectId ? projects.filter(p=>String(p.id)===String(projectId)) : projects.filter(p=>[p.name,p.client].some(v=>{
-    const name=norm(v);return name.length>=2 && (q.includes(name) || name.split(' ').filter(w=>w.length>=3&&!['משפחת','פרויקט','פרוייקט','בית','וילה'].includes(w)).some(w=>new RegExp(`(?:^|\\s|של)${w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?:$|\\s|[?.,])`).test(q)));
-  }));
+  const candidates=matchProjectNames(projects,question,projectId);
   if(candidates.length!==1) return {products:[],projects:(candidates.length?candidates:projects).map(({id,name})=>({id,name})),message:candidates.length?'נמצאו כמה פרויקטים מתאימים. בחרו את הפרויקט המדויק.':'בחרו פרויקט או הזינו יצרן ודגם כדי לזהות את הציוד.'};
   const project=candidates[0];
   const rows=(await pool.query(`SELECT e.id,e.name,e.manufacturer,e.model,e.code,COALESCE(s.name,'') system_name FROM project_equipment pe JOIN equipment_catalog e ON e.id=pe.catalog_item_id LEFT JOIN equipment_catalog s ON s.id=COALESCE(pe.project_system_id,e.parent_id) WHERE pe.project_id=$1 ORDER BY e.name`,[project.id])).rows;
