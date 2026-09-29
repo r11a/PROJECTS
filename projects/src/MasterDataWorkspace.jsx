@@ -402,6 +402,7 @@ export function MasterDataWorkspace({
                 body: JSON.stringify(value),
               });
               setNotice(value.id?"התפקיד עודכן":"סוג התפקיד נוסף");
+              setRoleForm(false);
               await refresh();
               return true;
             } catch (error) {

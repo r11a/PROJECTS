@@ -307,3 +307,34 @@ test('completed supervision task opens the linked project review form',async({pa
   await expect(page).toHaveURL(/project=PRJ-101/);await expect(page.getByRole('dialog').locator('textarea[name=summary]')).toBeVisible();
   await expect(page.getByRole('dialog').getByRole('button',{name:'שמירת ביקורת',exact:true})).toBeVisible();
 });
+
+test('project wizard closes after creation while reference refresh is pending and preserves access details',async({page})=>{
+  await mockApi(page);let created=false,payload,refreshPending=false,releaseRefresh;
+  const refreshHeld=new Promise(resolve=>releaseRefresh=resolve);
+  await page.route('**/api/clients',async route=>{
+    if(created){refreshPending=true;await refreshHeld;return route.fulfill({status:503,json:{error:'רענון לקוחות נכשל לבדיקה'}});}
+    return route.fulfill({json:{clients:[{id:7,name:'לקוח בדיקה',address:'רחוב הבדיקה 1',city:'תל אביב'}]}});
+  });
+  await page.route('**/api/projects',route=>{
+    if(route.request().method()!=='POST')return route.fulfill({json:{projects}});
+    payload=route.request().postDataJSON();created=true;
+    return route.fulfill({json:{project:{...projects[0],...payload,id:'PRJ-104'}}});
+  });
+  await page.route('**/api/projects/PRJ-104/workspace',route=>route.fulfill({json:{tasks:[],milestones:[],payments:[],team:[],equipment:[],forms:[],files:[],updates:[],activity:[],reviews:[],meetings:[],timeEntries:[],priorityOrders:[],systemColumns:[],systemFieldSettings:[]}}));
+  try {
+    await page.goto('/');await page.getByRole('button',{name:'פרויקט חדש',exact:true}).click();
+    const wizard=page.locator('.project-wizard');await expect(wizard).toBeVisible();
+    await wizard.getByRole('textbox',{name:'שם הפרויקט',exact:true}).fill('פרויקט בדיקת שמירה');
+    await wizard.getByRole('combobox',{name:'לקוח',exact:true}).selectOption('7');
+    await wizard.getByRole('textbox',{name:'קומה',exact:true}).fill('3');
+    await wizard.getByRole('textbox',{name:'מספר דירה',exact:true}).fill('12');
+    await wizard.getByRole('textbox',{name:'קוד כניסה לבניין',exact:true}).fill('0042#');
+    await wizard.getByRole('button',{name:'המשך',exact:true}).click();
+    await wizard.getByRole('button',{name:'המשך',exact:true}).click();
+    await wizard.getByRole('button',{name:'יצירת פרויקט',exact:true}).click();
+    await expect.poll(()=>refreshPending).toBe(true);
+    await expect(wizard).toHaveCount(0);await expect(page).toHaveURL(/project=PRJ-104/);
+    expect(payload).toMatchObject({name:'פרויקט בדיקת שמירה',clientId:7,floor:'3',apartmentNumber:'12',entranceCode:'0042#'});
+    const failedRefresh=page.waitForResponse(response=>response.url().endsWith('/api/clients')&&response.status()===503);releaseRefresh();await failedRefresh;await expect(wizard).toHaveCount(0);
+  } finally { releaseRefresh(); }
+});
