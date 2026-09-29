@@ -4,11 +4,16 @@ import { AppModal } from './AppModal';
 import { formatDateIL, localDateValue } from './dateTime';
 import './date-input.css';
 
+const FIRST_YEAR=2023;
+const LAST_YEAR=2040;
+
 export function DateInput(props) {
   return ['date','datetime-local'].includes(props.type) ? <DateField {...props}/> : <input {...props}/>;
 }
 
 function DateField({type='date',value,defaultValue='',onChange,onBlur,name,min,max,required,disabled,className='',...props}) {
+  const rangeMin=min&&min>`${FIRST_YEAR}-01-01`?min:(type==='datetime-local'?`${FIRST_YEAR}-01-01T00:00`:`${FIRST_YEAR}-01-01`);
+  const rangeMax=max&&max<`${LAST_YEAR}-12-31${type==='datetime-local'?'T23:59':''}`?max:(type==='datetime-local'?`${LAST_YEAR}-12-31T23:59`:`${LAST_YEAR}-12-31`);
   const [internal,setInternal]=useState(defaultValue);
   const current=String(value===undefined?internal:value||'');
   const display=(iso)=>iso ? `${formatDateIL(iso)}${type==='datetime-local'?' '+(iso.slice(11,16)||'00:00'):''}` : '';
@@ -25,27 +30,29 @@ function DateField({type='date',value,defaultValue='',onChange,onBlur,name,min,m
     if(localDateValue(date)!==iso||+hour>23||+minute>59)return '';
     return iso+(type==='datetime-local'?`T${hour}:${minute}`:'');
   };
-  const valid=(iso)=>Boolean(iso)&&(!min||iso>=min)&&(!max||iso<=max);
+  const valid=(iso)=>Boolean(iso)&&iso>=rangeMin&&iso<=rangeMax;
   useEffect(()=>{
     inputRef.current?.setCustomValidity(text&&!valid(parse(text))?'יש להזין תאריך תקין בטווח המותר בפורמט DD/MM/YYYY'+(type==='datetime-local'?' HH:MM':''):'');
-  },[text,min,max,type]);
+  },[text,rangeMin,rangeMax,type]);
   const emit=(iso)=>{setInternal(iso);onChange?.({target:{value:iso,name},currentTarget:{value:iso,name}});};
   const choose=(iso)=>{setText(display(iso));emit(iso);setOpen(false);};
   const days=new Date(month.getFullYear(),month.getMonth()+1,0).getDate();
   const offset=new Date(month.getFullYear(),month.getMonth(),1).getDay();
-  const years=Array.from({length:201},(_,i)=>new Date().getFullYear()-100+i);
+  const years=Array.from({length:LAST_YEAR-FIRST_YEAR+1},(_,i)=>FIRST_YEAR+i);
+  const firstMonth=month.getFullYear()===FIRST_YEAR&&month.getMonth()===0;
+  const lastMonth=month.getFullYear()===LAST_YEAR&&month.getMonth()===11;
   const weekdays=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   return <span className={`he-date-input ${className}`}>
     <input {...props} ref={inputRef} type="text" dir="ltr" lang="he" value={text} required={required} disabled={disabled} placeholder={type==='datetime-local'?'DD/MM/YYYY HH:MM':'DD/MM/YYYY'} onChange={event=>{const next=event.target.value;setText(next);const iso=parse(next);if(valid(iso)||!next)emit(iso);}} onBlur={()=>onBlur?.({target:{value:parse(text),name}})}/>
     <input type="hidden" name={name} value={current} disabled={disabled}/>
-    <button type="button" disabled={disabled} aria-label="פתיחת לוח תאריכים" onClick={()=>{setMonth(new Date(`${current.slice(0,10)||localDateValue()}T12:00:00`));setOpen(true);}}><CalendarDays size={17}/></button>
+    <button type="button" disabled={disabled} aria-label="פתיחת לוח תאריכים" onClick={()=>{const selected=current.slice(0,10)||localDateValue(),bounded=selected<`${FIRST_YEAR}-01-01`?`${FIRST_YEAR}-01-01`:selected>`${LAST_YEAR}-12-31`?`${LAST_YEAR}-12-31`:selected;setMonth(new Date(`${bounded}T12:00:00`));setOpen(true);}}><CalendarDays size={17}/></button>
     {open&&<AppModal title="בחירת תאריך" className="he-date-modal" onClose={()=>setOpen(false)}>
       <div className="he-calendar" dir="rtl" lang="he">
         <div className="he-calendar-navigation">
-          <button type="button" aria-label="החודש הקודם" onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()-1,1))}><ChevronRight size={18}/></button>
+          <button type="button" aria-label="החודש הקודם" disabled={firstMonth} onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()-1,1))}><ChevronRight size={18}/></button>
           <select aria-label="חודש" value={month.getMonth()} onChange={e=>setMonth(new Date(month.getFullYear(),+e.target.value,1))}>{Array.from({length:12},(_,i)=><option key={i} value={i}>{new Date(2026,i,1).toLocaleDateString('he-IL',{month:'long'})}</option>)}</select>
           <select aria-label="שנה" value={month.getFullYear()} onChange={e=>setMonth(new Date(+e.target.value,month.getMonth(),1))}>{years.map(year=><option key={year}>{year}</option>)}</select>
-          <button type="button" aria-label="החודש הבא" onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()+1,1))}><ChevronLeft size={18}/></button>
+          <button type="button" aria-label="החודש הבא" disabled={lastMonth} onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()+1,1))}><ChevronLeft size={18}/></button>
         </div>
         <div className="he-calendar-grid">
           {weekdays.map(day=><small key={day}>{day}</small>)}

@@ -70,7 +70,7 @@ const taskPriority = {
   low: "נמוכה",
 };
 const taskPriorityRank = { urgent: 4, high: 3, normal: 2, low: 1 };
-const taskTypeLabels={task:'משימה',service:'שירות',procurement:'רכש',followup:'מעקב',supervision:'פיקוח',meeting:'פגישה',planning:'תכנון',inspection:'ביקורת',installation:'התקנה',quotation:'הצעת מחיר'};
+const taskTypeLabels={task:'משימה',service:'שירות',procurement:'רכש',followup:'מעקב',supervision:'פיקוח',meeting:'פגישה',planning:'תכנון',inspection:'ביקורת',installation:'התקנה',activation:'הפעלות',quotation:'הצעת מחיר'};
 const milestoneStatus = {
   planned: "מתוכננת",
   in_progress: "בתהליך",
@@ -251,6 +251,7 @@ export function TaskEditor({
                 <option value="supervision">פיקוח</option>
                 <option value="meeting">פגישה</option><option value="planning">תכנון</option><option value="inspection">ביקורת</option>
                 <option value="installation">התקנה</option>
+                <option value="activation">הפעלות</option>
                 <option value="quotation">הצעת מחיר</option>
               </select>
             </label>)}
@@ -298,7 +299,7 @@ export function TaskEditor({
         </label>
         {!isMilestone && <label className="task-schedule-field task-start-time">
           שעת התחלה
-          <TimeSelect allowEmpty disabled={Boolean(form.allDay ?? form.all_day)} value={form.startTime ?? form.start_time ?? ""} onChange={(e)=>changeTime('startTime',e.target.value)}/>
+          <TimeSelect allowEmpty min="07:00" max="18:00" disabled={Boolean(form.allDay ?? form.all_day)} value={form.startTime ?? form.start_time ?? ""} onChange={(e)=>changeTime('startTime',e.target.value)}/>
         </label>}
         {!isMilestone && <label className="task-schedule-field task-end-time">שעת סיום<TimeSelect allowEmpty disabled={Boolean(form.allDay ?? form.all_day)} value={form.endTime ?? form.end_time ?? ''} onChange={e=>changeTime('endTime',e.target.value)}/></label>}
         {!isMilestone && <label className="task-schedule-field">

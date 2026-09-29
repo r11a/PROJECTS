@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.41.1
+
+- Limit task start-time choices to 07:00–18:00 in half-hour intervals and add the task type "הפעלות".
+- Limit shared date selection to 2023–2040, including typed-date validation and calendar navigation boundaries.
+- Keep project tabs on one stable horizontal line, hide the scrollbar and prevent vertical movement or clipped labels while swiping.
+
 ## 0.41.0
 
 - Add project floor, apartment number and building entrance code; display client contacts with roles in the project overview. Close project creation immediately after successful persistence, independently of equipment/reference follow-ups.

@@ -78,3 +78,8 @@
  .command-card-link { font-size:11px; }
 }
 @media(prefers-reduced-motion:reduce) { .command-card,.app-shell .main-nav button { transition:none; } .loading-orbit { animation:none; } }
+
+/* Stable, touch-friendly project tab strip. */
+.detail-tabs{height:55px;min-height:55px;align-items:center;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;overscroll-behavior-y:none;scroll-behavior:smooth;scrollbar-width:none;-ms-overflow-style:none;touch-action:pan-x}
+.detail-tabs::-webkit-scrollbar{display:none}
+.detail-tabs button{height:50px;min-height:50px;flex:0 0 auto;white-space:nowrap;line-height:1.2}

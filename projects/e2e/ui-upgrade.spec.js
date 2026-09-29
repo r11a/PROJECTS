@@ -299,6 +299,24 @@ for(const allDay of [false,true])test(`task scheduling saves ${allDay?'nine-hour
   await expect.poll(()=>reads).toBeGreaterThan(previousReads);await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
+test('task scheduling uses the operational time range, activation type, bounded years and stable horizontal project tabs',async({page})=>{
+  await mockApi(page);await page.setViewportSize({width:390,height:844});
+  await page.goto('/?page=project&project=PRJ-101&tab=overview');
+  const tabs=page.locator('.detail-tabs');
+  const tabStyles=await tabs.evaluate(el=>{const style=getComputedStyle(el);return {overflowX:style.overflowX,overflowY:style.overflowY,scrollbarWidth:style.scrollbarWidth,touchAction:style.touchAction,scrollBehavior:style.scrollBehavior,height:Math.round(el.getBoundingClientRect().height),buttons:[...el.querySelectorAll('button')].map(button=>({whiteSpace:getComputedStyle(button).whiteSpace,height:Math.round(button.getBoundingClientRect().height),scrollHeight:button.scrollHeight}))};});
+  expect(tabStyles.overflowX).toBe('auto');expect(tabStyles.overflowY).toBe('hidden');expect(tabStyles.scrollbarWidth).toBe('none');expect(tabStyles.touchAction).toBe('pan-x');expect(tabStyles.scrollBehavior).toBe('smooth');expect(tabStyles.height).toBeGreaterThanOrEqual(54);
+  expect(tabStyles.buttons.every(button=>button.whiteSpace==='nowrap'&&button.scrollHeight<=button.height)).toBeTruthy();
+
+  await page.goto('/?page=my-work');await page.locator('.next-action-card button').click();
+  const dialog=page.getByRole('dialog');
+  const startTimes=await dialog.getByRole('combobox',{name:'שעת התחלה',exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.value).filter(Boolean));
+  expect(startTimes[0]).toBe('07:00');expect(startTimes.at(-1)).toBe('18:00');expect(startTimes).toHaveLength(23);
+  await expect(dialog.getByRole('combobox',{name:'סוג משימה',exact:true}).locator('option[value="activation"]')).toHaveText('הפעלות');
+  await dialog.locator('label').filter({hasText:'תאריך התחלה'}).getByRole('button',{name:'פתיחת לוח תאריכים'}).click();
+  const years=await page.getByRole('dialog',{name:'בחירת תאריך'}).getByRole('combobox',{name:'שנה',exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.textContent));
+  expect(years[0]).toBe('2023');expect(years.at(-1)).toBe('2040');expect(years).toHaveLength(18);
+});
+
 test('completed supervision task opens the linked project review form',async({page})=>{
   await mockApi(page);
   await page.route('**/api/operations/tasks/41',route=>route.fulfill({json:{task:{...task,version:4,status:'done',task_type:'supervision'}}}));
