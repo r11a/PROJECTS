@@ -76,12 +76,17 @@ async function readWithExcelJs(buffer) {
   await workbook.xlsx.load(buffer);
   return workbook.worksheets.map((sheet) => {
     const rows = [];
-    sheet.eachRow({ includeEmpty: true }, (row) => {
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       const values = [];
-      row.eachCell({ includeEmpty: true }, (cell, index) => { values[index - 1] = cellValue(cell); });
-      rows.push(values);
+      row.eachCell({ includeEmpty: false }, (cell, index) => {
+        const value = cellValue(cell);
+        if (value instanceof Date || String(value ?? '').trim() !== '') values[index - 1] = value;
+      });
+      // Formatting alone can extend to Excel's final row/column. Preserve
+      // coordinates inside the real table, but do not count styled empty cells.
+      if (values.length) rows[rowNumber - 1] = Array.from(values, value => value ?? '');
     });
-    return { name: sheet.name, rows };
+    return { name: sheet.name, rows: Array.from(rows, row => row ?? []) };
   });
 }
 

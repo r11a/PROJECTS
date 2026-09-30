@@ -147,3 +147,9 @@ html[data-theme="dark"] .project-systems-board,html[data-theme="dark"] .project-
 .board-fields-head span.sorted{color:#6957df;background:#eeebff}
 .board-fields-head span.sorted .column-title-sort b::after{content:' ↕';font-size:10px;color:#6957df}
 .theme-dark .board-fields-head span.sorted{color:#b8adff;background:#39334f}
+.project-systems-board .component-name-cell{width:100%;min-width:0;gap:6px}
+.project-systems-board .component-name-cell select{min-width:0;width:100%;flex:1;font:inherit;font-weight:600;color:inherit;border:1px solid transparent;border-radius:8px;padding:7px;background:transparent;cursor:pointer}
+.project-systems-board .component-name-cell select:hover,.project-systems-board .component-name-cell select:focus{border-color:var(--line,#ded9f5);background:var(--surface,#fff)}
+.project-systems-board .component-name-cell .component-details-toggle{width:28px;min-width:28px;flex:0 0 28px;display:grid;place-items:center;padding:4px;color:var(--muted,#79758b)}
+.project-systems-board .component-details-toggle[aria-expanded=true] svg{transform:rotate(180deg)}
+.theme-dark .project-systems-board .component-name-cell select option{background:#252535;color:#f1f0fb}

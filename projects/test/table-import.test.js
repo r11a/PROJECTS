@@ -10,6 +10,25 @@ const fixture=()=>({tables:[{index:0,name:'קומה -2',rows:[['התקנות מ�
 const config=[{index:0,enabled:true,headerRow:1,mapping:{id:0,status:1,notes:2,location:3,type:4},kind:'equipment',systemName:'מצלמות'}];
 const empty=()=>({equipment:[],tasks:[],links:[],systems:[]});
 
+test('XLSX ignores empty formatting at the last Excel row and distant columns without moving source rows',async()=>{
+  const workbook=new ExcelJS.Workbook(),sheet=workbook.addWorksheet('קומה -1');
+  sheet.addRows([['טבלת התקנות'],['id','name'],['C1','מיני'],[],['C2','צינור']]);
+  sheet.getCell('V1048576').fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFF0000'}};
+  sheet.getCell('XFD3').font={bold:true};
+  const parsed=await parseTableFile(Buffer.from(await workbook.xlsx.writeBuffer()),'formatted.xlsx');
+  assert.equal(parsed.tables[0].rows.length,5);assert.equal(parsed.tables[0].rows[2].length,2);
+  const rows=mapTableRows(parsed,parsed.tables);assert.deepEqual(rows.map(r=>[r.id,r.row]),[['C1',3],['C2',5]]);
+});
+
+test('new file adds rows and applies only source updates, preserving local component and installation edits',()=>{
+  const rows=mapTableRows(fixture(),config),baseline=buildImportPlan(rows,empty())[0];
+  const current={id:1,name:'שם מותאם',manufacturer:'',model:'',system_name:'מצלמות',quantity:1,quantity_installed:1,status:'installed',location:baseline.values.location,notes:baseline.values.notes,tag:'-2c1',custom_values:{import_floor:rows[0].floor}};
+  const state={...empty(),equipment:[current],links:[{source_key:'-2c1',equipment_id:1,source_values:baseline.values,overrides:{}}]};
+  const plan=buildImportPlan([{...rows[0],notes:'עדכון מהקובץ'},rows[1]],state);
+  assert.equal(plan[0].status,'changed');assert.deepEqual(plan[0].changes.map(c=>c.field),['notes']);assert.equal(plan[1].status,'new');
+  current.notes='הערה ידנית';assert.equal(buildImportPlan([{...rows[0],notes:'עדכון מהקובץ'}],state)[0].status,'conflict');
+});
+
 test('XLSX and ODS detect multi-row headers, preserve identifiers and exclude summary rows',async()=>{
   const workbook=new ExcelJS.Workbook(),sheet=workbook.addWorksheet('קומה -2');fixture().tables[0].rows.forEach(r=>sheet.addRow(r));
   const parsed=await parseTableFile(Buffer.from(await workbook.xlsx.writeBuffer()),'test.xlsx');

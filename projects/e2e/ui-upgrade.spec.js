@@ -4,6 +4,38 @@ import { test, expect } from '@playwright/test';
 // The real add-on critical paths retain the production service worker.
 test.use({serviceWorkers:'block'});
 
+test('project components can select an existing category item or save a custom name without losing progress',async({page},testInfo)=>{
+  await mockApi(page);let fail=false;
+  const items=[{id:1,catalog_item_id:10,name:'מיני',system_id:8,system_name:'מצלמות',quantity:3,quantity_installed:2,status:'in_progress',tag:'C1',location:'קומה 1'},
+    {id:2,catalog_item_id:20,name:'צינור',system_id:8,system_name:'מצלמות',quantity:1},
+    {id:3,catalog_item_id:30,name:'רמקול',system_id:9,system_name:'אודיו',quantity:1}];
+  await page.route('**/api/projects/PRJ-101/workspace',route=>route.fulfill({json:{tasks:[],milestones:[],payments:[],team:[],equipment:items,forms:[],files:[],updates:[],activity:[],reviews:[],meetings:[],timeEntries:[],priorityOrders:[],systemColumns:[],systemFieldSettings:[]}}));
+  await page.route('**/api/projects/PRJ-101/equipment/1',route=>{
+    const body=route.request().postDataJSON();
+    if(fail)return route.fulfill({status:400,json:{error:'לא ניתן לשמור לבדיקה'}});
+    expect(Object.keys(body)).toHaveLength(1);
+    if(body.catalogItemId){expect(body.catalogItemId).toBe(20);items[0]={...items[0],catalog_item_id:20,name:'צינור'};}
+    else{expect(body.manualName).toBe('מצלמה מותאמת');items[0]={...items[0],catalog_item_id:40,name:body.manualName};}
+    return route.fulfill({json:{equipment:items[0]}});
+  });
+  await page.goto('/?page=project&project=PRJ-101&tab=systems');
+  await page.locator('.project-system-item').filter({hasText:'מצלמות'}).locator('.system-expand').click();
+  const select=page.getByRole('combobox',{name:'רכיב C1',exact:true});await expect(select).toBeVisible();
+  await expect(select.locator('option[value="30"]')).toHaveCount(0);await select.selectOption('20');await expect(select).toHaveValue('20');
+  const row=page.locator('.project-subitem-row').filter({has:select});await expect(row.locator('.status-field select')).toHaveValue('in_progress');
+  await select.selectOption('custom');const dialog=page.getByRole('dialog',{name:'שם רכיב מותאם'});
+  await dialog.getByLabel('שם הרכיב',{exact:true}).fill('מצלמה מותאמת');fail=true;await dialog.getByRole('button',{name:'שמירה',exact:true}).click();
+  await expect(dialog.getByRole('alert')).toContainText('לא ניתן לשמור לבדיקה');await expect(dialog.getByLabel('שם הרכיב',{exact:true})).toHaveValue('מצלמה מותאמת');
+  fail=false;await dialog.getByRole('button',{name:'שמירה',exact:true}).click();await expect(dialog).toHaveCount(0);await expect(select).toHaveValue('40');
+  await page.reload();await page.locator('.project-system-item').filter({hasText:'מצלמות'}).locator('.system-expand').click();await expect(select).toHaveValue('40');
+  await page.screenshot({path:testInfo.outputPath('components-desktop.png')});
+  await page.setViewportSize({width:390,height:844});
+  await page.reload();await page.locator('.project-system-item').filter({hasText:'מצלמות'}).locator('.system-expand').click();
+  await expect(select).toBeVisible();await select.scrollIntoViewIfNeeded();
+  expect(await select.evaluate(el=>{const r=el.getBoundingClientRect();return r.width>=100&&r.left>=0&&r.right<=innerWidth;})).toBeTruthy();
+  await page.screenshot({path:testInfo.outputPath('components-mobile.png')});
+});
+
 test('project creation stays available during background reference refresh',async({page})=>{
   await mockApi(page);await page.goto('/');
   const create=page.getByRole('button',{name:'פרויקט חדש',exact:true});await expect(create).toBeEnabled();

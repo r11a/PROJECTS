@@ -480,11 +480,45 @@ export function createOperationsRouter({ pool, authenticate, requireRoles, audit
   });
 
   router.patch('/projects/:id/equipment/:itemId', requireRoles('admin', 'manager', 'technician'), async (request, response) => {
-    const current = await pool.query('SELECT * FROM project_equipment WHERE id=$1 AND project_id=$2', [request.params.itemId, request.params.id]); if (!current.rowCount) return response.status(404).json({ error: 'הציוד לא נמצא' }); const row=current.rows[0];
+    const db=await pool.connect();let result;
+    try {
+    await db.query('BEGIN');
+    const current = await db.query(`SELECT pe.*,e.manufacturer,e.model,e.unit,
+      COALESCE(pe.project_system_id,CASE WHEN e.item_type IN ('system','system_type') THEN e.id ELSE e.parent_id END) effective_system_id
+      FROM project_equipment pe JOIN equipment_catalog e ON e.id=pe.catalog_item_id
+      WHERE pe.id=$1 AND pe.project_id=$2 FOR UPDATE OF pe`, [request.params.itemId, request.params.id]);
+    if (!current.rowCount) throw Object.assign(new Error('הציוד לא נמצא'),{statusCode:404});
+    const row=current.rows[0];let catalogItemId=row.catalog_item_id;
+    const replacing=request.body.catalogItemId!==undefined||request.body.manualName!==undefined;
+    const invalid=message=>Object.assign(new Error(message),{statusCode:400});
+    if(replacing){
+      if(request.body.projectSystemId!==undefined&&String(request.body.projectSystemId)!==String(row.effective_system_id))throw invalid('יש לבחור רכיב באותה קטגוריה; העברה למערכת מתבצעת בנפרד');
+      if(request.body.catalogItemId!==undefined&&request.body.manualName!==undefined)throw invalid('יש לבחור רכיב מהרשימה או שם מותאם');
+      if(request.body.manualName!==undefined){
+        const name=String(request.body.manualName??'').trim();
+        if(!name||name.length>200)throw invalid('יש להזין שם רכיב באורך עד 200 תווים');
+        if(!row.effective_system_id)throw invalid('יש לשייך את הרכיב לקטגוריה לפני שינוי השם');
+        await db.query(`INSERT INTO equipment_catalog(item_type,parent_id,name,manufacturer,model,unit)
+          VALUES('component',$1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,[row.effective_system_id,name,row.manufacturer||'',row.model||'',row.unit||'יחידה']);
+        const catalog=await db.query("SELECT id FROM equipment_catalog WHERE item_type='component' AND parent_id=$1 AND lower(name)=lower($2) AND active=TRUE",[row.effective_system_id,name]);
+        if(!catalog.rowCount)throw invalid('שם הרכיב קיים בקטלוג לא פעיל; יש לבחור שם אחר');
+        catalogItemId=catalog.rows[0].id;
+      }else{
+        const id=Number(request.body.catalogItemId);
+        if(!Number.isSafeInteger(id)||id<=0)throw invalid('יש לבחור רכיב תקין');
+        const catalog=await db.query(`SELECT e.id FROM project_equipment pe JOIN equipment_catalog e ON e.id=pe.catalog_item_id
+          WHERE pe.project_id=$1 AND e.id=$2 AND e.active=TRUE
+          AND COALESCE(pe.project_system_id,CASE WHEN e.item_type IN ('system','system_type') THEN e.id ELSE e.parent_id END)=$3 LIMIT 1`,[request.params.id,id,row.effective_system_id]);
+        if(!catalog.rowCount)throw invalid('הרכיב אינו קיים בפרויקט באותה קטגוריה');
+        catalogItemId=catalog.rows[0].id;
+      }
+    }
     const rowColor=Object.prototype.hasOwnProperty.call(request.body,'rowColor')?String(request.body.rowColor||''):row.row_color;
     const quantity=Math.max(0,Number(request.body.quantity??row.quantity)||0);let quantityInstalled=Math.max(0,Number(request.body.quantityInstalled??row.quantity_installed)||0);let status=request.body.status??row.status;if(request.body.status!==undefined&&request.body.quantityInstalled===undefined){if(status==='installed')quantityInstalled=quantity;else if(status==='waiting'||status==='planned')quantityInstalled=0;else if(status==='in_progress'&&quantityInstalled===0&&quantity>0)quantityInstalled=1}if(request.body.quantityInstalled!==undefined){quantityInstalled=Math.min(quantity,quantityInstalled);status=quantityInstalled>=quantity&&quantity>0?'installed':quantityInstalled>0?'in_progress':'waiting'}
-    const projectSystemId=Object.prototype.hasOwnProperty.call(request.body,'projectSystemId')?(request.body.projectSystemId||null):row.project_system_id;
-    const result=await pool.query('UPDATE project_equipment SET quantity=$1,location=$2,status=$3,serial_number=$4,notes=$5,quantity_installed=$6,tag=$7,row_color=$8,board_order=$9,custom_values=$10,project_system_id=$11,sku_override=$12,updated_at=NOW() WHERE id=$13 RETURNING *',[quantity,request.body.location??row.location,status,request.body.serialNumber??row.serial_number,request.body.notes??row.notes,quantityInstalled,request.body.tag??row.tag,rowColor,request.body.boardOrder??row.board_order,JSON.stringify(request.body.customValues??row.custom_values??{}),projectSystemId,request.body.sku??row.sku_override,request.params.itemId]);
+    const projectSystemId=Object.prototype.hasOwnProperty.call(request.body,'projectSystemId')?(request.body.projectSystemId||null):replacing?row.effective_system_id:row.project_system_id;
+    result=await db.query('UPDATE project_equipment SET quantity=$1,location=$2,status=$3,serial_number=$4,notes=$5,quantity_installed=$6,tag=$7,row_color=$8,board_order=$9,custom_values=$10,project_system_id=$11,sku_override=$12,catalog_item_id=$13,updated_at=NOW() WHERE id=$14 AND project_id=$15 RETURNING *',[quantity,request.body.location??row.location,status,request.body.serialNumber??row.serial_number,request.body.notes??row.notes,quantityInstalled,request.body.tag??row.tag,rowColor,request.body.boardOrder??row.board_order,JSON.stringify(request.body.customValues??row.custom_values??{}),projectSystemId,request.body.sku??row.sku_override,catalogItemId,request.params.itemId,request.params.id]);
+    await db.query('COMMIT');
+    }catch(error){await db.query('ROLLBACK');throw error;}finally{db.release();}
     await audit(request,'update','project_equipment',request.params.itemId,{projectId:request.params.id}); response.json({equipment:result.rows[0]});
   });
 

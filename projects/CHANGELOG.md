@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.50.1
+
+- Read Excel data without counting empty formatting at distant rows or columns; preserve original row numbers, all sheets and meaningful values.
+- Allow each project equipment row to select another component already used in its category, or save a custom name without renaming shared catalog entries.
+- Keep row identifiers, import links, location, quantities and installation progress during component changes; validate replacements on the server and save them transactionally.
+- Verify that repeat imports preserve local component/progress edits, apply source changes only and require a decision for conflicts.
+
 ## 0.50.0
 
 - Refresh the shared visual system with locally bundled Heebo, consistent primary/secondary buttons, accessible focus states, compact headers, theme-aware colors and reduced motion support.
