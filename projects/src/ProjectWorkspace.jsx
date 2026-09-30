@@ -1,4 +1,3 @@
-import { FileUpload } from "./FileUpload";
 import { stageMeta } from "./data";
 import { prepareUploadImage } from "./features/meetings/prepareUploadImage";
 import { CatalogItemSelect } from "./CatalogItemSelect";
@@ -187,8 +186,6 @@ export function ProjectWorkspace({
     systemFieldSettings: [],
   });
   const [bom,setBom]=useState([]);
-  const [metricsExpanded,setMetricsExpanded]=useState(false);
-  const [quickTask,setQuickTask]=useState(false);
   const tabsRef=useRef(null);
   useEffect(()=>{const strip=tabsRef.current,button=strip?.querySelector('.active');if(button){const container=strip.getBoundingClientRect(),selected=button.getBoundingClientRect();strip.scrollTo({left:strip.scrollLeft+selected.left-container.left-(strip.clientWidth-selected.width)/2,behavior:'instant'});}},[tab]);
   const [mentionUsers,setMentionUsers]=useState([]);
@@ -283,7 +280,7 @@ export function ProjectWorkspace({
       setNotice(result.offlineQueued ? "✓ העדכון נשמר במכשיר ויפורסם לצוות עם חזרת החיבור" : "✓ העדכון פורסם לצוות");
       if (!result.offlineQueued) load();
     } catch (err) {
-      setNotice({type:'error',message:err.message});
+      setNotice({ type: 'error', message: err.message });
     }
   };
   const addTeam = async (e) => {
@@ -303,7 +300,7 @@ export function ProjectWorkspace({
       setNotice("איש הצוות שויך לפרויקט");
       load();
     } catch (err) {
-      setNotice({type:'error',message:err.message});
+      setNotice({ type: 'error', message: err.message });
     }
   };
   const createProfessionalAndAssign=async(e)=>{
@@ -340,7 +337,7 @@ export function ProjectWorkspace({
       if(f.get("manualName"))api("/equipment-catalog").then(result=>setReference(current=>({...current,equipment:result.items}))).catch(()=>{});
       load();
     } catch (err) {
-      setNotice({type:'error',message:err.message});
+      setNotice({ type: 'error', message: err.message });
     }
   };
   const addDocument = async (e) => {
@@ -353,7 +350,7 @@ export function ProjectWorkspace({
       setNotice("המסמך הועלה ושויך לפרויקט");
       load();
     } catch (err) {
-      setNotice({type:'error',message:err.message});
+      setNotice({ type: 'error', message: err.message });
     }
   };
   const uploadRecordFiles=async(files,title,category,relatedEntityType,relatedEntityId)=>{
@@ -461,7 +458,7 @@ export function ProjectWorkspace({
   };
   const tabs = [
     ["overview", "סקירה"],
-    ["tasks", "משימות"],
+    ["tasks", "משימות ואבני דרך"],
     ["gantt", "גאנט"],
     ["reviews", "ביקורות ופגישות"],
     ["hours", "שעות עבודה"],
@@ -470,7 +467,7 @@ export function ProjectWorkspace({
     ["priority", "הזמנות Priority"],
     ["forms", "קבצים ומסמכים"],
     ["finance", "כספים"],
-    ["activity", "פעילות"],
+    ["activity", "פעילות, שינויים ובקרה"],
   ].filter(([key])=>key!=="finance"||user.financeAccess!==false);
   return (
     <div className="project-detail project-workspace">
@@ -499,8 +496,7 @@ export function ProjectWorkspace({
             </p>
           </div>
         </div>
-        <div className="project-quick-actions">{canEdit&&<details className="project-add-menu"><summary className="primary-button"><Plus size={16}/>הוספה לפרויקט</summary><div><button onClick={event=>{event.currentTarget.closest('details').open=false;setQuickTask(true);}}>משימה</button><button onClick={event=>{event.currentTarget.closest('details').open=false;setEditingReview(null);setReviewDraft({summary:'',followUp:''});setModal('review');}}>ביקורת</button><button onClick={event=>{event.currentTarget.closest('details').open=false;setEditingMeeting(null);setModal('meeting');}}>סיכום פגישה</button><button onClick={event=>{event.currentTarget.closest('details').open=false;setTab('hours');}}>דיווח שעות</button><button onClick={event=>{event.currentTarget.closest('details').open=false;setTab('systems');}}>רכיבים וייבוא</button><button onClick={event=>{event.currentTarget.closest('details').open=false;setTab('forms');}}>קבצים</button></div></details>}<button type="button" className="secondary-button" aria-expanded={metricsExpanded} onClick={()=>setMetricsExpanded(!metricsExpanded)}>{metricsExpanded?'פחות פרטים':'פרטים נוספים'}<ChevronDown size={16}/></button></div>
-        <div className={`hero-metrics ${metricsExpanded?'expanded':'compact'}`}>
+        <div className="hero-metrics">
           <div>
             <span>שלב נוכחי</span>
             <select
@@ -595,12 +591,10 @@ export function ProjectWorkspace({
           <div><span>שעות עבודה</span><strong>{totalHours.toFixed(1)}</strong><small>{targetHours?`מתוך ${targetHours} שעות יעד`:'מדידה שוטפת'}</small></div>
         </div>
       </div>
-      <div className="project-tab-navigation"><div className="detail-tabs" ref={tabsRef} aria-label="לשוניות הפרויקט">
+      <div className="detail-tabs" ref={tabsRef}>
         {tabs.map(([id, label]) => (
           <button
             className={tab === id ? "active" : ""}
-            aria-pressed={tab === id}
-            title={id==='activity'?'פעילות, שינויים ובקרה':label}
             key={id}
             onClick={() => setTab(id)}
           >
@@ -609,20 +603,19 @@ export function ProjectWorkspace({
           </button>
         ))}
       </div>
-      <label className="project-tab-jump"><span>מעבר אל</span><select aria-label="מעבר ללשונית בפרויקט" value={tab} onChange={event=>setTab(event.target.value)}>{tabs.map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label></div>
-      {quickTask&&<TaskEditor api={api} setNotice={setNotice} projects={[project]} professionals={professionals} tasks={workspace.tasks} fixedProjectId={project.id} initial={{title:'',projectId:project.id,taskType:'task',status:'open',priority:'normal',startDate:localDateValue(),dueDate:localDateValue(),description:''}} onClose={()=>setQuickTask(false)} onSave={async value=>{const result=await api('/operations/tasks',{method:'POST',body:JSON.stringify({...value,projectId:project.id})});setNotice(result.offlineQueued?'נשמר במכשיר · ממתין לסנכרון':'המשימה נוצרה');load();return result;}}/>}
       {tab === "hours" && (
         <ProjectHoursPanel project={project} entries={workspace.timeEntries || []} professionals={professionals} api={api} setNotice={setNotice} onDone={load} canEdit={canEdit}/>
       )}
       {tab === "activity" && <ProjectGovernancePanel project={project} api={api} user={user} setNotice={setNotice}/>}
       {tab === "overview"&&<div className="project-overview-snapshot">
-        <section className="panel overview-summary-table"><header><div><h3>תמונת מצב הפרויקט</h3></div><button className="overview-manage-link" onClick={()=>setTab('tasks')}>ניהול משימות</button></header><div className="overview-data-grid">
+        <section className="panel overview-summary-table"><header><div><span className="overview-eyebrow">סקירה ניהולית</span><h3>תמונת מצב הפרויקט</h3><span>המידע החשוב לקבלת החלטה מהירה</span></div><button className="overview-manage-link" onClick={()=>setTab('tasks')}>ניהול משימות</button></header><div className="overview-progress-strip"><article><span>התקדמות הפרויקט</span><strong>{project.progress}%</strong><div><i style={{width:`${project.progress}%`}}/></div></article><article><span>השלמת משימות</span><strong>{taskProgress}%</strong><div><i style={{width:`${taskProgress}%`}}/></div></article><article><span>התקנת ציוד</span><strong>{installationProgress}%</strong><div><i style={{width:`${installationProgress}%`}}/></div></article></div><div className="overview-data-grid">
           <div><span>סיווג</span><strong>{project.projectCategory==='other'?(project.projectCategoryCustom||'אחר'):'בית חכם'} · {project.projectClassification||'בית פרטי'}</strong></div>
           <div><span>כתובת</span><strong>{project.address||'לא הוגדרה'}</strong></div><div><span>פרטי גישה</span><strong>{[project.floor && `קומה ${project.floor}`,project.apartmentNumber && `דירה ${project.apartmentNumber}`,project.entranceCode && `קוד כניסה ${project.entranceCode}`].filter(Boolean).join(" · ") || "לא הוגדרו"}</strong></div>
           <div><span>שלב נוכחי</span><strong>{stageOptions.find((item)=>(item.metadata?.key||item.name)===project.stage)?.name||stageMeta[project.stage]?.label||project.stage}</strong></div>
           <div><span>התקדמות קבלן</span><strong>{({waiting:'בהמתנה',infrastructure_paving:'סלילת תשתיות',drywall_paint:'עבודות גבס וצבע',carpentry:'הרכבות נגרות',finishing:'עבודות גמר',stopped:'בעצירה'})[project.contractorProgress]||'בהמתנה'}</strong></div>
           <div><span>מנהל פרויקט</span><strong>{project.manager||'לא הוקצה'}</strong></div>
-
+          <div><span>משימות</span><strong>{completed} הושלמו מתוך {workspace.tasks.length}</strong></div>
+          <div><span>שעות עבודה</span><strong>{totalHours.toFixed(1)}{targetHours?` מתוך ${targetHours}`:''}</strong></div>
           {user.financeAccess!==false&&<div><span>קצב גבייה</span><strong>{project.value?Math.round(project.paid/project.value*100):0}% · {money.format(due)} יתרה</strong></div>}
         </div><div className="overview-action-summary"><button onClick={()=>setTab('tasks')}><strong>{openTasks}</strong><span>משימות פתוחות</span></button><button onClick={()=>setTab('systems')}><strong>{equipmentInstalled}/{equipmentTotal}</strong><span>רכיבים הותקנו</span></button><button onClick={()=>setTab('hours')}><strong>{totalHours.toFixed(1)}</strong><span>שעות שדווחו</span></button></div></section>
         <section className="panel overview-contacts-table"><header><div><span className="overview-eyebrow">אנשים בפרויקט</span><h3>לקוח וצוות</h3></div><span>{1+workspace.team.length+(workspace.contacts||[]).length} משויכים</span></header><div className="overview-contact-rows"><div><span className="resource-avatar">{project.client?.slice(0,2)}</span><strong>{project.client}</strong><small>לקוח</small>{project.phone?<a href={`tel:${project.phone}`}>{project.phone}</a>:<i>—</i>}{project.email?<a href={`mailto:${project.email}`}>{project.email}</a>:<i>—</i>}</div>{(workspace.contacts||[]).map((contact)=><div key={`contact-${contact.id}`}><span className="resource-avatar">{contact.name?.slice(0,2)}</span><strong>{contact.name}</strong><small>{contact.role_name || ({architect:"אדריכל",electrician:"חשמלאי",supervisor:"מפקח",contractor:"קבלן",designer:"מעצב פנים",other:"אחר"})[contact.role] || contact.role || "איש קשר"}{contact.company ? ` · ${contact.company}` : ""}</small>{contact.phone?<a href={`tel:${contact.phone}`}>{contact.phone}</a>:<i>—</i>}{contact.email?<a href={`mailto:${contact.email}`}>{contact.email}</a>:<i>—</i>}</div>)}{workspace.team.map((person)=><div key={`${person.professional_id}-${person.role_type_id}`}><span className="resource-avatar" style={{background:person.color}}>{person.display_name?.slice(0,2)}</span><strong>{person.display_name}</strong><small>{person.role_name}</small>{person.phone?<a href={`tel:${person.phone}`}>{person.phone}</a>:<i>—</i>}{person.email?<a href={`mailto:${person.email}`}>{person.email}</a>:<i>—</i>}</div>)}</div><button className="overview-team-action" onClick={()=>setTab('team')}>ניהול צוות הפרויקט</button></section>
@@ -699,6 +692,42 @@ export function ProjectWorkspace({
             </div>
           </div>
           <div className="detail-side">
+            <div className="panel contact-card">
+              <div className="panel-head">
+                <div>
+                  <h3>פרטי לקוח</h3>
+                </div>
+              </div>
+              <div className="contact-person">
+                <div className="client-avatar">
+                  {project.client.slice(0, 2)}
+                </div>
+                <div>
+                  <strong>{project.client}</strong>
+                  <span>לקוח ראשי</span>
+                </div>
+              </div>
+              {project.phone && (
+                <a href={`tel:${project.phone}`}>
+                  <Phone size={16} />
+                  {project.phone}
+                </a>
+              )}
+              {project.email && (
+                <a href={`mailto:${project.email}`}>
+                  <Mail size={16} />
+                  {project.email}
+                </a>
+              )}
+              {workspace.team.slice(0,4).map((person)=><a key={`${person.professional_id}-${person.role_type_id}`} href={person.phone?`tel:${person.phone}`:undefined}><UserRound size={16}/><span><strong>{person.display_name}</strong> · {person.role_name}</span></a>)}
+              <p>
+                <MapPin size={16} />
+                {project.address}
+              </p>
+              <button onClick={() => setPage("clients")}>
+                פתיחת מאגר הלקוחות
+              </button>
+            </div>
             {user.financeAccess!==false&&<div className="panel money-summary">
               <div className="panel-head">
                 <div>
@@ -941,7 +970,7 @@ export function ProjectWorkspace({
           </section>
         </div>
       )}
-      {modal==='review'&&<Modal title={editingReview?'עריכת ביקורת אתר':'ביקורת אתר חדשה'} onClose={()=>{if(!recordBusy.current){setEditingReview(null);setReviewFromTask(false);setModal('')}}}><form className="work-form execution-record-form" onSubmit={addReview}>{reviewFromTask&&<p className="wide">שעות המשימה כבר נרשמו. הוסיפו כאן רק שעות פיקוח נוספות כדי למנוע ספירה כפולה.</p>}<label>תאריך פיקוח<DateInput type="date" name="reviewDate" required defaultValue={String(editingReview?.review_date||localDateValue()).slice(0,10)}/></label><label>סוג פיקוח<input name="supervisionType" defaultValue={editingReview?.supervision_type||''} placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy" defaultValue={editingReview?.performed_by||''}><option value="">בחירת עובד חברה</option>{professionals.filter(x=>x.active&&x.affiliation==='company').map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.5" placeholder="0" defaultValue={0}/></label><div className="wide"><SmartTextArea api={api} value={reviewDraft.summary} onChange={(summary)=>setReviewDraft((current)=>({...current,summary}))} setNotice={setNotice} label="ממצאים וסיכום" textareaProps={{name:'summary',required:true,rows:5}}/></div><div className="wide"><SmartTextArea api={api} value={reviewDraft.followUp} onChange={(followUp)=>setReviewDraft((current)=>({...current,followUp}))} setNotice={setNotice} label="המשך טיפול" textareaProps={{name:'followUp',rows:3}}/></div><div className="wide"><VoiceNotes api={api} apiRoot={apiRoot} entityType="site_review_draft" entityId={reviewVoiceContext} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></div><div className="wide"><FileUpload label="תמונות, סקיצה או תכנית מעודכנת" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></div><label className="wide check-label"><input type="checkbox" name="planUpdateRequired" defaultChecked={Boolean(editingReview?.plan_update_required)}/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">{editingReview?'שמירת שינויים':'שמירת ביקורת'}</button></div></form></Modal>}
+      {modal==='review'&&<Modal title={editingReview?'עריכת ביקורת אתר':'ביקורת אתר חדשה'} onClose={()=>{if(!recordBusy.current){setEditingReview(null);setReviewFromTask(false);setModal('')}}}><form className="work-form execution-record-form" onSubmit={addReview}>{reviewFromTask&&<p className="wide">שעות המשימה כבר נרשמו. הוסיפו כאן רק שעות פיקוח נוספות כדי למנוע ספירה כפולה.</p>}<label>תאריך פיקוח<DateInput type="date" name="reviewDate" required defaultValue={String(editingReview?.review_date||localDateValue()).slice(0,10)}/></label><label>סוג פיקוח<input name="supervisionType" defaultValue={editingReview?.supervision_type||''} placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy" defaultValue={editingReview?.performed_by||''}><option value="">בחירת עובד חברה</option>{professionals.filter(x=>x.active&&x.affiliation==='company').map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.5" placeholder="0" defaultValue={0}/></label><div className="wide"><SmartTextArea api={api} value={reviewDraft.summary} onChange={(summary)=>setReviewDraft((current)=>({...current,summary}))} setNotice={setNotice} label="ממצאים וסיכום" textareaProps={{name:'summary',required:true,rows:5}}/></div><div className="wide"><SmartTextArea api={api} value={reviewDraft.followUp} onChange={(followUp)=>setReviewDraft((current)=>({...current,followUp}))} setNotice={setNotice} label="המשך טיפול" textareaProps={{name:'followUp',rows:3}}/></div><div className="wide"><VoiceNotes api={api} apiRoot={apiRoot} entityType="site_review_draft" entityId={reviewVoiceContext} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></div><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired" defaultChecked={Boolean(editingReview?.plan_update_required)}/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">{editingReview?'שמירת שינויים':'שמירת ביקורת'}</button></div></form></Modal>}
       {modal==='meeting'&&<MeetingSummaryForm api={api} apiRoot={apiRoot} project={project} professionals={professionals} setNotice={setNotice} initial={editingMeeting} onClose={()=>{if(!recordBusy.current){setEditingMeeting(null);setModal('')}}} onSubmit={addMeeting}/>}
       {selectedExecution&&<Modal title={selectedExecution.kind==='meeting'?'סיכום פגישה':'ביקורת אתר'} subtitle={selectedExecution.kind==='meeting'?new Date(selectedExecution.meeting_at).toLocaleString('he-IL'):dateText(selectedExecution.review_date)} onClose={()=>setSelectedExecution(null)}><div className="execution-detail"><header><strong>{selectedExecution.performed_by_name||selectedExecution.created_by_name||'לא צוין מי ביצע'}</strong>{selectedExecution.attendees&&<span>נוכחים: {selectedExecution.attendees}</span>}</header><section><h3>סיכום</h3><p>{selectedExecution.summary}</p></section>{selectedExecution.follow_up&&<section><h3>המשך טיפול</h3><p>{selectedExecution.follow_up}</p></section>}<ExecutionMedia files={workspace.files} entityType={selectedExecution.kind==='meeting'?'meeting_summary':'site_review'} entityId={selectedExecution.id} apiRoot={apiRoot} onPreview={setPreviewFile}/><VoiceNotesToggle api={api} apiRoot={apiRoot} entityType={selectedExecution.kind==='meeting'?'meeting':'site_review'} entityId={selectedExecution.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></div></Modal>}
       {modal === "team" && (

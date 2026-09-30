@@ -203,7 +203,6 @@ import "./modal-system.css";
 import "./productivity.css";
 import "./responsive-unified.css";
 import "./theme-dark.css";
-import "./ui-system.css";
 import projectsMark from "./assets/projects-mark.svg";
 
 const money = new Intl.NumberFormat("he-IL", {
@@ -2135,9 +2134,6 @@ function SystemPage({ setNotice }) {
 }
 
 function Dashboard({ api, projects, openProject, setPage, insights, insightsRefreshing, onRefreshInsights, user }) {
-  const displayKey=`projects:dashboard-display:${user.id}`;
-  const [display,setDisplay]=useState(()=>{try{return {metrics:true,charts:true,...JSON.parse(localStorage.getItem(displayKey)||'{}')};}catch{return {metrics:true,charts:true};}});
-  const changeDisplay=(key,value)=>{const next={...display,[key]:value};setDisplay(next);try{localStorage.setItem(displayKey,JSON.stringify(next));}catch{}};
   const [insightsOpen,setInsightsOpen]=useState(false);
   const [insightsBusy,setInsightsBusy]=useState(false);
   const active = projects.filter((p) => p.stage !== "completed");
@@ -2172,10 +2168,10 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
       <section className="welcome-row">
         <div>
           <span className="workspace-eyebrow">סביבת הניהול שלך <span> / </span> {new Date().toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'})}</span>
-          <h2><span className="welcome-accent">תמונה אחת ברורה.</span></h2>
+          <h2>כל הפרויקטים.<br/><span className="welcome-accent">תמונה אחת ברורה.</span></h2>
+          <p>שלום {user.displayName}, הנה מה שמתקדם ומה שדורש את תשומת הלב שלך.</p>
         </div>
         <div className="welcome-actions">
-          <details className="dashboard-display-options"><summary><SlidersHorizontal size={16}/>התאמת תצוגה</summary><div><label><input type="checkbox" checked={display.metrics} onChange={e=>changeDisplay('metrics',e.target.checked)}/>הצגת מדדים</label><label><input type="checkbox" checked={display.charts} onChange={e=>changeDisplay('charts',e.target.checked)}/>הצגת גרפים ותכנון</label></div></details>
           <button
             className={`dashboard-task-button ${insights?.stats?.overdue > 0 ? "urgent" : ""}`}
             onClick={() => setPage("tasks")}
@@ -2199,8 +2195,8 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
         {userCanAccess(user,'my-work') && <button className="command-card" onClick={() => setPage('my-work')}><span className="command-card-icon"><CheckCircle2 size={23}/></span><span className="workspace-eyebrow">הפוקוס שלך</span><strong>העבודה שלי</strong><span>משימות, חסמים והצעד הבא שלך.</span><span className="command-card-link">לסדר היום האישי <ArrowLeft size={16}/></span></button>}
         {userCanAccess(user,'tasks') && <button className="command-card attention" onClick={() => setPage('tasks')}><span className="command-card-icon"><Clock3 size={23}/></span><span className="workspace-eyebrow">דורש טיפול</span><strong>{insights ? (insights.stats?.overdue || 0) : '—'} <small>משימות באיחור</small></strong><span>{insights?.stats?.overdue ? 'זה הזמן לבדוק מה מעכב את ההתקדמות.' : 'בדיקת המשימות והתאריכים במקום אחד.'}</span><span className="command-card-link">למרכז המשימות <ArrowLeft size={16}/></span></button>}
       </section>
-      <div className="dashboard-section-title" hidden={!display.metrics}><div><strong>מדדים מרכזיים</strong></div></div>
-      <section className="kpi-grid" hidden={!display.metrics}>
+      <div className="dashboard-section-title"><div><span>01</span><strong>מדדים מרכזיים</strong></div><small>תמונה מהירה של מצב כלל הפרויקטים</small></div>
+      <section className="kpi-grid">
         <KpiCard
           icon={FolderKanban}
           tone="purple"
@@ -2235,7 +2231,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
           onClick={() => setPage("finance")}
         />}
       </section>
-      <div className="dashboard-section-title"><div><strong>דורש תשומת לב</strong></div></div>
+      <div className="dashboard-section-title"><div><span>02</span><strong>דורש תשומת לב</strong></div><small>חריגות, סיכונים ופעולות שכדאי לקדם עכשיו</small></div>
       <section className="dashboard-priority-zone"><RiskCenter api={api} projects={projects} openProject={openProject}/></section>
       <section className="dashboard-grid top">
         {projects.some((p) => p.flag) && <div className="panel portfolio-panel">
@@ -2295,8 +2291,8 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
           </div>
         </div>}
       </section>
-      <div className="dashboard-section-title" hidden={!display.charts}><div><strong>תכנון וביצוע</strong></div></div>
-      <section hidden={!display.charts} className={`dashboard-grid bottom planning-overview ${canViewFinance ? "" : "without-finance"}`}>
+      <div className="dashboard-section-title"><div><span>03</span><strong>תכנון וביצוע</strong></div><small>מגמות כספיות והמשימות הקרובות</small></div>
+      <section className={`dashboard-grid bottom planning-overview ${canViewFinance ? "" : "without-finance"}`}>
         <div className="panel stage-panel">
           <PanelHead title="התפלגות לפי שלב" subtitle="כלל הפרויקטים" />
           <div className="stage-chart-wrap">
@@ -3867,7 +3863,7 @@ function NewProjectModal({
   );
   if (step === 1)
     return (
-      <AppModal title="לקוח וזהות הפרויקט" subtitle="פרויקט חדש · 1 מתוך 3" className="project-wizard" onClose={onClose} busy={projectSaving}>
+      <AppModal title="לקוח וזהות הפרויקט" subtitle="אשף פרויקט חדש · שלב 1 מתוך 3" className="project-wizard" onClose={onClose} busy={projectSaving}>
           <div className="wizard-progress">
             <i style={{ width: "33.333%" }} />
           </div>
@@ -4028,7 +4024,7 @@ function NewProjectModal({
       </AppModal>
     );
   return (
-    <AppModal title={step===2?'ניהול ולוחות זמנים':'מערכות וסקירה'} subtitle={`פרויקט חדש · ${step} מתוך 3`} className="project-wizard" onClose={onClose} busy={projectSaving}>
+    <AppModal title={step===2?'ניהול ולוחות זמנים':'מערכות וסקירה'} subtitle={`אשף פרויקט חדש · שלב ${step} מתוך 3`} className="project-wizard" onClose={onClose} busy={projectSaving}>
         <div className="wizard-progress">
           <i style={{ width: `${(step / 3) * 100}%` }} />
         </div>

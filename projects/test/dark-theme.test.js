@@ -4,12 +4,12 @@ import {readFile} from 'node:fs/promises';
 
 const read=(path)=>readFile(new URL(`../${path}`,import.meta.url),'utf8');
 
-test('the dark theme follows feature styles, with the shared theme-aware system last',async()=>{
+test('the restored dark theme remains the final visual stylesheet',async()=>{
   const app=await read('src/App.jsx');
   const darkImport=app.lastIndexOf('import "./theme-dark.css"');
   assert.ok(darkImport>0);
-  assert.deepEqual(app.slice(darkImport).match(/import\s+["'][^"']+\.css["']/g),['import "./theme-dark.css"','import "./ui-system.css"']);
-  assert.match(await read('src/ui-system.css'), /:root\[data-projects-theme='dark'\]/);
+  assert.deepEqual(app.slice(darkImport).match(/import\s+["'][^"']+\.css["']/g),['import "./theme-dark.css"']);
+  assert.ok(!app.includes('ui-system.css'));
   assert.match(app,/document\.body\.classList\.add\("theme-dark"\)/);
   assert.match(app,/document\.body\.classList\.remove\("theme-dark"\)/);
 });

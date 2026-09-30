@@ -314,7 +314,6 @@ export function TaskEditor({
           יום מלא · 9 שעות עבודה
         </label>}
         </div>
-        {!isMilestone&&<p className="wide task-schedule-summary"><Clock3 size={16}/><span>{(form.allDay??form.all_day)?'יום מלא · 9 שעות':`${form.startTime??form.start_time??'ללא שעת התחלה'}${(form.endTime??form.end_time)?`–${form.endTime??form.end_time}`:''} · ${form.durationHours??form.duration_hours??form.estimatedHours??0} שעות`}<small>בהשלמה, שעות המשימה יירשמו בבנק השעות.</small></span></p>}
         <label>
           סטטוס
           <select
@@ -377,7 +376,6 @@ export function TaskEditor({
               <label className="task-assignee-search" data-no-dirty><Search size={16}/><input value={assigneeSearch} onChange={(event)=>setAssigneeSearch(event.target.value)} placeholder="חיפוש מבצע לפי שם או תפקיד"/></label>
               <div>{eligibleProfessionals.map((p) => {const selected=(form.assigneeProfessionalIds || form.assignees?.map((item)=>String(item.id)) || [form.assigneeProfessionalId || form.assignee_professional_id]).map(String).includes(String(p.id));return <label key={p.id}><input type="checkbox" checked={selected} onChange={(event)=>{const current=(form.assigneeProfessionalIds || form.assignees?.map((item)=>String(item.id)) || [form.assigneeProfessionalId || form.assignee_professional_id]).filter(Boolean).map(String);setForm({...form,assigneeProfessionalIds:event.target.checked?[...new Set([...current,String(p.id)])]:current.filter((id)=>id!==String(p.id))})}}/><span style={{'--avatar-color':p.color||'#6957df'}}>{p.avatarImage?<img src={p.avatarImage} alt=""/>:(p.displayName||'א').slice(0,2)}</span><b>{p.displayName}</b><small>{p.jobTitle || p.roles?.[0]?.name || "איש מקצוע"}</small></label>})}</div>
             </fieldset>
-            <details className="wide task-extra-fields"><summary>עדיפות · {taskPriority[form.priority]||'רגילה'}{form.critical?' · קריטית':''}</summary><div className="work-form">
             <label>
               עדיפות
               <select
@@ -394,11 +392,11 @@ export function TaskEditor({
               <input type="checkbox" checked={Boolean(form.critical)} onChange={(e)=>setForm({...form,critical:e.target.checked})}/>
               משימה קריטית
             </label>
-            </div></details>
+
           </>
         )}
         {!isMilestone && (
-          <details className="wide task-extra-fields"><summary>תלות ומשימת אב</summary><div className="work-form">
+          <>
           <label>
             תלויה במשימה
             <select
@@ -429,7 +427,7 @@ export function TaskEditor({
               {tasks.filter((item) => item.id !== initial?.id && item.project_id === (form.projectId || initial?.project_id) && !item.parent_task_id).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
             </select>
           </label>
-          </div></details>
+          </>
         )}
         <div className="wide"><SmartTextArea api={api} value={form.description||""} onChange={(description)=>setForm({...form,description})} setNotice={setNotice} label="הנחיות והערות" textareaProps={{placeholder:'מידע שיאפשר לאחראי לבצע בלי צורך בבירור נוסף'}}/></div>
         <div className="wide form-actions">
@@ -744,7 +742,7 @@ export function TasksWorkspace({
         )}
       </div>
       {tab === "tasks" && (
-        <details className="task-filter-shell"><summary><ListFilter size={17}/>סינון{activeFilterCount>0?` · ${activeFilterCount} פעילים`:""}</summary><section className="task-filter-bar" aria-label="סינון מתקדם למשימות">
+        <section className="task-filter-bar" aria-label="סינון מתקדם למשימות">
           <div className="task-filter-heading"><ListFilter size={17}/><span>מיקוד מהיר</span>{activeFilterCount > 0 && <em>{activeFilterCount}</em>}</div>
           <select value={priority} onChange={(event) => setPriority(event.target.value)} aria-label="קדימות">
             <option value="">כל הקדימויות</option>
@@ -772,7 +770,7 @@ export function TasksWorkspace({
           <button type="button" className={filtersPinned ? "filter-pin active" : "filter-pin"} onClick={togglePinnedFilters} title={filtersPinned ? "ביטול זכירת הסינון" : "זכירת הסינון לפעם הבאה"}>📌</button>
           {activeFilterCount > 0 && <button type="button" onClick={clearFilters}>ניקוי סינון</button>}
           <small>{visibleTasks.length} מתוך {tasks.length} משימות</small>
-        </section></details>
+        </section>
       )}
       <div className="work-list panel">
         {tab === "tasks" && items.length > 0 && <div className="work-table-head"><span>משימה ופרויקט</span><span>קדימות</span><span>אחראי</span><span>מבצע</span><span>מנהל פרויקט</span><span>תאריך סיום</span><span/></div>}

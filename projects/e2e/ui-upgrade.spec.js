@@ -66,29 +66,25 @@ test('0.50 protects edited tasks, keeps failures visible and closes only after s
   await expect(dialog).toHaveCount(0);
 });
 
-test('0.50 project opens compactly and exposes every tab without document overflow',async({page})=>{
-  await mockApi(page);await page.setViewportSize({width:390,height:844});
-  await page.goto('/?page=project&project=PRJ-101');
-  const tabs=page.locator('.detail-tabs');await expect(tabs).toBeVisible();
-  expect(await tabs.evaluate(el=>el.getBoundingClientRect().bottom)).toBeLessThan(650);
-  await expect(page.getByLabel('מעבר ללשונית בפרויקט')).toBeVisible();
-  await page.getByLabel('מעבר ללשונית בפרויקט').selectOption('tasks');
-  await expect(page.locator('.detail-tabs button.active')).toContainText('משימות');
-  await page.getByLabel('מעבר ללשונית בפרויקט').selectOption('activity');
-  await expect.poll(()=>tabs.evaluate(el=>{const r=el.getBoundingClientRect(),active=el.querySelector('.active').getBoundingClientRect();return active.left>=r.left-1&&active.right<=r.right+1;})).toBeTruthy();
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+test('restored project layout shows the full metrics, overview and original tab names',async({page})=>{
+  await mockApi(page);await page.goto('/?page=project&project=PRJ-101');
+  await expect(page.locator('.hero-metrics>div')).toHaveCount(7);
+  for(const metric of await page.locator('.hero-metrics>div').all())await expect(metric).toBeVisible();
+  await expect(page.locator('.overview-progress-strip')).toBeVisible();
+  await expect(page.locator('.contact-card')).toHaveCount(1);
+  await expect(page.locator('.detail-tabs').getByRole('button',{name:/משימות ואבני דרך/})).toBeVisible();
+  await expect(page.locator('.project-add-menu,.project-tab-jump')).toHaveCount(0);
 });
 
-test('0.50 dashboard preferences persist per user',async({page})=>{
-  await mockApi(page);await page.goto('/');
-  await page.getByText('התאמת תצוגה',{exact:true}).click();
-  await page.getByLabel('הצגת מדדים').uncheck();
-  await expect(page.locator('.kpi-grid')).toBeHidden();
-  await page.reload();await expect(page.locator('.command-overview')).toBeVisible();
-  await expect(page.locator('.kpi-grid')).toBeHidden();
+test('restored dashboard keeps the original heading and all sections despite newer display preferences',async({page})=>{
+  await mockApi(page);await page.addInitScript(()=>localStorage.setItem('projects:dashboard-display:1',JSON.stringify({metrics:false,charts:false})));
+  await page.goto('/');await expect(page.locator('.welcome-row h2')).toContainText('כל הפרויקטים.');
+  await expect(page.locator('.welcome-row p')).toContainText('שלום');
+  await expect(page.locator('.kpi-grid')).toBeVisible();await expect(page.locator('.planning-overview')).toBeVisible();
+  await expect(page.locator('.dashboard-display-options')).toHaveCount(0);
 });
 
-test('0.50 custom date edits are protected and quick-add uses current project task links',async({page})=>{
+test('custom date edits remain protected after restoring the prior layout',async({page})=>{
   await mockApi(page);await page.goto('/?page=project&project=PRJ-101&tab=reviews');
   await page.getByRole('button',{name:'ביקורת',exact:true}).click();
   await page.getByRole('dialog').getByRole('button',{name:'פתיחת לוח תאריכים'}).click();
@@ -97,9 +93,7 @@ test('0.50 custom date edits are protected and quick-add uses current project ta
   await calendar.getByRole('button',{name:'10/01/2027',exact:true}).click();
   await page.keyboard.press('Escape');await expect(page.getByText('יש שינויים שלא נשמרו',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'יציאה ללא שמירה',exact:true}).click();
-  await page.locator('.project-add-menu>summary').click();await page.locator('.project-add-menu').getByRole('button',{name:'משימה',exact:true}).click();
-  const dialog=page.getByRole('dialog');await dialog.getByText('תלות ומשימת אב',{exact:true}).click();
-  await expect(dialog.getByRole('combobox',{name:'תלויה במשימה',exact:true}).locator('option[value="41"]')).toHaveText(task.title);
+
 });
 
 test('0.50 mobile task notes remain reachable above the sticky save actions',async({page})=>{
@@ -112,7 +106,7 @@ test('0.50 mobile task notes remain reachable above the sticky save actions',asy
   await notes.fill('הערות שניתן לקרוא ולערוך');
 });
 
-test('0.50 import hides unchanged rows, pages large plans and never commits while reviewing',async({page})=>{
+test('restored import keeps all comparison rows and never commits while reviewing',async({page})=>{
   await mockApi(page);let commits=0;
   await page.route('**/api/table-import/inspect',route=>route.fulfill({json:{previewId:'large',tables:[{index:0,name:'ציוד',enabled:true,kind:'equipment',headerRow:0,mapping:{id:0,name:1},rows:[['id','name'],['1','מצלמה']],systemName:'מצלמות'}],projects,systems:[],fields:{id:'מזהה',name:'שם'},warnings:[],detection:{suggested:'PRJ-101',matches:[projects[0]]}}}));
   const plan=Array.from({length:86},(_,i)=>({key:String(i),id:`item-${i}`,name:'מצלמה',kind:'equipment',sheet:'ציוד',row:i+2,status:i<5?'unchanged':'new',changes:[],conflicts:[],systemName:'מצלמות'}));
@@ -121,11 +115,9 @@ test('0.50 import hides unchanged rows, pages large plans and never commits whil
   await page.goto('/?page=project&project=PRJ-101&tab=systems');await page.getByRole('button',{name:'ייבוא טבלה וקובץ לפרויקט',exact:true}).click();
   await page.getByLabel('קובץ לייבוא',{exact:true}).setInputFiles({name:'large.csv',mimeType:'text/csv',buffer:Buffer.from('id,name\n1,Camera')});
   await page.getByRole('button',{name:'בדיקה והצעת מיפוי',exact:true}).click();await page.getByRole('button',{name:'הצגת השינויים לפני אישור',exact:true}).click();
-  await expect(page.locator('.table-import-row')).toHaveCount(40);await expect(page.locator('.table-import-row.unchanged')).toHaveCount(0);
-  const pages=page.getByRole('navigation',{name:'עמודי השוואה'});
-  await pages.getByRole('button',{name:'הבא',exact:true}).click();await expect(page.locator('.table-import-row')).toHaveCount(40);
-  await pages.getByRole('button',{name:'הבא',exact:true}).click();await expect(page.locator('.table-import-row')).toHaveCount(1);
-  await expect(pages.getByRole('button',{name:'הבא',exact:true})).toBeDisabled();expect(commits).toBe(0);
+  await expect(page.locator('.table-import-row')).toHaveCount(86);
+  await page.getByRole('button',{name:'5 ללא שינוי',exact:true}).click();
+  await expect(page.locator('.table-import-row')).toHaveCount(5);expect(commits).toBe(0);
 });
 
 test('0.50 calendar remembers its view and date picker supports RTL keyboard navigation',async({page})=>{
@@ -175,7 +167,6 @@ test('dynamic import highlights a detected project, maps multiple sheets, edits 
   await expect(dialog.locator('.table-import-mapping>details')).toHaveCount(2);expect(commits).toBe(0);
   await page.getByRole('button',{name:'הצגת השינויים לפני אישור',exact:true}).click();
   await page.getByLabel('סיכום רכיבים זהים לפי קומה').check();await expect(dialog.locator('.equipment-floor-groups summary')).toHaveCount(2);await expect(dialog.locator('.equipment-floor-groups summary').first()).toContainText('כמות 2');
-  await dialog.locator('.table-import-bulk summary').click();
   await dialog.locator('.table-import-bulk').getByLabel('יצרן',{exact:true}).fill('Maker');await page.getByLabel('קבוצת עריכה').selectOption('Dome');await page.getByRole('button',{name:'החל על הקבוצה בתצוגה',exact:true}).click();
   await page.getByLabel('C1 דגם',{exact:true}).fill('M1');await expect(page.getByRole('button',{name:'אישור וייבוא לפרויקט',exact:true})).toBeDisabled();expect(commits).toBe(0);
   await page.getByRole('button',{name:'השווה מחדש',exact:true}).click();await expect(page.getByLabel('C2 יצרן',{exact:true})).toHaveValue('Maker');

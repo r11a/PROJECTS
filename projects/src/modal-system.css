@@ -107,6 +107,14 @@ body > .modal-backdrop .app-modal-content > form {
   flex: 0 0 auto;
 }
 
+/* Keep the save safeguards without changing the established visual theme. */
+.unsaved-changes { padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; background: var(--soft, #f6f7fa); flex: none; }
+.unsaved-changes > div { display: flex; gap: 8px; }
+.toast { z-index: 8000; }
+.toast-error { border-inline-start: 4px solid #bd4051; }
+.toast-error > svg { color: #bd4051; }
+[hidden] { display: none !important; }
+
 body > :is(.modal-backdrop, .ops-modal-backdrop)
   :is(.modal-actions, .ops-modal-actions, .form-actions),
 body > .cg-dialog-backdrop .cg-schedule-dialog > footer,

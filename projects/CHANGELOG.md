@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.50.2
+
+- Restore the screen layouts, dashboard, project metrics/navigation, task fields and import presentation from 0.41.1, before the 0.50.0 visual redesign.
+- Preserve Excel parsing and incremental-import safeguards, per-row component selection/custom names, save protections and functional fixes delivered in 0.50.0–0.50.1.
+- Retain local Heebo fonts and existing data; this is an upgrade with no database downgrade.
+
 ## 0.50.1
 
 - Read Excel data without counting empty formatting at distant rows or columns; preserve original row numbers, all sheets and meaningful values.
