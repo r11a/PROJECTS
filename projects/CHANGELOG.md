@@ -5,6 +5,7 @@
 - Refresh the shared visual system with locally bundled Heebo, consistent primary/secondary buttons, accessible focus states, compact headers, theme-aware colors and reduced motion support.
 - Simplify project navigation with three primary metrics, expandable details, a mobile tab picker and quick project actions. Remove repeated overview and contact panels.
 - Protect unsaved forms from accidental dismissal, keep save errors visible, distinguish error/success/sync notices, and preserve existing out-of-range task times during editing.
+- Keep project creation available during background reference refreshes after the initial data load, preventing dropped clicks during live reconnection.
 - Migrate the task constraint to accept activation tasks (הפעלות); keep successful saves independent of reference refreshes.
 - Simplify task forms and filters; retain scheduling, assignees and all advanced fields. Add a visible duration/hour-bank summary.
 - Remember dashboard display choices and calendar views/filters per user on the device.

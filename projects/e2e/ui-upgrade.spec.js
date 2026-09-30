@@ -4,6 +4,18 @@ import { test, expect } from '@playwright/test';
 // The real add-on critical paths retain the production service worker.
 test.use({serviceWorkers:'block'});
 
+test('project creation stays available during background reference refresh',async({page})=>{
+  await mockApi(page);await page.goto('/');
+  const create=page.getByRole('button',{name:'פרויקט חדש',exact:true});await expect(create).toBeEnabled();
+  let release;const held=new Promise(resolve=>release=resolve);let refreshing=false;
+  await page.route('**/api/clients',async route=>{refreshing=true;await held;await route.fulfill({json:{clients:[]}});});
+  try{
+    await page.evaluate(()=>window.dispatchEvent(new Event('projects:reference-changed')));
+    await expect.poll(()=>refreshing).toBe(true);await expect(create).toBeEnabled();
+    await create.click();await expect(page.locator('.project-wizard')).toBeVisible();
+  }finally{release();}
+});
+
 test('0.50 protects edited tasks, keeps failures visible and closes only after saving',async({page})=>{
   await mockApi(page,{conflict:true});
   await page.goto('/?page=my-work');

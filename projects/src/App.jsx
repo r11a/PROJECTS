@@ -383,6 +383,7 @@ function App() {
   const [startupError, setStartupError] = useState("");
   const [referenceFailures, setReferenceFailures] = useState([]);
   const [referenceLoading, setReferenceLoading] = useState(true);
+  const referenceLoaded = useRef(false);
   const referenceRequest = useRef(0);
   const liveConnected = useRef(false);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -486,6 +487,7 @@ function App() {
       else failures.push(sources[index][1]);
     });
     setReferenceFailures(failures);
+    referenceLoaded.current = true;
     setReferenceLoading(false);
   };
   const refreshCurrentUser = async (changedUser) => {
@@ -1212,8 +1214,8 @@ function App() {
             {["admin", "manager"].includes(user.role) && (
               <button
                 className="primary-button"
-                disabled={referenceLoading}
-                title={referenceLoading ? "מכינים את נתוני הפרויקט" : "יצירת פרויקט"}
+                disabled={referenceLoading && !referenceLoaded.current}
+                title={referenceLoading && !referenceLoaded.current ? "מכינים את נתוני הפרויקט" : "יצירת פרויקט"}
                 onClick={() => setNewProjectOpen(true)}
               >
                 <Plus size={18} />
