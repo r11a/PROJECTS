@@ -1,3 +1,5 @@
+import { FileUpload } from "./FileUpload";
+import { stageMeta } from "./data";
 import { prepareUploadImage } from "./features/meetings/prepareUploadImage";
 import { CatalogItemSelect } from "./CatalogItemSelect";
 import { DateInput } from "./DateInput";
@@ -185,6 +187,10 @@ export function ProjectWorkspace({
     systemFieldSettings: [],
   });
   const [bom,setBom]=useState([]);
+  const [metricsExpanded,setMetricsExpanded]=useState(false);
+  const [quickTask,setQuickTask]=useState(false);
+  const tabsRef=useRef(null);
+  useEffect(()=>{const strip=tabsRef.current,button=strip?.querySelector('.active');if(button){const container=strip.getBoundingClientRect(),selected=button.getBoundingClientRect();strip.scrollTo({left:strip.scrollLeft+selected.left-container.left-(strip.clientWidth-selected.width)/2,behavior:'instant'});}},[tab]);
   const [mentionUsers,setMentionUsers]=useState([]);
   const [note, setNote] = useState("");
   const [updateVoiceContext,setUpdateVoiceContext]=useState(newVoiceContext);
@@ -231,10 +237,10 @@ export function ProjectWorkspace({
       const [nextWorkspace,bomResult]=await Promise.all([api(`/projects/${encodeURIComponent(project.id)}/workspace`),api(`/projects/${encodeURIComponent(project.id)}/bom`)]);
       setWorkspace(nextWorkspace);setBom(bomResult.items||[]);
     } catch (e) {
-      setNotice(e.message);
+      setNotice({type:'error',message:e.message});
     }
   };
-  const updateBom=async(item,patch)=>{try{await api(`/projects/${project.id}/bom/${item.id}`,{method:'PATCH',body:JSON.stringify(patch)});setNotice('נתוני הביצוע עודכנו');load()}catch(error){setNotice(error.message)}};
+  const updateBom=async(item,patch)=>{try{await api(`/projects/${project.id}/bom/${item.id}`,{method:'PATCH',body:JSON.stringify(patch)});setNotice('נתוני הביצוע עודכנו');load()}catch(error){setNotice({type:'error',message:error.message})}};
   useEffect(() => {
     load();
     api('/team').then(result=>setMentionUsers(result.users||[])).catch(()=>{});
@@ -253,7 +259,7 @@ export function ProjectWorkspace({
     if (!modal) return;
     Promise.all([api("/professional-roles"), api("/equipment-catalog")])
       .then(([a, b]) => setReference({ roles: a.roles, equipment: b.items }))
-      .catch((e) => setNotice(e.message));
+      .catch((e) => setNotice({type:'error',message:e.message}));
   }, [modal]);
   const due = Number(project.value) - Number(project.paid);
   const totalHours = (workspace.timeEntries||[]).reduce((sum,item)=>sum+Number(item.hours||0),0);
@@ -277,7 +283,7 @@ export function ProjectWorkspace({
       setNotice(result.offlineQueued ? "✓ העדכון נשמר במכשיר ויפורסם לצוות עם חזרת החיבור" : "✓ העדכון פורסם לצוות");
       if (!result.offlineQueued) load();
     } catch (err) {
-      setNotice(err.message);
+      setNotice({type:'error',message:err.message});
     }
   };
   const addTeam = async (e) => {
@@ -297,7 +303,7 @@ export function ProjectWorkspace({
       setNotice("איש הצוות שויך לפרויקט");
       load();
     } catch (err) {
-      setNotice(err.message);
+      setNotice({type:'error',message:err.message});
     }
   };
   const createProfessionalAndAssign=async(e)=>{
@@ -311,7 +317,7 @@ export function ProjectWorkspace({
       setReference({roles:rolesResult.roles,equipment:equipmentResult.items});
       window.dispatchEvent(new Event('projects:reference-changed'));
       setModal('');setNotice('איש המקצוע נשמר במאגר עם התפקיד שנבחר ושויך לפרויקט');load();
-    }catch(error){setNotice(error.message)}
+    }catch(error){setNotice({type:'error',message:error.message})}
   };
   const addEquipment = async (e) => {
     e.preventDefault();
@@ -334,7 +340,7 @@ export function ProjectWorkspace({
       if(f.get("manualName"))api("/equipment-catalog").then(result=>setReference(current=>({...current,equipment:result.items}))).catch(()=>{});
       load();
     } catch (err) {
-      setNotice(err.message);
+      setNotice({type:'error',message:err.message});
     }
   };
   const addDocument = async (e) => {
@@ -347,7 +353,7 @@ export function ProjectWorkspace({
       setNotice("המסמך הועלה ושויך לפרויקט");
       load();
     } catch (err) {
-      setNotice(err.message);
+      setNotice({type:'error',message:err.message});
     }
   };
   const uploadRecordFiles=async(files,title,category,relatedEntityType,relatedEntityId)=>{
@@ -362,9 +368,9 @@ export function ProjectWorkspace({
   };
   const addReview=async(e)=>{e.preventDefault();if(recordBusy.current)return;recordBusy.current=true;setRecordStatus("שומר ומכין את הקבצים להעלאה…");const f=new FormData(e.currentTarget);const wasEditing=Boolean(editingReview);const payload={reviewDate:f.get('reviewDate'),performedBy:f.get('performedBy'),supervisionType:f.get('supervisionType'),summary:reviewDraft.summary,followUp:reviewDraft.followUp,hours:f.get('hours'),planUpdateRequired:f.get('planUpdateRequired')==='on',voiceContextId:reviewVoiceContext};try{const result=await api(editingReview?`/projects/${project.id}/site-reviews/${editingReview.id}`:`/projects/${project.id}/site-reviews`,{method:editingReview?'PATCH':'POST',body:JSON.stringify(payload)});setEditingReview(result.review);await uploadRecordFiles(f.getAll('attachments'),`ביקורת אתר ${f.get('reviewDate')}`,'ביקורת אתר','site_review',result.review.id);setReviewVoiceContext(newVoiceContext());setEditingReview(null);setReviewDraft({summary:'',followUp:''});setModal('');setReviewFromTask(false);setNotice(result.offlineQueued?'✓ הביקורת והקבצים נשמרו במכשיר ויסתנכרנו אוטומטית':wasEditing?'✓ ביקורת האתר והשעות עודכנו בהצלחה':'✓ ביקורת האתר, השעות והקבצים נשמרו בהצלחה');if(!result.offlineQueued)await load()}catch(error){setNotice(`השמירה נכשלה: ${error.message}`)}finally{recordBusy.current=false;setRecordStatus("")}};
   const addMeeting=async(e,providedForm)=>{e.preventDefault();if(recordBusy.current)return;recordBusy.current=true;setRecordStatus("שומר ומכין את הקבצים להעלאה…");const f=providedForm||new FormData(e.currentTarget);const wasEditing=Boolean(editingMeeting);try{const endpoint=editingMeeting?`/projects/${project.id}/meetings/${editingMeeting.id}`:`/projects/${project.id}/meetings`;const result=await api(endpoint,{method:editingMeeting?'PATCH':'POST',body:JSON.stringify({meetingAt:f.get('meetingAt'),attendees:f.get('attendees'),summary:f.get('summary'),followUp:f.get('followUp'),hours:f.get('hours'),voiceContextId:f.get('voiceContextId')})});const aiTasks=JSON.parse(String(f.get('aiTasks')||'[]'));if(aiTasks.length)await api(`/projects/${project.id}/meetings/${result.meeting.id}/tasks`,{method:'POST',body:JSON.stringify({tasks:aiTasks})});setEditingMeeting(result.meeting);await uploadRecordFiles(f.getAll('attachments'),`סיכום פגישה ${String(f.get('meetingAt')).slice(0,10)}`,'סיכום פגישה','meeting_summary',result.meeting.id);setEditingMeeting(null);setModal('');setNotice(result.offlineQueued?'✓ סיכום הפגישה והקבצים נשמרו במכשיר ויסתנכרנו אוטומטית':wasEditing?'✓ סיכום הפגישה והשעות עודכנו בהצלחה':aiTasks.length?`✓ סיכום הפגישה נשמר ונוצרו ${aiTasks.length} משימות`:'✓ סיכום הפגישה, השעות והקבצים נשמרו בהצלחה');if(!result.offlineQueued)await load()}catch(error){setNotice(`השמירה נכשלה: ${error.message}`)}finally{recordBusy.current=false;setRecordStatus("")}};
-  const deleteReview=async(item)=>{if(user.role!=='admin'||!confirm('למחוק את ביקורת האתר?'))return;try{await api(`/projects/${project.id}/site-reviews/${item.id}`,{method:'DELETE'});setNotice('ביקורת האתר נמחקה');load()}catch(error){setNotice(error.message)}};
-  const deleteMeeting=async(item)=>{if(user.role!=='admin'||!confirm('למחוק את סיכום הפגישה?'))return;try{await api(`/projects/${project.id}/meetings/${item.id}`,{method:'DELETE'});setNotice('סיכום הפגישה נמחק');load()}catch(error){setNotice(error.message)}};
-  const archiveDocument=async(file)=>{if(user.role!=='admin'||!confirm(`להעביר את "${file.title||file.original_name}" לסל המחזור ל־14 יום?`))return;try{await api(`/documents/${file.id}`,{method:'DELETE'});setNotice('המסמך הועבר לסל המחזור ל־14 יום');load()}catch(error){setNotice(error.message)}};
+  const deleteReview=async(item)=>{if(user.role!=='admin'||!confirm('למחוק את ביקורת האתר?'))return;try{await api(`/projects/${project.id}/site-reviews/${item.id}`,{method:'DELETE'});setNotice('ביקורת האתר נמחקה');load()}catch(error){setNotice({type:'error',message:error.message})}};
+  const deleteMeeting=async(item)=>{if(user.role!=='admin'||!confirm('למחוק את סיכום הפגישה?'))return;try{await api(`/projects/${project.id}/meetings/${item.id}`,{method:'DELETE'});setNotice('סיכום הפגישה נמחק');load()}catch(error){setNotice({type:'error',message:error.message})}};
+  const archiveDocument=async(file)=>{if(user.role!=='admin'||!confirm(`להעביר את "${file.title||file.original_name}" לסל המחזור ל־14 יום?`))return;try{await api(`/documents/${file.id}`,{method:'DELETE'});setNotice('המסמך הועבר לסל המחזור ל־14 יום');load()}catch(error){setNotice({type:'error',message:error.message})}};
   const deleteTeam = async (x) => {
     if (!confirm(`להסיר את ${x.display_name} מהפרויקט?`)) return;
     try {
@@ -374,7 +380,7 @@ export function ProjectWorkspace({
       );
       load();
     } catch (e) {
-      setNotice(e.message);
+      setNotice({type:'error',message:e.message});
     }
   };
   const deleteEquipment = async (x) => {
@@ -385,7 +391,7 @@ export function ProjectWorkspace({
       });
       load();
     } catch (e) {
-      setNotice(e.message);
+      setNotice({type:'error',message:e.message});
     }
   };
   const openProjectEdit = () => {
@@ -441,7 +447,7 @@ export function ProjectWorkspace({
     if (!confirm(`${action}?${warning}`)) return;
     await archiveProject(project.id, !project.archived);
   };
-  const toggleCompleted=async()=>{try{await api(`/projects/${project.id}/complete`,{method:"PATCH",body:JSON.stringify({completed:!project.completed})});setNotice(project.completed?"הפרויקט הוחזר לפעילים":"הפרויקט הועבר להסתיימו");window.dispatchEvent(new Event("projects:data-changed"));setPage("projects");}catch(error){setNotice(error.message)}};
+  const toggleCompleted=async()=>{try{await api(`/projects/${project.id}/complete`,{method:"PATCH",body:JSON.stringify({completed:!project.completed})});setNotice(project.completed?"הפרויקט הוחזר לפעילים":"הפרויקט הועבר להסתיימו");window.dispatchEvent(new Event("projects:data-changed"));setPage("projects");}catch(error){setNotice({type:'error',message:error.message})}};
   const requestNavigation = (nextProject = project) => {
     if (!nextProject?.id) return;
     setNavigationTarget(nextProject);
@@ -455,7 +461,7 @@ export function ProjectWorkspace({
   };
   const tabs = [
     ["overview", "סקירה"],
-    ["tasks", "משימות ואבני דרך"],
+    ["tasks", "משימות"],
     ["gantt", "גאנט"],
     ["reviews", "ביקורות ופגישות"],
     ["hours", "שעות עבודה"],
@@ -464,7 +470,7 @@ export function ProjectWorkspace({
     ["priority", "הזמנות Priority"],
     ["forms", "קבצים ומסמכים"],
     ["finance", "כספים"],
-    ["activity", "פעילות, שינויים ובקרה"],
+    ["activity", "פעילות"],
   ].filter(([key])=>key!=="finance"||user.financeAccess!==false);
   return (
     <div className="project-detail project-workspace">
@@ -493,7 +499,8 @@ export function ProjectWorkspace({
             </p>
           </div>
         </div>
-        <div className="hero-metrics">
+        <div className="project-quick-actions">{canEdit&&<details className="project-add-menu"><summary className="primary-button"><Plus size={16}/>הוספה לפרויקט</summary><div><button onClick={event=>{event.currentTarget.closest('details').open=false;setQuickTask(true);}}>משימה</button><button onClick={event=>{event.currentTarget.closest('details').open=false;setEditingReview(null);setReviewDraft({summary:'',followUp:''});setModal('review');}}>ביקורת</button><button onClick={event=>{event.currentTarget.closest('details').open=false;setEditingMeeting(null);setModal('meeting');}}>סיכום פגישה</button><button onClick={event=>{event.currentTarget.closest('details').open=false;setTab('hours');}}>דיווח שעות</button><button onClick={event=>{event.currentTarget.closest('details').open=false;setTab('systems');}}>רכיבים וייבוא</button><button onClick={event=>{event.currentTarget.closest('details').open=false;setTab('forms');}}>קבצים</button></div></details>}<button type="button" className="secondary-button" aria-expanded={metricsExpanded} onClick={()=>setMetricsExpanded(!metricsExpanded)}>{metricsExpanded?'פחות פרטים':'פרטים נוספים'}<ChevronDown size={16}/></button></div>
+        <div className={`hero-metrics ${metricsExpanded?'expanded':'compact'}`}>
           <div>
             <span>שלב נוכחי</span>
             <select
@@ -505,14 +512,7 @@ export function ProjectWorkspace({
             >
               {(stageOptions.length
                 ? stageOptions.map((i) => [i.metadata?.key || i.name, i.name])
-                : [
-                    ["planning", "תכנון"],
-                    ["infrastructure", "תשתיות"],
-                    ["installation", "התקנה"],
-                    ["programming", "תכנות"],
-                    ["handover", "לקראת מסירה"],
-                    ["completed", "הושלם"],
-                  ]
+                : Object.entries({...stageMeta,planning:{label:'תכנון'},installation:{label:'התקנה'},programming:{label:'תכנות'},handover:{label:'לקראת מסירה'},completed:{label:'הושלם'}}).map(([key,value])=>[key,value.label])
               ).map(([v, l]) => (
                 <option key={v} value={v}>
                   {l}
@@ -595,10 +595,12 @@ export function ProjectWorkspace({
           <div><span>שעות עבודה</span><strong>{totalHours.toFixed(1)}</strong><small>{targetHours?`מתוך ${targetHours} שעות יעד`:'מדידה שוטפת'}</small></div>
         </div>
       </div>
-      <div className="detail-tabs">
+      <div className="project-tab-navigation"><div className="detail-tabs" ref={tabsRef} aria-label="לשוניות הפרויקט">
         {tabs.map(([id, label]) => (
           <button
             className={tab === id ? "active" : ""}
+            aria-pressed={tab === id}
+            title={id==='activity'?'פעילות, שינויים ובקרה':label}
             key={id}
             onClick={() => setTab(id)}
           >
@@ -607,19 +609,20 @@ export function ProjectWorkspace({
           </button>
         ))}
       </div>
+      <label className="project-tab-jump"><span>מעבר אל</span><select aria-label="מעבר ללשונית בפרויקט" value={tab} onChange={event=>setTab(event.target.value)}>{tabs.map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label></div>
+      {quickTask&&<TaskEditor api={api} setNotice={setNotice} projects={[project]} professionals={professionals} tasks={workspace.tasks} fixedProjectId={project.id} initial={{title:'',projectId:project.id,taskType:'task',status:'open',priority:'normal',startDate:localDateValue(),dueDate:localDateValue(),description:''}} onClose={()=>setQuickTask(false)} onSave={async value=>{const result=await api('/operations/tasks',{method:'POST',body:JSON.stringify({...value,projectId:project.id})});setNotice(result.offlineQueued?'נשמר במכשיר · ממתין לסנכרון':'המשימה נוצרה');load();return result;}}/>}
       {tab === "hours" && (
         <ProjectHoursPanel project={project} entries={workspace.timeEntries || []} professionals={professionals} api={api} setNotice={setNotice} onDone={load} canEdit={canEdit}/>
       )}
       {tab === "activity" && <ProjectGovernancePanel project={project} api={api} user={user} setNotice={setNotice}/>}
       {tab === "overview"&&<div className="project-overview-snapshot">
-        <section className="panel overview-summary-table"><header><div><span className="overview-eyebrow">סקירה ניהולית</span><h3>תמונת מצב הפרויקט</h3><span>המידע החשוב לקבלת החלטה מהירה</span></div><button className="overview-manage-link" onClick={()=>setTab('tasks')}>ניהול משימות</button></header><div className="overview-progress-strip"><article><span>התקדמות הפרויקט</span><strong>{project.progress}%</strong><div><i style={{width:`${project.progress}%`}}/></div></article><article><span>השלמת משימות</span><strong>{taskProgress}%</strong><div><i style={{width:`${taskProgress}%`}}/></div></article><article><span>התקנת ציוד</span><strong>{installationProgress}%</strong><div><i style={{width:`${installationProgress}%`}}/></div></article></div><div className="overview-data-grid">
+        <section className="panel overview-summary-table"><header><div><h3>תמונת מצב הפרויקט</h3></div><button className="overview-manage-link" onClick={()=>setTab('tasks')}>ניהול משימות</button></header><div className="overview-data-grid">
           <div><span>סיווג</span><strong>{project.projectCategory==='other'?(project.projectCategoryCustom||'אחר'):'בית חכם'} · {project.projectClassification||'בית פרטי'}</strong></div>
           <div><span>כתובת</span><strong>{project.address||'לא הוגדרה'}</strong></div><div><span>פרטי גישה</span><strong>{[project.floor && `קומה ${project.floor}`,project.apartmentNumber && `דירה ${project.apartmentNumber}`,project.entranceCode && `קוד כניסה ${project.entranceCode}`].filter(Boolean).join(" · ") || "לא הוגדרו"}</strong></div>
-          <div><span>שלב נוכחי</span><strong>{stageOptions.find((item)=>(item.metadata?.key||item.name)===project.stage)?.name||project.stage}</strong></div>
+          <div><span>שלב נוכחי</span><strong>{stageOptions.find((item)=>(item.metadata?.key||item.name)===project.stage)?.name||stageMeta[project.stage]?.label||project.stage}</strong></div>
           <div><span>התקדמות קבלן</span><strong>{({waiting:'בהמתנה',infrastructure_paving:'סלילת תשתיות',drywall_paint:'עבודות גבס וצבע',carpentry:'הרכבות נגרות',finishing:'עבודות גמר',stopped:'בעצירה'})[project.contractorProgress]||'בהמתנה'}</strong></div>
           <div><span>מנהל פרויקט</span><strong>{project.manager||'לא הוקצה'}</strong></div>
-          <div><span>משימות</span><strong>{completed} הושלמו מתוך {workspace.tasks.length}</strong></div>
-          <div><span>שעות עבודה</span><strong>{totalHours.toFixed(1)}{targetHours?` מתוך ${targetHours}`:''}</strong></div>
+
           {user.financeAccess!==false&&<div><span>קצב גבייה</span><strong>{project.value?Math.round(project.paid/project.value*100):0}% · {money.format(due)} יתרה</strong></div>}
         </div><div className="overview-action-summary"><button onClick={()=>setTab('tasks')}><strong>{openTasks}</strong><span>משימות פתוחות</span></button><button onClick={()=>setTab('systems')}><strong>{equipmentInstalled}/{equipmentTotal}</strong><span>רכיבים הותקנו</span></button><button onClick={()=>setTab('hours')}><strong>{totalHours.toFixed(1)}</strong><span>שעות שדווחו</span></button></div></section>
         <section className="panel overview-contacts-table"><header><div><span className="overview-eyebrow">אנשים בפרויקט</span><h3>לקוח וצוות</h3></div><span>{1+workspace.team.length+(workspace.contacts||[]).length} משויכים</span></header><div className="overview-contact-rows"><div><span className="resource-avatar">{project.client?.slice(0,2)}</span><strong>{project.client}</strong><small>לקוח</small>{project.phone?<a href={`tel:${project.phone}`}>{project.phone}</a>:<i>—</i>}{project.email?<a href={`mailto:${project.email}`}>{project.email}</a>:<i>—</i>}</div>{(workspace.contacts||[]).map((contact)=><div key={`contact-${contact.id}`}><span className="resource-avatar">{contact.name?.slice(0,2)}</span><strong>{contact.name}</strong><small>{contact.role_name || ({architect:"אדריכל",electrician:"חשמלאי",supervisor:"מפקח",contractor:"קבלן",designer:"מעצב פנים",other:"אחר"})[contact.role] || contact.role || "איש קשר"}{contact.company ? ` · ${contact.company}` : ""}</small>{contact.phone?<a href={`tel:${contact.phone}`}>{contact.phone}</a>:<i>—</i>}{contact.email?<a href={`mailto:${contact.email}`}>{contact.email}</a>:<i>—</i>}</div>)}{workspace.team.map((person)=><div key={`${person.professional_id}-${person.role_type_id}`}><span className="resource-avatar" style={{background:person.color}}>{person.display_name?.slice(0,2)}</span><strong>{person.display_name}</strong><small>{person.role_name}</small>{person.phone?<a href={`tel:${person.phone}`}>{person.phone}</a>:<i>—</i>}{person.email?<a href={`mailto:${person.email}`}>{person.email}</a>:<i>—</i>}</div>)}</div><button className="overview-team-action" onClick={()=>setTab('team')}>ניהול צוות הפרויקט</button></section>
@@ -696,42 +699,6 @@ export function ProjectWorkspace({
             </div>
           </div>
           <div className="detail-side">
-            <div className="panel contact-card">
-              <div className="panel-head">
-                <div>
-                  <h3>פרטי לקוח</h3>
-                </div>
-              </div>
-              <div className="contact-person">
-                <div className="client-avatar">
-                  {project.client.slice(0, 2)}
-                </div>
-                <div>
-                  <strong>{project.client}</strong>
-                  <span>לקוח ראשי</span>
-                </div>
-              </div>
-              {project.phone && (
-                <a href={`tel:${project.phone}`}>
-                  <Phone size={16} />
-                  {project.phone}
-                </a>
-              )}
-              {project.email && (
-                <a href={`mailto:${project.email}`}>
-                  <Mail size={16} />
-                  {project.email}
-                </a>
-              )}
-              {workspace.team.slice(0,4).map((person)=><a key={`${person.professional_id}-${person.role_type_id}`} href={person.phone?`tel:${person.phone}`:undefined}><UserRound size={16}/><span><strong>{person.display_name}</strong> · {person.role_name}</span></a>)}
-              <p>
-                <MapPin size={16} />
-                {project.address}
-              </p>
-              <button onClick={() => setPage("clients")}>
-                פתיחת מאגר הלקוחות
-              </button>
-            </div>
             {user.financeAccess!==false&&<div className="panel money-summary">
               <div className="panel-head">
                 <div>
@@ -862,7 +829,7 @@ export function ProjectWorkspace({
             <span><FileSpreadsheet size={20}/></span>
             <div><strong>{order.priorityOrderNumber}</strong><small>{order.customerName || project.client} · {order.orderStatus || "ללא סטטוס"} · {dateText(order.orderDate || order.createdAt)} · {order.selectedCount}/{order.lineCount} שורות</small></div>
             {order.totalAmount !== undefined && <strong>{priorityMoney.format(order.totalAmount)}</strong>}
-            <button type="button" onClick={async()=>{try{setPriorityOrderDetail(await api(`/projects/${encodeURIComponent(project.id)}/priority-orders/${order.id}`))}catch(error){setNotice(error.message)}}}>צפייה</button>
+            <button type="button" onClick={async()=>{try{setPriorityOrderDetail(await api(`/projects/${encodeURIComponent(project.id)}/priority-orders/${order.id}`))}catch(error){setNotice({type:'error',message:error.message})}}}>צפייה</button>
           </article>) : <div className="priority-order-empty"><FileSpreadsheet size={38}/><p>טרם יובאו הזמנות Priority לפרויקט.</p>{canImportPriority&&<button className="primary-button" onClick={()=>setModal("priority-import")}>ייבוא הזמנה ראשונה</button>}</div>}
         </section>
       )}
@@ -974,7 +941,7 @@ export function ProjectWorkspace({
           </section>
         </div>
       )}
-      {modal==='review'&&<Modal title={editingReview?'עריכת ביקורת אתר':'ביקורת אתר חדשה'} onClose={()=>{if(!recordBusy.current){setEditingReview(null);setReviewFromTask(false);setModal('')}}}><form className="work-form execution-record-form" onSubmit={addReview}>{reviewFromTask&&<p className="wide">שעות המשימה כבר נרשמו. הוסיפו כאן רק שעות פיקוח נוספות כדי למנוע ספירה כפולה.</p>}<label>תאריך פיקוח<DateInput type="date" name="reviewDate" required defaultValue={String(editingReview?.review_date||localDateValue()).slice(0,10)}/></label><label>סוג פיקוח<input name="supervisionType" defaultValue={editingReview?.supervision_type||''} placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy" defaultValue={editingReview?.performed_by||''}><option value="">בחירת עובד חברה</option>{professionals.filter(x=>x.active&&x.affiliation==='company').map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.5" placeholder="0" defaultValue={0}/></label><div className="wide"><SmartTextArea api={api} value={reviewDraft.summary} onChange={(summary)=>setReviewDraft((current)=>({...current,summary}))} setNotice={setNotice} label="ממצאים וסיכום" textareaProps={{name:'summary',required:true,rows:5}}/></div><div className="wide"><SmartTextArea api={api} value={reviewDraft.followUp} onChange={(followUp)=>setReviewDraft((current)=>({...current,followUp}))} setNotice={setNotice} label="המשך טיפול" textareaProps={{name:'followUp',rows:3}}/></div><div className="wide"><VoiceNotes api={api} apiRoot={apiRoot} entityType="site_review_draft" entityId={reviewVoiceContext} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></div><label className="wide">תמונות, סקיצה או תכנית מעודכנת<input type="file" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></label><label className="wide check-label"><input type="checkbox" name="planUpdateRequired" defaultChecked={Boolean(editingReview?.plan_update_required)}/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">{editingReview?'שמירת שינויים':'שמירת ביקורת'}</button></div></form></Modal>}
+      {modal==='review'&&<Modal title={editingReview?'עריכת ביקורת אתר':'ביקורת אתר חדשה'} onClose={()=>{if(!recordBusy.current){setEditingReview(null);setReviewFromTask(false);setModal('')}}}><form className="work-form execution-record-form" onSubmit={addReview}>{reviewFromTask&&<p className="wide">שעות המשימה כבר נרשמו. הוסיפו כאן רק שעות פיקוח נוספות כדי למנוע ספירה כפולה.</p>}<label>תאריך פיקוח<DateInput type="date" name="reviewDate" required defaultValue={String(editingReview?.review_date||localDateValue()).slice(0,10)}/></label><label>סוג פיקוח<input name="supervisionType" defaultValue={editingReview?.supervision_type||''} placeholder="פיקוח תשתיות / התקנות / מסירה"/></label><label>מי ביצע<select name="performedBy" defaultValue={editingReview?.performed_by||''}><option value="">בחירת עובד חברה</option>{professionals.filter(x=>x.active&&x.affiliation==='company').map(x=><option key={x.id} value={x.id}>{x.displayName}</option>)}</select></label><label>שעות פיקוח<input type="number" name="hours" min="0" max="24" step="0.5" placeholder="0" defaultValue={0}/></label><div className="wide"><SmartTextArea api={api} value={reviewDraft.summary} onChange={(summary)=>setReviewDraft((current)=>({...current,summary}))} setNotice={setNotice} label="ממצאים וסיכום" textareaProps={{name:'summary',required:true,rows:5}}/></div><div className="wide"><SmartTextArea api={api} value={reviewDraft.followUp} onChange={(followUp)=>setReviewDraft((current)=>({...current,followUp}))} setNotice={setNotice} label="המשך טיפול" textareaProps={{name:'followUp',rows:3}}/></div><div className="wide"><VoiceNotes api={api} apiRoot={apiRoot} entityType="site_review_draft" entityId={reviewVoiceContext} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></div><div className="wide"><FileUpload label="תמונות, סקיצה או תכנית מעודכנת" name="attachments" accept="image/*,application/pdf,.dwg,.dxf" multiple/></div><label className="wide check-label"><input type="checkbox" name="planUpdateRequired" defaultChecked={Boolean(editingReview?.plan_update_required)}/>נדרש עדכון תכנית</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setModal('')}>ביטול</button><button className="ops-primary">{editingReview?'שמירת שינויים':'שמירת ביקורת'}</button></div></form></Modal>}
       {modal==='meeting'&&<MeetingSummaryForm api={api} apiRoot={apiRoot} project={project} professionals={professionals} setNotice={setNotice} initial={editingMeeting} onClose={()=>{if(!recordBusy.current){setEditingMeeting(null);setModal('')}}} onSubmit={addMeeting}/>}
       {selectedExecution&&<Modal title={selectedExecution.kind==='meeting'?'סיכום פגישה':'ביקורת אתר'} subtitle={selectedExecution.kind==='meeting'?new Date(selectedExecution.meeting_at).toLocaleString('he-IL'):dateText(selectedExecution.review_date)} onClose={()=>setSelectedExecution(null)}><div className="execution-detail"><header><strong>{selectedExecution.performed_by_name||selectedExecution.created_by_name||'לא צוין מי ביצע'}</strong>{selectedExecution.attendees&&<span>נוכחים: {selectedExecution.attendees}</span>}</header><section><h3>סיכום</h3><p>{selectedExecution.summary}</p></section>{selectedExecution.follow_up&&<section><h3>המשך טיפול</h3><p>{selectedExecution.follow_up}</p></section>}<ExecutionMedia files={workspace.files} entityType={selectedExecution.kind==='meeting'?'meeting_summary':'site_review'} entityId={selectedExecution.id} apiRoot={apiRoot} onPreview={setPreviewFile}/><VoiceNotesToggle api={api} apiRoot={apiRoot} entityType={selectedExecution.kind==='meeting'?'meeting':'site_review'} entityId={selectedExecution.id} projectId={project.id} setNotice={setNotice} canDelete={user.role==='admin'}/></div></Modal>}
       {modal === "team" && (
@@ -1545,7 +1512,7 @@ function ProjectPhotoUpdate({ project, api, setNotice, onDone }) {
       setOpen(false);
       onDone();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy(false);
     }
@@ -1604,7 +1571,7 @@ function GoogleAddressField({ project, api, updateProject, setNotice }) {
           .then((result) => setAddresses(result.addresses))
           .catch((error) => {
             setAddresses([]);
-            setNotice(error.message);
+            setNotice({type:'error',message:error.message});
           }),
       350,
     );
@@ -1656,9 +1623,9 @@ function LegacyProjectSystemsBoard({items,columns,canEdit,canManage,user,api,pro
   const [draggedRow,setDraggedRow]=useState(null);
   const [draggedGroup,setDraggedGroup]=useState(null);
   const groups=useMemo(()=>{const map=new Map();for(const item of items){const key=String(item.system_id||'other');if(!map.has(key))map.set(key,{id:item.system_id,name:item.system_name||'ללא מערכת',type:item.system_type_name||'אחר',color:item.system_color||item.color||'#6957df',sort:Number(item.system_sort_order||0),items:[]});map.get(key).items.push(item)}return [...map.values()].sort((a,b)=>a.sort-b.sort)},[items]);
-  const save=async(item,patch)=>{try{await api(`/projects/${projectId}/equipment/${item.id}`,{method:'PATCH',body:JSON.stringify(patch)});setNotice('השורה עודכנה');await onReload()}catch(error){setNotice(error.message)}};
-  const saveGroup=async(group,patch)=>{if(!group.id)return;try{await api(`/projects/${projectId}/system-board/${group.id}`,{method:'PATCH',body:JSON.stringify({title:patch.title??group.name,color:patch.color??group.color,sortOrder:group.sort,propagateColor:Object.prototype.hasOwnProperty.call(patch,'color')})});setNotice(Object.prototype.hasOwnProperty.call(patch,'color')?'צבע המערכת הוחל על הרכיבים':'המערכת עודכנה');await onReload()}catch(error){setNotice(error.message)}};
-  const addColumn=async()=>{if(!newColumn.trim())return;try{await api(`/projects/${projectId}/system-columns`,{method:'POST',body:JSON.stringify({label:newColumn.trim()})});setNewColumn('');await onReload()}catch(error){setNotice(error.message)}};
+  const save=async(item,patch)=>{try{await api(`/projects/${projectId}/equipment/${item.id}`,{method:'PATCH',body:JSON.stringify(patch)});setNotice('השורה עודכנה');await onReload()}catch(error){setNotice({type:'error',message:error.message})}};
+  const saveGroup=async(group,patch)=>{if(!group.id)return;try{await api(`/projects/${projectId}/system-board/${group.id}`,{method:'PATCH',body:JSON.stringify({title:patch.title??group.name,color:patch.color??group.color,sortOrder:group.sort,propagateColor:Object.prototype.hasOwnProperty.call(patch,'color')})});setNotice(Object.prototype.hasOwnProperty.call(patch,'color')?'צבע המערכת הוחל על הרכיבים':'המערכת עודכנה');await onReload()}catch(error){setNotice({type:'error',message:error.message})}};
+  const addColumn=async()=>{if(!newColumn.trim())return;try{await api(`/projects/${projectId}/system-columns`,{method:'POST',body:JSON.stringify({label:newColumn.trim()})});setNewColumn('');await onReload()}catch(error){setNotice({type:'error',message:error.message})}};
   const moveColumn=async(from,to)=>{if(from===to)return;const next=[...columns];const [column]=next.splice(from,1);next.splice(to,0,column);await api(`/projects/${projectId}/system-columns/order`,{method:'PATCH',body:JSON.stringify({columnIds:next.map(item=>item.id)})});await onReload()};
   const moveGroup=async(targetId)=>{if(!draggedGroup||String(draggedGroup)===String(targetId))return;const next=[...groups],from=next.findIndex(item=>String(item.id)===String(draggedGroup)),to=next.findIndex(item=>String(item.id)===String(targetId));const [group]=next.splice(from,1);next.splice(to,0,group);setDraggedGroup(null);await api(`/projects/${projectId}/system-board-order`,{method:'PATCH',body:JSON.stringify({systemIds:next.map(item=>item.id)})});await onReload()};
   const moveRow=async(group,targetId)=>{if(!draggedRow||String(draggedRow)===String(targetId))return;const next=[...group.items],from=next.findIndex(item=>String(item.id)===String(draggedRow)),to=next.findIndex(item=>String(item.id)===String(targetId));const [row]=next.splice(from,1);next.splice(to,0,row);setDraggedRow(null);await api(`/projects/${projectId}/equipment-order`,{method:'PATCH',body:JSON.stringify({itemIds:next.map(item=>item.id)})});await onReload()};
@@ -1686,8 +1653,8 @@ function LegacyProjectSystemsBoard({items,columns,canEdit,canManage,user,api,pro
             <label className="subitem-field numeric"><small>כמות</small><input aria-label="כמות" disabled={!canEdit} type="number" min="0" step="1" defaultValue={Number(item.quantity_ordered??item.quantity??0)} onBlur={event=>save(item,{quantity:Number(event.target.value)})}/></label><label className="subitem-field numeric"><small>הותקן</small><input aria-label="כמות שהותקנה" disabled={!canEdit} type="number" min="0" step="1" max={Number(item.quantity_ordered??item.quantity??0)} defaultValue={Number(item.quantity_installed||0)} onBlur={event=>save(item,{quantityInstalled:Number(event.target.value),status:Number(event.target.value)>=Number(item.quantity_ordered??item.quantity??0)?'installed':item.status})}/></label>
             <label className="subitem-field status-field"><small>סטטוס</small><select aria-label="סטטוס" disabled={!canEdit} className={`monday-status ${item.status||'waiting'}`} value={item.status==='planned'?'waiting':item.status||'waiting'} onChange={event=>save(item,{status:event.target.value,quantityInstalled:event.target.value==='installed'?Number(item.quantity_ordered??item.quantity??0):Number(item.quantity_installed||0)})}><option value="waiting">ממתין</option><option value="in_progress">בביצוע</option><option value="installed">הותקן</option></select></label>
             {columns.map(column=><label className="subitem-field" key={column.column_key}><small>{column.label}</small><input disabled={!canEdit} defaultValue={item.custom_values?.[column.column_key]||''} onBlur={event=>save(item,{customValues:{...(item.custom_values||{}),[column.column_key]:event.target.value}})}/></label>)}
-            <span className="project-subitem-actions"><label className="color-control compact" title="צבע אישי לרכיב" style={{'--selected-color':item.row_color||group.color}}><Palette size={13}/><input disabled={!canEdit} type="color" value={item.row_color||group.color} onChange={event=>save(item,{rowColor:event.target.value})}/></label>{canEdit&&item.row_color&&<button type="button" title="חזרה לצבע המערכת" onClick={()=>save(item,{rowColor:''})}><RotateCcw size={14}/></button>}{canEdit&&<button type="button" title="שכפול" onClick={async()=>{try{await api(`/projects/${projectId}/equipment`,{method:'POST',body:JSON.stringify({catalogItemId:item.catalog_item_id,quantity:item.quantity,location:item.location,status:item.status,serialNumber:item.serial_number,notes:item.notes})});setNotice('השורה שוכפלה');onReload()}catch(error){setNotice(error.message)}}}><Copy size={14}/></button>}{user.role==='admin'&&<button type="button" title="מחיקה" className="danger" onClick={()=>onDelete(item)}><Trash2 size={14}/></button>}</span>
-            <span className="mobile-subitem-menu"><MobileActionMenu label="פעולות רכיב"><label style={{'--selected-color':item.row_color||group.color}}><i className="menu-color-dot"/><span>שינוי צבע</span><input disabled={!canEdit} type="color" value={item.row_color||group.color} onChange={event=>save(item,{rowColor:event.target.value})}/></label>{canEdit&&item.row_color&&<button type="button" onClick={()=>save(item,{rowColor:''})}><RotateCcw size={16}/><span>חזרה לצבע המערכת</span></button>}{canEdit&&<button type="button" onClick={async()=>{try{await api(`/projects/${projectId}/equipment`,{method:'POST',body:JSON.stringify({catalogItemId:item.catalog_item_id,quantity:item.quantity,location:item.location,status:item.status,serialNumber:item.serial_number,notes:item.notes})});setNotice('השורה שוכפלה');onReload()}catch(error){setNotice(error.message)}}}><Copy size={16}/><span>שכפול רכיב</span></button>}{user.role==='admin'&&<button type="button" className="danger" onClick={()=>onDelete(item)}><Trash2 size={16}/><span>מחיקת רכיב</span></button>}</MobileActionMenu></span>
+            <span className="project-subitem-actions"><label className="color-control compact" title="צבע אישי לרכיב" style={{'--selected-color':item.row_color||group.color}}><Palette size={13}/><input disabled={!canEdit} type="color" value={item.row_color||group.color} onChange={event=>save(item,{rowColor:event.target.value})}/></label>{canEdit&&item.row_color&&<button type="button" title="חזרה לצבע המערכת" onClick={()=>save(item,{rowColor:''})}><RotateCcw size={14}/></button>}{canEdit&&<button type="button" title="שכפול" onClick={async()=>{try{await api(`/projects/${projectId}/equipment`,{method:'POST',body:JSON.stringify({catalogItemId:item.catalog_item_id,quantity:item.quantity,location:item.location,status:item.status,serialNumber:item.serial_number,notes:item.notes})});setNotice('השורה שוכפלה');onReload()}catch(error){setNotice({type:'error',message:error.message})}}}><Copy size={14}/></button>}{user.role==='admin'&&<button type="button" title="מחיקה" className="danger" onClick={()=>onDelete(item)}><Trash2 size={14}/></button>}</span>
+            <span className="mobile-subitem-menu"><MobileActionMenu label="פעולות רכיב"><label style={{'--selected-color':item.row_color||group.color}}><i className="menu-color-dot"/><span>שינוי צבע</span><input disabled={!canEdit} type="color" value={item.row_color||group.color} onChange={event=>save(item,{rowColor:event.target.value})}/></label>{canEdit&&item.row_color&&<button type="button" onClick={()=>save(item,{rowColor:''})}><RotateCcw size={16}/><span>חזרה לצבע המערכת</span></button>}{canEdit&&<button type="button" onClick={async()=>{try{await api(`/projects/${projectId}/equipment`,{method:'POST',body:JSON.stringify({catalogItemId:item.catalog_item_id,quantity:item.quantity,location:item.location,status:item.status,serialNumber:item.serial_number,notes:item.notes})});setNotice('השורה שוכפלה');onReload()}catch(error){setNotice({type:'error',message:error.message})}}}><Copy size={16}/><span>שכפול רכיב</span></button>}{user.role==='admin'&&<button type="button" className="danger" onClick={()=>onDelete(item)}><Trash2 size={16}/><span>מחיקת רכיב</span></button>}</MobileActionMenu></span>
           </div>)}
           <button type="button" className="project-add-subitem" onClick={onAdd}><Plus size={15}/>הוספת רכיב למערכת</button>
         </div>}
@@ -1711,7 +1678,7 @@ function CommercialProjectGantt({ tasks, milestones, project, projects, professi
       if (typeof onDataChanged === "function") onDataChanged();
       return result;
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
       return false;
     }
   };
@@ -1722,7 +1689,7 @@ function CommercialProjectGantt({ tasks, milestones, project, projects, professi
       if(dates.mentionUserIds?.length)await api('/mentions',{method:'POST',body:JSON.stringify({userIds:dates.mentionUserIds,subject:`תיוג במשימה ${item.title}`,body:`תויגת במשימה ${item.title}. התאריכים עודכנו ל-${dates.startDate} עד ${dates.dueDate}.`,linkedUrl:`?project=${encodeURIComponent(project.id)}&task=${encodeURIComponent(item.id)}`})});
       setNotice("תאריכי המשימה עודכנו");
       if (typeof onDataChanged === "function") await onDataChanged();
-    } catch (error) { setNotice(error.message); if (typeof onDataChanged === "function") await onDataChanged(); }
+    } catch (error) { setNotice({type:'error',message:error.message}); if (typeof onDataChanged === "function") await onDataChanged(); }
   };
   if (!items.length) return <div className="panel gantt-empty"><Activity size={30} /><h3>לוח הגאנט מוכן</h3><p>הוסיפו למשימות תאריך התחלה וסיום או אבני דרך כדי לבנות את ציר הביצוע.</p></div>;
   return (
@@ -1748,8 +1715,8 @@ function ProjectHoursPanel({project,entries,professionals,api,setNotice,onDone,c
   const [editing,setEditing]=useState(null);
   const totals=summarizeTimeEntries(entries);
   const totalHours=totals.reduce((sum,item)=>sum+item.hours,0);
-  const submit=async(event)=>{event.preventDefault();const data=new FormData(event.currentTarget);try{const result=await api(`/projects/${project.id}/time-entries${editing?`/${editing.id}`:''}`,{method:editing?'PATCH':'POST',body:JSON.stringify({activityType:data.get('activityType'),workDate:data.get('workDate'),hours:data.get('hours'),professionalId:data.get('professionalId')||null,notes:data.get('notes')})});setOpen(false);setEditing(null);setNotice(result.offlineQueued?'✓ דיווח השעות נשמר במכשיר ובנק השעות יתעדכן לאחר הסנכרון':editing?'השינוי בדיווח השעות נשמר בהצלחה':'דיווח השעות נשמר בהצלחה ובנק השעות עודכן');if(!result.offlineQueued)await onDone()}catch(error){setNotice(error.message)}};
-  const remove=async(item)=>{if(!confirm(`למחוק את דיווח ${Number(item.hours)} השעות? בנק השעות יעודכן מיד.`))return;try{await api(`/projects/${project.id}/time-entries/${item.id}`,{method:'DELETE'});setNotice('דיווח השעות נמחק ובנק השעות עודכן');await onDone()}catch(error){setNotice(error.message)}};
+  const submit=async(event)=>{event.preventDefault();const data=new FormData(event.currentTarget);try{const result=await api(`/projects/${project.id}/time-entries${editing?`/${editing.id}`:''}`,{method:editing?'PATCH':'POST',body:JSON.stringify({activityType:data.get('activityType'),workDate:data.get('workDate'),hours:data.get('hours'),professionalId:data.get('professionalId')||null,notes:data.get('notes')})});setOpen(false);setEditing(null);setNotice(result.offlineQueued?'✓ דיווח השעות נשמר במכשיר ובנק השעות יתעדכן לאחר הסנכרון':editing?'השינוי בדיווח השעות נשמר בהצלחה':'דיווח השעות נשמר בהצלחה ובנק השעות עודכן');if(!result.offlineQueued)await onDone()}catch(error){setNotice({type:'error',message:error.message})}};
+  const remove=async(item)=>{if(!confirm(`למחוק את דיווח ${Number(item.hours)} השעות? בנק השעות יעודכן מיד.`))return;try{await api(`/projects/${project.id}/time-entries/${item.id}`,{method:'DELETE'});setNotice('דיווח השעות נמחק ובנק השעות עודכן');await onDone()}catch(error){setNotice({type:'error',message:error.message})}};
   const targetFor=(key)=>key==='installation'?Number(project.installationHoursTarget||0):key==='programming'?Number(project.programmingHoursTarget||0):0;
   return <section className="project-hours-page">
     <header className="panel project-hours-head"><div><span><Timer size={19}/></span><div><h3>מונה שעות לפרויקט</h3><p>נתוני ביצוע מובנים מדוחות, טפסים ודיווח ידני. יעדים נקבעים בהקמת הפרויקט או בעריכתו.</p></div></div><strong>{totalHours.toLocaleString('he-IL',{maximumFractionDigits:1})}<small> שעות בפועל</small></strong>{canEdit&&<div className="hours-actions"><button className="ops-primary" onClick={()=>{setEditing(null);setOpen(true)}}><Plus size={16}/>דיווח שעות</button></div>}</header>

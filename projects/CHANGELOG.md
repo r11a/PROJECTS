@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.50.0
+
+- Refresh the shared visual system with locally bundled Heebo, consistent primary/secondary buttons, accessible focus states, compact headers, theme-aware colors and reduced motion support.
+- Simplify project navigation with three primary metrics, expandable details, a mobile tab picker and quick project actions. Remove repeated overview and contact panels.
+- Protect unsaved forms from accidental dismissal, keep save errors visible, distinguish error/success/sync notices, and preserve existing out-of-range task times during editing.
+- Migrate the task constraint to accept activation tasks (הפעלות); keep successful saves independent of reference refreshes.
+- Simplify task forms and filters; retain scheduling, assignees and all advanced fields. Add a visible duration/hour-bank summary.
+- Remember dashboard display choices and calendar views/filters per user on the device.
+- Present table import as three steps, default to changes only, paginate large comparisons, and keep all sheets, bulk edits, duplicate protection and final approval.
+- Add Hebrew file selection with previews, persistent chat project context and structured manufacturer/model cards with explicit evidence status. Bundle the font with the app for offline use.
+- Known dependency findings (2026-09-30): the production audit reports four high and one moderate advisory across existing dependencies (brace-expansion, image-size/pptxgenjs, multer and qs); no critical advisory. These dependency upgrades are not included in this UI release.
+
+
 ## 0.41.1
 
 - Limit task start-time choices to 07:00–18:00 in half-hour intervals and add the task type "הפעלות".

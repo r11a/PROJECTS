@@ -27,7 +27,7 @@ export function ResearchResults({research,busy,onProduct,onProject}) {
     {research.cached&&<small className="equipment-cache">תשובה שמורה · ללא טוקנים נוספים</small>}
     {research.projects?.length>0&&<label>בחירת פרויקט<select defaultValue="" disabled={busy} onChange={e=>onProject(e.target.value)}><option value="" disabled>בחרו פרויקט</option>{research.projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
     {research.products?.map((p,i)=><div className="equipment-product" key={`${p.id||p.model}-${i}`}>
-      <strong>{p.name}</strong><span dir="auto">{[p.manufacturer,p.model].filter(Boolean).join(' · ')||'יצרן ודגם לא הוגדרו'}</span>
+      <strong>{p.name}</strong><dl className="equipment-identity"><div><dt>יצרן</dt><dd dir="auto">{p.manufacturer||'לא הוגדר'}</dd></div><div><dt>דגם</dt><dd dir="auto">{p.model||'נדרש זיהוי'}</dd></div></dl><small className="equipment-evidence">{!p.manufacturer||!p.model?'נדרש יצרן ודגם לפני אימות מידות':research.sources?.length?'מקורות מצורפים · יש להתאים לדגם ולגרסה':'דגם מהפרויקט · המידות טרם אומתו'}</small>
       <nav>{p.links?.map(link=><Link key={link.url} url={link.url}>{link.title} ↗</Link>)}</nav>
       {!research.sources?.length&&<button type="button" disabled={busy} onClick={()=>onProduct(p)}>{p.manufacturer&&p.model?'חיפוש AI עם מקורות':'השלמת יצרן ודגם'}</button>}
     </div>)}
@@ -39,6 +39,6 @@ export function ResearchResults({research,busy,onProduct,onProject}) {
         {preview?.documents?.map(d=><Link key={d.url} url={d.url}>{d.title} · PDF ↗</Link>)}
       </div>;
     })}</div>}
-    {research.suggestions&&<iframe title="הצעות חיפוש Google" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerPolicy="no-referrer" srcDoc={`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">${research.suggestions}`}/>}
+    {research.suggestions&&<details className="research-suggestions"><summary>הצעות חיפוש נוספות</summary><iframe title="הצעות חיפוש Google" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerPolicy="no-referrer" srcDoc={`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">${research.suggestions}`}/></details>}
   </section>;
 }

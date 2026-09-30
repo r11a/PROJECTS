@@ -121,8 +121,8 @@ function EmptyState({ icon: Icon, title, text, action, onAction }) {
   );
 }
 
-function Modal({ title, subtitle, onClose, children, className = "" }) {
-  return <AppModal title={title} subtitle={subtitle} onClose={onClose} className={className}>{children}</AppModal>;
+function Modal({ title, subtitle, onClose, children, className = "", busy = false, hasChanges = false }) {
+  return <AppModal title={title} subtitle={subtitle} onClose={onClose} className={className} busy={busy} hasChanges={hasChanges}>{children}</AppModal>;
 }
 
 function AiReportContent({ text }) {
@@ -169,6 +169,7 @@ export function TaskEditor({
   );
   const [submitting, setSubmitting] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const originalForm=useRef(JSON.stringify(form));
   const submitLock = useRef(false);
   const changeTime = (field,value) => setForm(current => {
     const next={...current,[field]:value};
@@ -212,7 +213,7 @@ export function TaskEditor({
         onClose();
         if(!saved?.offlineQueued&&saved?.task?.status==='done'&&initial?.status!=='done'&&saved.task.task_type==='supervision')window.dispatchEvent(new CustomEvent('projects:supervision-completed',{detail:saved.task}));
       } else setSaveError('השמירה לא הושלמה. יש לבדוק את הודעת השגיאה ולנסות שוב.');
-    } catch (error) { setSaveError(error.message);setNotice(error.message); }
+    } catch (error) { setSaveError(error.message);setNotice({type:'error',message:error.message}); }
     finally { setSubmitting(false);submitLock.current=false; }
   };
   return (
@@ -221,6 +222,8 @@ export function TaskEditor({
       subtitle={initial?.id ? "עריכה ועדכון" : "פריט תפעולי חדש"}
       onClose={onClose}
       className="task-editor-modal"
+      busy={submitting}
+      hasChanges={JSON.stringify(form)!==originalForm.current}
     >
       <form className="work-form" onSubmit={submit}>
         {saveError&&<p className="wide" role="alert">{saveError}</p>}
@@ -311,6 +314,7 @@ export function TaskEditor({
           יום מלא · 9 שעות עבודה
         </label>}
         </div>
+        {!isMilestone&&<p className="wide task-schedule-summary"><Clock3 size={16}/><span>{(form.allDay??form.all_day)?'יום מלא · 9 שעות':`${form.startTime??form.start_time??'ללא שעת התחלה'}${(form.endTime??form.end_time)?`–${form.endTime??form.end_time}`:''} · ${form.durationHours??form.duration_hours??form.estimatedHours??0} שעות`}<small>בהשלמה, שעות המשימה יירשמו בבנק השעות.</small></span></p>}
         <label>
           סטטוס
           <select
@@ -370,9 +374,10 @@ export function TaskEditor({
           <>
             <fieldset className="task-assignees wide">
               <legend>מבצעים</legend>
-              <label className="task-assignee-search"><Search size={16}/><input value={assigneeSearch} onChange={(event)=>setAssigneeSearch(event.target.value)} placeholder="חיפוש מבצע לפי שם או תפקיד"/></label>
+              <label className="task-assignee-search" data-no-dirty><Search size={16}/><input value={assigneeSearch} onChange={(event)=>setAssigneeSearch(event.target.value)} placeholder="חיפוש מבצע לפי שם או תפקיד"/></label>
               <div>{eligibleProfessionals.map((p) => {const selected=(form.assigneeProfessionalIds || form.assignees?.map((item)=>String(item.id)) || [form.assigneeProfessionalId || form.assignee_professional_id]).map(String).includes(String(p.id));return <label key={p.id}><input type="checkbox" checked={selected} onChange={(event)=>{const current=(form.assigneeProfessionalIds || form.assignees?.map((item)=>String(item.id)) || [form.assigneeProfessionalId || form.assignee_professional_id]).filter(Boolean).map(String);setForm({...form,assigneeProfessionalIds:event.target.checked?[...new Set([...current,String(p.id)])]:current.filter((id)=>id!==String(p.id))})}}/><span style={{'--avatar-color':p.color||'#6957df'}}>{p.avatarImage?<img src={p.avatarImage} alt=""/>:(p.displayName||'א').slice(0,2)}</span><b>{p.displayName}</b><small>{p.jobTitle || p.roles?.[0]?.name || "איש מקצוע"}</small></label>})}</div>
             </fieldset>
+            <details className="wide task-extra-fields"><summary>עדיפות · {taskPriority[form.priority]||'רגילה'}{form.critical?' · קריטית':''}</summary><div className="work-form">
             <label>
               עדיפות
               <select
@@ -389,11 +394,11 @@ export function TaskEditor({
               <input type="checkbox" checked={Boolean(form.critical)} onChange={(e)=>setForm({...form,critical:e.target.checked})}/>
               משימה קריטית
             </label>
-
+            </div></details>
           </>
         )}
         {!isMilestone && (
-          <>
+          <details className="wide task-extra-fields"><summary>תלות ומשימת אב</summary><div className="work-form">
           <label>
             תלויה במשימה
             <select
@@ -424,11 +429,11 @@ export function TaskEditor({
               {tasks.filter((item) => item.id !== initial?.id && item.project_id === (form.projectId || initial?.project_id) && !item.parent_task_id).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
             </select>
           </label>
-          </>
+          </div></details>
         )}
         <div className="wide"><SmartTextArea api={api} value={form.description||""} onChange={(description)=>setForm({...form,description})} setNotice={setNotice} label="הנחיות והערות" textareaProps={{placeholder:'מידע שיאפשר לאחראי לבצע בלי צורך בבירור נוסף'}}/></div>
         <div className="wide form-actions">
-          {initial?.id&&<button type="button" className="ops-danger" onClick={async()=>{if(!confirm(`למחוק את המשימה “${form.title}”?`))return;try{setSubmitting(true);await api(`/operations/tasks/${initial.id}`,{method:"DELETE"});setNotice("המשימה נמחקה והוסרה מיומן העבודה");onClose()}catch(error){setSubmitting(false);setNotice(error.message)}}}><Trash2 size={16}/>מחיקה</button>}
+          {initial?.id&&<button type="button" className="ops-danger" onClick={async()=>{if(!confirm(`למחוק את המשימה “${form.title}”?`))return;try{setSubmitting(true);await api(`/operations/tasks/${initial.id}`,{method:"DELETE"});setNotice("המשימה נמחקה והוסרה מיומן העבודה");onClose()}catch(error){setSubmitting(false);setNotice({type:'error',message:error.message})}}}><Trash2 size={16}/>מחיקה</button>}
           <button type="button" className="ops-secondary" onClick={onClose}>
             ביטול
           </button>
@@ -488,7 +493,7 @@ export function TasksWorkspace({
       setTasks(a.tasks);
       setMilestones(b.milestones);
     } catch (e) {
-      if (requestId === loadRequest.current) setNotice(e.message);
+      if (requestId === loadRequest.current) setNotice({type:'error',message:e.message});
     } finally {
       if (requestId === loadRequest.current) setLoading(false);
     }
@@ -624,7 +629,7 @@ export function TasksWorkspace({
       if (typeof onDataChanged === "function") onDataChanged();
       return result;
     } catch (e) {
-      setNotice(e.message);
+      setNotice({type:'error',message:e.message});
       return false;
     }
   };
@@ -636,7 +641,7 @@ export function TasksWorkspace({
       load({ silent: true });
       if (typeof onDataChanged === "function") onDataChanged();
     } catch (e) {
-      setNotice(e.message);
+      setNotice({type:'error',message:e.message});
     }
   };
   return (
@@ -739,7 +744,7 @@ export function TasksWorkspace({
         )}
       </div>
       {tab === "tasks" && (
-        <section className="task-filter-bar" aria-label="סינון מתקדם למשימות">
+        <details className="task-filter-shell"><summary><ListFilter size={17}/>סינון{activeFilterCount>0?` · ${activeFilterCount} פעילים`:""}</summary><section className="task-filter-bar" aria-label="סינון מתקדם למשימות">
           <div className="task-filter-heading"><ListFilter size={17}/><span>מיקוד מהיר</span>{activeFilterCount > 0 && <em>{activeFilterCount}</em>}</div>
           <select value={priority} onChange={(event) => setPriority(event.target.value)} aria-label="קדימות">
             <option value="">כל הקדימויות</option>
@@ -767,7 +772,7 @@ export function TasksWorkspace({
           <button type="button" className={filtersPinned ? "filter-pin active" : "filter-pin"} onClick={togglePinnedFilters} title={filtersPinned ? "ביטול זכירת הסינון" : "זכירת הסינון לפעם הבאה"}>📌</button>
           {activeFilterCount > 0 && <button type="button" onClick={clearFilters}>ניקוי סינון</button>}
           <small>{visibleTasks.length} מתוך {tasks.length} משימות</small>
-        </section>
+        </section></details>
       )}
       <div className="work-list panel">
         {tab === "tasks" && items.length > 0 && <div className="work-table-head"><span>משימה ופרויקט</span><span>קדימות</span><span>אחראי</span><span>מבצע</span><span>מנהל פרויקט</span><span>תאריך סיום</span><span/></div>}
@@ -1046,7 +1051,7 @@ export function FinanceWorkspace({
       api(`/operations/finance-summary?projectId=${encodeURIComponent(projectId)}`),
     ])
       .then(([paymentData,summary]) => { setPayments(Array.isArray(paymentData.payments)?paymentData.payments:[]); setFinanceProjects(Array.isArray(summary.projects)?summary.projects:[]); })
-      .catch((e) => setNotice(e.message));
+      .catch((e) => setNotice({type:'error',message:e.message}));
   useEffect(() => {
     load();
   }, [projectId]);
@@ -1077,7 +1082,7 @@ export function FinanceWorkspace({
       setNotice("התשלום נשמר והיתרה עודכנה");
       load();
     } catch (e) {
-      setNotice(e.message);
+      setNotice({type:'error',message:e.message});
     }
   };
   const remove = async (item) => {
@@ -1087,7 +1092,7 @@ export function FinanceWorkspace({
       load();
       setNotice("התשלום נמחק");
     } catch (e) {
-      setNotice(e.message);
+      setNotice({type:'error',message:e.message});
     }
   };
   const canEdit = user.permissions?.finance === "write" || ["admin", "manager", "finance"].includes(user.role);
@@ -1238,7 +1243,7 @@ export function FinanceWorkspace({
           onSave={save}
         />
       )}
-      {financeSetup && <AppModal title="אשף כספים לפרויקט" subtitle="מסגרת, תנאים ומקדמה" onClose={()=>setFinanceSetup(null)} className="finance-setup-modal"><form className="work-form" onSubmit={async(event)=>{event.preventDefault();try{const target=projects.find(item=>String(item.id)===String(financeSetup.projectId));await api(`/projects/${encodeURIComponent(financeSetup.projectId)}`,{method:"PATCH",body:JSON.stringify({...financeSetup,value:Number(financeSetup.value||target?.value||0),depositAmount:Number(financeSetup.depositAmount||0)})});setNotice("המסגרת הכספית נשמרה");setFinanceSetup(null);load()}catch(error){setNotice(error.message)}}}><label className="wide">פרויקט<select required value={financeSetup.projectId} onChange={(event)=>{const target=projects.find(item=>String(item.id)===String(event.target.value));setFinanceSetup({...financeSetup,projectId:event.target.value,value:target?.value||"",paymentTerms:target?.paymentTerms||"",depositAmount:target?.depositAmount||"",depositPaid:Boolean(target?.depositPaid),financeMode:target?.financeMode||"total"})}}>{projects.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>אופן תקצוב<select value={financeSetup.financeMode} onChange={(event)=>setFinanceSetup({...financeSetup,financeMode:event.target.value})}><option value="total">סכום כללי</option><option value="systems">פיצול לפי מערכות</option></select></label><label>סכום הפרויקט<input type="number" min="0" step="0.01" value={financeSetup.value} onChange={(event)=>setFinanceSetup({...financeSetup,value:event.target.value})}/></label><label className="wide">תנאי תשלום<input value={financeSetup.paymentTerms} onChange={(event)=>setFinanceSetup({...financeSetup,paymentTerms:event.target.value})} placeholder="למשל: 30% מקדמה, 40% התקנה, 30% מסירה"/></label><label>מקדמה<input type="number" min="0" step="0.01" value={financeSetup.depositAmount} onChange={(event)=>setFinanceSetup({...financeSetup,depositAmount:event.target.value})}/></label><label className="check-label"><input type="checkbox" checked={financeSetup.depositPaid} onChange={(event)=>setFinanceSetup({...financeSetup,depositPaid:event.target.checked})}/>המקדמה שולמה</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setFinanceSetup(null)}>ביטול</button><button className="ops-primary">שמירת מסגרת</button></div></form></AppModal>}
+      {financeSetup && <AppModal title="אשף כספים לפרויקט" subtitle="מסגרת, תנאים ומקדמה" onClose={()=>setFinanceSetup(null)} className="finance-setup-modal"><form className="work-form" onSubmit={async(event)=>{event.preventDefault();try{const target=projects.find(item=>String(item.id)===String(financeSetup.projectId));await api(`/projects/${encodeURIComponent(financeSetup.projectId)}`,{method:"PATCH",body:JSON.stringify({...financeSetup,value:Number(financeSetup.value||target?.value||0),depositAmount:Number(financeSetup.depositAmount||0)})});setNotice("המסגרת הכספית נשמרה");setFinanceSetup(null);load()}catch(error){setNotice({type:'error',message:error.message})}}}><label className="wide">פרויקט<select required value={financeSetup.projectId} onChange={(event)=>{const target=projects.find(item=>String(item.id)===String(event.target.value));setFinanceSetup({...financeSetup,projectId:event.target.value,value:target?.value||"",paymentTerms:target?.paymentTerms||"",depositAmount:target?.depositAmount||"",depositPaid:Boolean(target?.depositPaid),financeMode:target?.financeMode||"total"})}}>{projects.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>אופן תקצוב<select value={financeSetup.financeMode} onChange={(event)=>setFinanceSetup({...financeSetup,financeMode:event.target.value})}><option value="total">סכום כללי</option><option value="systems">פיצול לפי מערכות</option></select></label><label>סכום הפרויקט<input type="number" min="0" step="0.01" value={financeSetup.value} onChange={(event)=>setFinanceSetup({...financeSetup,value:event.target.value})}/></label><label className="wide">תנאי תשלום<input value={financeSetup.paymentTerms} onChange={(event)=>setFinanceSetup({...financeSetup,paymentTerms:event.target.value})} placeholder="למשל: 30% מקדמה, 40% התקנה, 30% מסירה"/></label><label>מקדמה<input type="number" min="0" step="0.01" value={financeSetup.depositAmount} onChange={(event)=>setFinanceSetup({...financeSetup,depositAmount:event.target.value})}/></label><label className="check-label"><input type="checkbox" checked={financeSetup.depositPaid} onChange={(event)=>setFinanceSetup({...financeSetup,depositPaid:event.target.checked})}/>המקדמה שולמה</label><div className="wide form-actions"><button type="button" className="ops-secondary" onClick={()=>setFinanceSetup(null)}>ביטול</button><button className="ops-primary">שמירת מסגרת</button></div></form></AppModal>}
     </div>
   );
 }
@@ -1278,7 +1283,7 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
       })
       .catch((error) => {
         setReportError(error.message);
-        if (!silent) setNotice(error.message);
+        if (!silent) setNotice({type:'error',message:error.message});
       });
   };
   useEffect(() => {
@@ -1311,7 +1316,7 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
           : null,
       });
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const generatePdf = async () => {
@@ -1387,7 +1392,7 @@ export function ReportsWorkspace({ api, setNotice, company = {}, companyLogo = "
   };
   const generateAiReport=async(event)=>{
     event.preventDefault();setGenerating(true);
-    try{const job=await api('/ai/chat',{method:'POST',body:JSON.stringify({question:`הכן דוח ניהולי מקצועי בעברית וב-RTL על סמך נתוני PROJECTS. החזר טקסט תמציתי ומובנה בלבד: כותרת קצרה לכל סעיף ולאחריה עד 3 נקודות קצרות. הסעיפים הם תקציר מנהלים, חריגים וחסמים, החלטות נדרשות ופעולות לביצוע. אין להשתמש בטבלאות Markdown, אין פסקאות ארוכות ואין לחזור על אותו מידע. דרישת המשתמש: ${aiPrompt}`})});let result=job;for(let attempt=0;attempt<90&&result.status==='working';attempt++){await new Promise(resolve=>setTimeout(resolve,1000));result=await api(`/ai/chat/${job.jobId}`)}if(!result.answer)throw new Error('הסוכן לא החזיר דוח');setAiReportText(result.answer);setReportType('management');setAiReportOpen(false);setWizardOpen(true);setNotice('דוח AI הוכן ומוכן לעיון ולהפקה');}catch(error){setNotice(error.message)}finally{setGenerating(false)}
+    try{const job=await api('/ai/chat',{method:'POST',body:JSON.stringify({question:`הכן דוח ניהולי מקצועי בעברית וב-RTL על סמך נתוני PROJECTS. החזר טקסט תמציתי ומובנה בלבד: כותרת קצרה לכל סעיף ולאחריה עד 3 נקודות קצרות. הסעיפים הם תקציר מנהלים, חריגים וחסמים, החלטות נדרשות ופעולות לביצוע. אין להשתמש בטבלאות Markdown, אין פסקאות ארוכות ואין לחזור על אותו מידע. דרישת המשתמש: ${aiPrompt}`})});let result=job;for(let attempt=0;attempt<90&&result.status==='working';attempt++){await new Promise(resolve=>setTimeout(resolve,1000));result=await api(`/ai/chat/${job.jobId}`)}if(!result.answer)throw new Error('הסוכן לא החזיר דוח');setAiReportText(result.answer);setReportType('management');setAiReportOpen(false);setWizardOpen(true);setNotice('דוח AI הוכן ומוכן לעיון ולהפקה');}catch(error){setNotice({type:'error',message:error.message})}finally{setGenerating(false)}
   };
   const generatePresentation=async()=>{
     const safePresentationOptions = canViewFinance ? presentationOptions : {

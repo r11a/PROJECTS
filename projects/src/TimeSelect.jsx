@@ -11,6 +11,7 @@ export function TimeSelect({ value = "", onChange, min = "00:00", max = "23:30",
   }, [min, max, step]);
   return <select value={String(value || "").slice(0, 5)} onChange={onChange} {...props}>
     {allowEmpty && <option value="">{emptyLabel}</option>}
+    {value && !options.includes(String(value).slice(0,5)) && <option value={String(value).slice(0,5)}>{String(value).slice(0,5)} · שעה קיימת</option>}
     {options.map((time) => <option key={time} value={time}>{time}</option>)}
   </select>;
 }

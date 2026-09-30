@@ -23,7 +23,7 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
       setTasks(taskResult.tasks);
       setMilestones(milestoneResult.milestones);
     }).catch((error) => {
-      if (requestId === loadRequest.current) setNotice(error.message);
+      if (requestId === loadRequest.current) setNotice({type:'error',message:error.message});
     });
   }, []);
   useEffect(() => {
@@ -66,7 +66,7 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
       load();
       return result;
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
       return false;
     }
   };
@@ -78,7 +78,7 @@ export function GanttWorkspace({ api, setNotice, user, projects, professionals }
       if(dates.mentionUserIds?.length)await api('/mentions',{method:'POST',body:JSON.stringify({userIds:dates.mentionUserIds,subject:`תיוג במשימה ${item.title}`,body:`תויגת במשימה ${item.title}. התאריכים עודכנו ל-${dates.startDate} עד ${dates.dueDate}.`,linkedUrl:`?project=${encodeURIComponent(item.project_id||'')}&task=${encodeURIComponent(item.id)}`})});
       setNotice("תאריכי המשימה עודכנו");
       await load();
-    } catch (error) { setNotice(error.message); await load(); }
+    } catch (error) { setNotice({type:'error',message:error.message}); await load(); }
   };
 
   return (

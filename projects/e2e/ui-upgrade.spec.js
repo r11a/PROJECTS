@@ -4,6 +4,99 @@ import { test, expect } from '@playwright/test';
 // The real add-on critical paths retain the production service worker.
 test.use({serviceWorkers:'block'});
 
+test('0.50 protects edited tasks, keeps failures visible and closes only after saving',async({page})=>{
+  await mockApi(page,{conflict:true});
+  await page.goto('/?page=my-work');
+  await page.locator('.next-action-card button').click();
+  const dialog=page.getByRole('dialog');
+  await dialog.getByLabel('כותרת',{exact:true}).fill('שינוי שלא נשמר');
+  await page.keyboard.press('Escape');
+  await expect(dialog.getByText('יש שינויים שלא נשמרו')).toBeVisible();
+  await dialog.getByRole('button',{name:'המשך עריכה',exact:true}).click();
+  await expect(dialog.getByLabel('כותרת',{exact:true})).toHaveValue('שינוי שלא נשמר');
+  await dialog.getByRole('button',{name:'שמירת שינויים',exact:true}).click();
+  await expect(page.locator('.toast[role="alert"]')).toContainText('המשימה עודכנה על ידי משתמש אחר');
+  await expect(dialog).toBeVisible();
+  await page.route('**/api/operations/tasks/41',route=>route.fulfill({json:{task:{...task,version:4}}}));
+  await dialog.getByRole('button',{name:'שמירת שינויים',exact:true}).click();
+  await expect(dialog).toHaveCount(0);
+});
+
+test('0.50 project opens compactly and exposes every tab without document overflow',async({page})=>{
+  await mockApi(page);await page.setViewportSize({width:390,height:844});
+  await page.goto('/?page=project&project=PRJ-101');
+  const tabs=page.locator('.detail-tabs');await expect(tabs).toBeVisible();
+  expect(await tabs.evaluate(el=>el.getBoundingClientRect().bottom)).toBeLessThan(650);
+  await expect(page.getByLabel('מעבר ללשונית בפרויקט')).toBeVisible();
+  await page.getByLabel('מעבר ללשונית בפרויקט').selectOption('tasks');
+  await expect(page.locator('.detail-tabs button.active')).toContainText('משימות');
+  await page.getByLabel('מעבר ללשונית בפרויקט').selectOption('activity');
+  await expect.poll(()=>tabs.evaluate(el=>{const r=el.getBoundingClientRect(),active=el.querySelector('.active').getBoundingClientRect();return active.left>=r.left-1&&active.right<=r.right+1;})).toBeTruthy();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+});
+
+test('0.50 dashboard preferences persist per user',async({page})=>{
+  await mockApi(page);await page.goto('/');
+  await page.getByText('התאמת תצוגה',{exact:true}).click();
+  await page.getByLabel('הצגת מדדים').uncheck();
+  await expect(page.locator('.kpi-grid')).toBeHidden();
+  await page.reload();await expect(page.locator('.command-overview')).toBeVisible();
+  await expect(page.locator('.kpi-grid')).toBeHidden();
+});
+
+test('0.50 custom date edits are protected and quick-add uses current project task links',async({page})=>{
+  await mockApi(page);await page.goto('/?page=project&project=PRJ-101&tab=reviews');
+  await page.getByRole('button',{name:'ביקורת',exact:true}).click();
+  await page.getByRole('dialog').getByRole('button',{name:'פתיחת לוח תאריכים'}).click();
+  const calendar=page.getByRole('dialog',{name:'בחירת תאריך'});
+  await calendar.getByLabel('שנה',{exact:true}).selectOption('2027');await calendar.getByLabel('חודש',{exact:true}).selectOption('0');
+  await calendar.getByRole('button',{name:'10/01/2027',exact:true}).click();
+  await page.keyboard.press('Escape');await expect(page.getByText('יש שינויים שלא נשמרו',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'יציאה ללא שמירה',exact:true}).click();
+  await page.locator('.project-add-menu>summary').click();await page.locator('.project-add-menu').getByRole('button',{name:'משימה',exact:true}).click();
+  const dialog=page.getByRole('dialog');await dialog.getByText('תלות ומשימת אב',{exact:true}).click();
+  await expect(dialog.getByRole('combobox',{name:'תלויה במשימה',exact:true}).locator('option[value="41"]')).toHaveText(task.title);
+});
+
+test('0.50 mobile task notes remain reachable above the sticky save actions',async({page})=>{
+  await mockApi(page);await page.setViewportSize({width:390,height:844});await page.goto('/?page=my-work');
+  await page.locator('.next-action-card button').click();
+  const dialog=page.getByRole('dialog');
+  await dialog.locator('.app-modal-content').evaluate(el=>el.scrollTop=el.scrollHeight);
+  const notes=dialog.locator('textarea');
+  expect(await notes.evaluate(el=>{const r=el.getBoundingClientRect();const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return el===hit;})).toBeTruthy();
+  await notes.fill('הערות שניתן לקרוא ולערוך');
+});
+
+test('0.50 import hides unchanged rows, pages large plans and never commits while reviewing',async({page})=>{
+  await mockApi(page);let commits=0;
+  await page.route('**/api/table-import/inspect',route=>route.fulfill({json:{previewId:'large',tables:[{index:0,name:'ציוד',enabled:true,kind:'equipment',headerRow:0,mapping:{id:0,name:1},rows:[['id','name'],['1','מצלמה']],systemName:'מצלמות'}],projects,systems:[],fields:{id:'מזהה',name:'שם'},warnings:[],detection:{suggested:'PRJ-101',matches:[projects[0]]}}}));
+  const plan=Array.from({length:86},(_,i)=>({key:String(i),id:`item-${i}`,name:'מצלמה',kind:'equipment',sheet:'ציוד',row:i+2,status:i<5?'unchanged':'new',changes:[],conflicts:[],systemName:'מצלמות'}));
+  await page.route('**/api/table-import/plan',route=>route.fulfill({json:{planId:'large-plan',plan,existingEquipment:[],existingTasks:[]}}));
+  await page.route('**/api/table-import/commit',route=>{commits++;return route.fulfill({json:{}});});
+  await page.goto('/?page=project&project=PRJ-101&tab=systems');await page.getByRole('button',{name:'ייבוא טבלה וקובץ לפרויקט',exact:true}).click();
+  await page.getByLabel('קובץ לייבוא',{exact:true}).setInputFiles({name:'large.csv',mimeType:'text/csv',buffer:Buffer.from('id,name\n1,Camera')});
+  await page.getByRole('button',{name:'בדיקה והצעת מיפוי',exact:true}).click();await page.getByRole('button',{name:'הצגת השינויים לפני אישור',exact:true}).click();
+  await expect(page.locator('.table-import-row')).toHaveCount(40);await expect(page.locator('.table-import-row.unchanged')).toHaveCount(0);
+  const pages=page.getByRole('navigation',{name:'עמודי השוואה'});
+  await pages.getByRole('button',{name:'הבא',exact:true}).click();await expect(page.locator('.table-import-row')).toHaveCount(40);
+  await pages.getByRole('button',{name:'הבא',exact:true}).click();await expect(page.locator('.table-import-row')).toHaveCount(1);
+  await expect(pages.getByRole('button',{name:'הבא',exact:true})).toBeDisabled();expect(commits).toBe(0);
+});
+
+test('0.50 calendar remembers its view and date picker supports RTL keyboard navigation',async({page})=>{
+  await mockApi(page);await page.goto('/?page=calendar');
+  await page.getByLabel('תצוגת לוח שנה',{exact:true}).selectOption('week');
+  await page.reload();await expect(page.getByLabel('תצוגת לוח שנה',{exact:true})).toHaveValue('week');
+  await page.goto('/?page=my-work');await page.locator('.next-action-card button').click();
+  await page.getByRole('dialog').locator('label').filter({hasText:'תאריך התחלה'}).getByRole('button',{name:'פתיחת לוח תאריכים'}).click();
+  const date=page.getByRole('dialog',{name:'בחירת תאריך'});
+  await date.getByRole('button',{name:'08/09/2026',exact:true}).focus();
+  await page.keyboard.press('ArrowLeft');await expect(date.getByRole('button',{name:'09/09/2026',exact:true})).toBeFocused();
+  await page.keyboard.press('Enter');await expect(date).toHaveCount(0);
+  await expect(page.getByRole('dialog').locator('label').filter({hasText:'תאריך התחלה'}).getByRole('textbox')).toHaveValue('09/09/2026');
+});
+
 test('check and suggest selects a project, retries errors and opens findings without AI or writes',async({page},testInfo)=>{
   await mockApi(page);await page.setViewportSize({width:390,height:844});let checks=0;
   await page.route('**/api/ai/project-check?*',route=>{
@@ -38,6 +131,7 @@ test('dynamic import highlights a detected project, maps multiple sheets, edits 
   await expect(dialog.locator('.table-import-mapping>details')).toHaveCount(2);expect(commits).toBe(0);
   await page.getByRole('button',{name:'הצגת השינויים לפני אישור',exact:true}).click();
   await page.getByLabel('סיכום רכיבים זהים לפי קומה').check();await expect(dialog.locator('.equipment-floor-groups summary')).toHaveCount(2);await expect(dialog.locator('.equipment-floor-groups summary').first()).toContainText('כמות 2');
+  await dialog.locator('.table-import-bulk summary').click();
   await dialog.locator('.table-import-bulk').getByLabel('יצרן',{exact:true}).fill('Maker');await page.getByLabel('קבוצת עריכה').selectOption('Dome');await page.getByRole('button',{name:'החל על הקבוצה בתצוגה',exact:true}).click();
   await page.getByLabel('C1 דגם',{exact:true}).fill('M1');await expect(page.getByRole('button',{name:'אישור וייבוא לפרויקט',exact:true})).toBeDisabled();expect(commits).toBe(0);
   await page.getByRole('button',{name:'השווה מחדש',exact:true}).click();await expect(page.getByLabel('C2 יצרן',{exact:true})).toHaveValue('Maker');
@@ -108,6 +202,7 @@ async function mockApi(page, {theme='light', failReference=false, conflict=false
       '/saved-views':{views:[]}, '/operations/tasks':{tasks:[task]}, '/operations/milestones':{milestones:[]},
       '/projects/PRJ-101/workspace':{tasks:[task],milestones:[],payments:[],team:[],equipment:[],forms:[],files:[],updates:[],activity:[],reviews:[],meetings:[],timeEntries:[],priorityOrders:[],systemColumns:[],systemFieldSettings:[]},
       '/projects/PRJ-101/bom':{items:[]}, '/mention-users':{users:[]},
+      '/projects/PRJ-101/baselines':{baselines:[]}, '/projects/PRJ-101/change-requests':{changes:[]},
     };
     return route.fulfill({json:data[path] || {items:[],users:[],projects:[],tasks:[],records:[]}});
   });
@@ -163,6 +258,8 @@ test('reference failure is isolated, and failed edits retain the form and keyboa
   for(let i=0;i<30;i++) await page.keyboard.press('Tab');
   expect(await dialog.evaluate(el=>el.contains(document.activeElement))).toBeTruthy();
   await page.keyboard.press('Escape');
+  await expect(dialog.getByText('יש שינויים שלא נשמרו')).toBeVisible();
+  await dialog.getByRole('button',{name:'יציאה ללא שמירה',exact:true}).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('.next-action-card button')).toBeFocused();
 });

@@ -127,7 +127,7 @@ export function MasterDataWorkspace({
       setProfessionalFields((settingsData.customFields||[]).filter(field=>field.entityType==='professional'&&field.active));
     } catch (error) {
       if (requestId !== loadRequest.current) return;
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   }, []);
   const refresh = async () => {
@@ -241,7 +241,7 @@ export function MasterDataWorkspace({
               const result = await api(`/professionals/${professional.id}/projects`);
               setProfessionalProjects({ professional, projects: result.projects || [] });
             } catch (error) {
-              setNotice(error.message);
+              setNotice({type:'error',message:error.message});
             }
           }}
           onEdit={(item) =>
@@ -259,7 +259,7 @@ export function MasterDataWorkspace({
               setNotice("איש המקצוע נמחק");
               refresh();
             } catch (error) {
-              setNotice(error.message);
+              setNotice({type:'error',message:error.message});
             }
           }}
         />
@@ -281,7 +281,7 @@ export function MasterDataWorkspace({
           onEdit={(item) =>
             setEquipmentForm({ ...item, parentId: item.parentId || "" })
           }
-          onDuplicate={async(item,parentId)=>{try{await api(`/equipment-catalog/${item.id}/duplicate`,{method:"POST",body:JSON.stringify({parentId})});setNotice("הפריט שוכפל לקטגוריה שנבחרה");refresh()}catch(error){setNotice(error.message)}}}
+          onDuplicate={async(item,parentId)=>{try{await api(`/equipment-catalog/${item.id}/duplicate`,{method:"POST",body:JSON.stringify({parentId})});setNotice("הפריט שוכפל לקטגוריה שנבחרה");refresh()}catch(error){setNotice({type:'error',message:error.message})}}}
           onDelete={async (item) => {
             if (!confirm(`למחוק את ${item.name}?`)) return;
             try {
@@ -332,7 +332,7 @@ export function MasterDataWorkspace({
               );
               refresh();
             } catch (error) {
-              setNotice(error.message);
+              setNotice({type:'error',message:error.message});
             }
           }}
         />
@@ -386,7 +386,7 @@ export function MasterDataWorkspace({
               setNotice(value.id ? "פריט הציוד עודכן" : "פריט נוסף לקטלוג");
               refresh();
             } catch (error) {
-              setNotice(error.message);
+              setNotice({type:'error',message:error.message});
             }
           }}
         />
@@ -406,11 +406,11 @@ export function MasterDataWorkspace({
               await refresh();
               return true;
             } catch (error) {
-              setNotice(error.message);
+              setNotice({type:'error',message:error.message});
               return false;
             }
           }}
-          onDelete={async(role)=>{if(!confirm(`למחוק את התפקיד „${role.name}”?`))return;try{await api(`/professional-roles/${role.id}`,{method:'DELETE'});setNotice('התפקיד נמחק');await refresh()}catch(error){setNotice(error.message)}}}
+          onDelete={async(role)=>{if(!confirm(`למחוק את התפקיד „${role.name}”?`))return;try{await api(`/professional-roles/${role.id}`,{method:'DELETE'});setNotice('התפקיד נמחק');await refresh()}catch(error){setNotice({type:'error',message:error.message})}}}
         />
       )}
       {priorityScanOpen && (
@@ -421,7 +421,7 @@ export function MasterDataWorkspace({
             if (!(file instanceof File) || !file.size) return setNotice("יש לבחור קובץ PDF");
             setScanBusy(true);
             try { const body = new FormData(); body.append("file", file); setPriorityScan(await api("/priority-orders/scan", { method: "POST", body })); }
-            catch (error) { setNotice(error.message); }
+            catch (error) { setNotice({type:'error',message:error.message}); }
             finally { setScanBusy(false); }
           }}>
             <label>קובץ הזמנה PDF<input name="file" type="file" accept="application/pdf,.pdf" required/></label>
@@ -431,7 +431,7 @@ export function MasterDataWorkspace({
             <div className="scan-summary"><strong>{priorityScan.items.length} שורות זוהו</strong><span>{priorityScan.items.filter((item)=>item.catalogItem).length} הותאמו לקטלוג</span></div>
             {!priorityScan.textDetected && <p className="scan-warning">ה־PDF הוא תמונה סרוקה ללא שכבת טקסט. נדרש OCR לזיהוי.</p>}
             <div className="scan-table"><table><thead><tr><th>מק״ט</th><th>תיאור</th><th>כמות</th><th>קטלוג</th></tr></thead><tbody>{priorityScan.items.map((item,index)=><tr key={`${item.code}-${index}`}><td>{item.code}</td><td>{item.description || item.catalogItem?.name || "—"}</td><td>{item.quantity}</td><td>{item.catalogItem ? "מותאם" : "לא נמצא"}</td></tr>)}</tbody></table></div>
-            {priorityScan.items.some((item)=>item.catalogItem) && <div className="scan-import"><select value={priorityProjectId} onChange={(event)=>setPriorityProjectId(event.target.value)}><option value="">בחירת פרויקט לשיוך</option>{projects.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}</select><button className="ops-primary" disabled={!priorityProjectId} onClick={async()=>{setScanBusy(true);try{for(const item of priorityScan.items.filter((row)=>row.catalogItem)){await api(`/projects/${encodeURIComponent(priorityProjectId)}/equipment`,{method:"POST",body:JSON.stringify({catalogItemId:item.catalogItem.id,quantity:item.quantity,notes:`יובא מהזמנת ${priorityScan.fileName}`})})}setNotice("הפריטים המותאמים שויכו לפרויקט");setPriorityScanOpen(false)}catch(error){setNotice(error.message)}finally{setScanBusy(false)}}}>שיוך הפריטים המותאמים</button></div>}
+            {priorityScan.items.some((item)=>item.catalogItem) && <div className="scan-import"><select value={priorityProjectId} onChange={(event)=>setPriorityProjectId(event.target.value)}><option value="">בחירת פרויקט לשיוך</option>{projects.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}</select><button className="ops-primary" disabled={!priorityProjectId} onClick={async()=>{setScanBusy(true);try{for(const item of priorityScan.items.filter((row)=>row.catalogItem)){await api(`/projects/${encodeURIComponent(priorityProjectId)}/equipment`,{method:"POST",body:JSON.stringify({catalogItemId:item.catalogItem.id,quantity:item.quantity,notes:`יובא מהזמנת ${priorityScan.fileName}`})})}setNotice("הפריטים המותאמים שויכו לפרויקט");setPriorityScanOpen(false)}catch(error){setNotice({type:'error',message:error.message})}finally{setScanBusy(false)}}}>שיוך הפריטים המותאמים</button></div>}
           </div>}
         </Modal>
       )}
@@ -709,7 +709,7 @@ function EquipmentTree({ items, apiRoot, api, refresh, setNotice, user, onCreate
   const [newColumn,setNewColumn]=useState('');
   const editable=["admin","manager"].includes(user.role);
   const metadata=(item)=>item.metadata||{};
-  const update=async(item,patch)=>{try{await api(`/equipment-catalog/${item.id}`,{method:'PATCH',body:JSON.stringify(patch)});await refresh()}catch(error){setNotice(error.message)}};
+  const update=async(item,patch)=>{try{await api(`/equipment-catalog/${item.id}`,{method:'PATCH',body:JSON.stringify(patch)});await refresh()}catch(error){setNotice({type:'error',message:error.message})}};
   const updateMeta=(item,patch)=>update(item,{metadata:{...metadata(item),...patch}});
   const persistColumns=(next)=>{setColumns(next);localStorage.setItem('projects:equipment-board-columns',JSON.stringify(next))};
   const addColumn=()=>{const label=newColumn.trim();if(!label)return;persistColumns([...columns,{key:`custom_${Date.now()}`,label}]);setNewColumn('')};
@@ -1040,7 +1040,7 @@ function DocumentUpload({
       await api("/documents", { method: "POST", body });
       onDone();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy(false);
     }

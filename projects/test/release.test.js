@@ -1,6 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
+
+test('every task type offered by the editor is accepted by the latest database constraint',async()=>{
+  const directory=new URL('../migrations/',import.meta.url);
+  let allowed=[];
+  for(const name of (await readdir(directory)).filter(name=>name.endsWith('.sql')).sort()) {
+    const sql=await readFile(new URL(name,directory),'utf8');
+    const check=sql.match(/ADD CONSTRAINT tasks_task_type_check CHECK\s*\(task_type IN\s*\(([^)]+)\)/s);
+    if(check)allowed=[...check[1].matchAll(/'([^']+)'/g)].map(match=>match[1]);
+  }
+  const ui=await readFile(new URL('../src/Workspaces.jsx',import.meta.url),'utf8');
+  const editor=ui.slice(ui.indexOf('export function TaskEditor'),ui.indexOf('export function TasksWorkspace'));
+  const types=editor.slice(editor.indexOf('value={form.taskType'),editor.indexOf('</select>',editor.indexOf('value={form.taskType')));
+  for(const [,type] of types.matchAll(/<option value="([^"]+)"/g))assert.ok(allowed.includes(type),`Task type ${type} is visible but cannot be saved`);
+  assert.ok(allowed.includes('activation'));
+});
 
 test('release version stays synchronized across package and Home Assistant metadata', async () => {
   const packageJson=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));

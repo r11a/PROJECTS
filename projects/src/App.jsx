@@ -203,6 +203,7 @@ import "./modal-system.css";
 import "./productivity.css";
 import "./responsive-unified.css";
 import "./theme-dark.css";
+import "./ui-system.css";
 import projectsMark from "./assets/projects-mark.svg";
 
 const money = new Intl.NumberFormat("he-IL", {
@@ -430,6 +431,8 @@ function App() {
   },[sidebarOpen]);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const noticeText = typeof notice === 'object' ? notice.message : notice;
+  const noticeType = typeof notice === 'object' ? (notice.type || 'info') : /נכשל|לא נשמר|לא הושלמ|שגיאה|תקלה/.test(notice || '') ? 'error' : /ממתין לסנכרון|ויסתנכר|עם חזרת החיבור|נשמר במכשיר|מעלה קבצים/.test(notice || '') ? 'info' : /נשמר|נוצר|עודכנ|עודכן|נמחק|נוספ|הושלמ|הושלם/.test(notice || '') ? 'success' : 'info';
   const [insights, setInsights] = useState(null);
   const [insightsRefreshing, setInsightsRefreshing] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -543,7 +546,7 @@ function App() {
       await loadReferenceData();
       setNotice("תמונת המשתמש עודכנה בסרגל");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const loadInsights = async (force = false) => {
@@ -640,10 +643,10 @@ function App() {
     };
   }, [user?.id]);
   useEffect(() => {
-    if (!notice) return;
+    if (!notice || noticeType === 'error' || noticeType === 'warning') return;
     const timer = setTimeout(() => setNotice(""), 5200);
     return () => clearTimeout(timer);
-  }, [notice]);
+  }, [notice, noticeType]);
   useEffect(() => {
     if (!user) return undefined;
     const unlock = () => {
@@ -783,7 +786,7 @@ function App() {
       if (error.code === "COLLECTION_STAGE_WARNING" && window.confirm(`${error.message}\n\nהאם לעבור שלב בכל זאת?`)) {
         return updateProject(id, { ...patch, overrideCollectionWarning: true });
       }
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
       return null;
     }
   };
@@ -805,7 +808,7 @@ function App() {
       );
       return true;
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
       return false;
     }
   };
@@ -837,7 +840,7 @@ function App() {
       try { await loadReferenceData(); } catch (error) { setNotice(`הפרויקט נוצר, אך רענון הנתונים נכשל: ${error.message}`); }
       if (failures.length) setNotice(`הפרויקט נוצר, אך ${failures.length} פריטי ציוד לא נשמרו. ניתן להוסיף אותם בכרטיס הפרויקט.`);
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
 
@@ -1232,7 +1235,7 @@ function App() {
               setPage={setPage}
               insights={insights}
               insightsRefreshing={insightsRefreshing}
-              onRefreshInsights={() => loadInsights(true).catch((error) => setNotice(error.message))}
+              onRefreshInsights={() => loadInsights(true).catch((error) => setNotice({type:'error',message:error.message}))}
               user={user}
             />
           )}
@@ -1423,9 +1426,9 @@ function App() {
       )}
       {aiChatOpen && <AiChatBoundary onClose={() => setAiChatOpen(false)}><AiChat initialProjectId={selectedProject?.id || ""} apiRoot={apiRoot} onClose={() => setAiChatOpen(false)} onNavigate={(target)=>{setAiChatOpen(false);setSelectedProject(null);setPage(target);setSidebarOpen(false)}} /></AiChatBoundary>}
       {notice && (
-        <div className="toast" role="status" aria-live="polite">
-          <CheckCircle2 size={19} />
-          <span>{notice}</span>
+        <div className={`toast toast-${noticeType}`} role={noticeType==='error'?'alert':'status'} aria-live={noticeType==='error'?'assertive':'polite'}>
+          {noticeType==='success'?<CheckCircle2 size={19}/>:noticeType==='error'||noticeType==='warning'?<AlertTriangle size={19}/>:<Clock3 size={19}/>}
+          <span>{noticeText}</span>
           <button type="button" onClick={() => setNotice("")} aria-label="סגירת ההודעה">×</button>
         </div>
       )}
@@ -1578,7 +1581,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
   const loadUsers = () =>
     api("/users")
       .then((result) => setUsers(result.users))
-      .catch((error) => setNotice(error.message));
+      .catch((error) => setNotice({type:'error',message:error.message}));
   useEffect(() => {
     loadUsers();
     const timer = setInterval(loadUsers, 30000);
@@ -1602,7 +1605,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       loadUsers();
       if (typeof onChanged === "function") onChanged();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const updateUser = async (id, patch) => {
@@ -1615,7 +1618,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       if (typeof onChanged === "function") onChanged(result.user);
       setNotice("ההרשאה עודכנה");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const uploadAvatar = async (id, file) => {
@@ -1628,7 +1631,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       if (typeof onChanged === "function") onChanged(result.user);
       setNotice("תמונת המשתמש עודכנה");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const removeAvatar = async (id) => {
@@ -1638,7 +1641,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       if (typeof onChanged === "function") onChanged();
       setNotice("תמונת המשתמש הוסרה");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const deleteUser = async (item) => {
@@ -1649,7 +1652,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       if (typeof onChanged === "function") onChanged();
       setNotice("המשתמש נמחק");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const mergeIdentities = async (event) => {
@@ -1665,7 +1668,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       await loadUsers();
       if (typeof onChanged === "function") onChanged();
       setNotice("הזהויות אוחדו בהצלחה לחשבון אחד");
-    } catch (error) { setNotice(error.message); } finally { setLinkingIdentity(false); }
+    } catch (error) { setNotice({type:'error',message:error.message}); } finally { setLinkingIdentity(false); }
   };
   const openPasswordReset = (itemId) => setPasswordActions((state)=>({
     ...state,
@@ -1714,7 +1717,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       if (typeof onChanged === "function") onChanged(result.user);
       setNotice("סיסמת משתמש עודכנה בהצלחה");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setSavingAction("");
     }
@@ -1728,7 +1731,7 @@ function UsersPage({ setNotice, currentUser, onChanged }) {
       if (typeof onChanged === "function") onChanged(result.user);
       setNotice("נעילת המשתמש שוחררה");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setSavingAction("");
     }
@@ -2034,7 +2037,7 @@ function SystemPage({ setNotice }) {
   const loadBackups = () =>
     api("/system/backups")
       .then((result) => setBackups(result.backups))
-      .catch((error) => setNotice(error.message));
+      .catch((error) => setNotice({type:'error',message:error.message}));
   useEffect(() => {
     loadBackups();
   }, []);
@@ -2045,7 +2048,7 @@ function SystemPage({ setNotice }) {
       setNotice("הגיבוי הושלם");
       loadBackups();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy(false);
     }
@@ -2065,7 +2068,7 @@ function SystemPage({ setNotice }) {
       });
       setNotice("השחזור החל; המערכת תעלה מחדש בעוד רגע");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
       setBusy(false);
     }
   };
@@ -2130,6 +2133,9 @@ function SystemPage({ setNotice }) {
 }
 
 function Dashboard({ api, projects, openProject, setPage, insights, insightsRefreshing, onRefreshInsights, user }) {
+  const displayKey=`projects:dashboard-display:${user.id}`;
+  const [display,setDisplay]=useState(()=>{try{return {metrics:true,charts:true,...JSON.parse(localStorage.getItem(displayKey)||'{}')};}catch{return {metrics:true,charts:true};}});
+  const changeDisplay=(key,value)=>{const next={...display,[key]:value};setDisplay(next);try{localStorage.setItem(displayKey,JSON.stringify(next));}catch{}};
   const [insightsOpen,setInsightsOpen]=useState(false);
   const [insightsBusy,setInsightsBusy]=useState(false);
   const active = projects.filter((p) => p.stage !== "completed");
@@ -2164,10 +2170,10 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
       <section className="welcome-row">
         <div>
           <span className="workspace-eyebrow">סביבת הניהול שלך <span> / </span> {new Date().toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'})}</span>
-          <h2>כל הפרויקטים.<br/><span className="welcome-accent">תמונה אחת ברורה.</span></h2>
-          <p>שלום {user.displayName}, הנה מה שמתקדם ומה שדורש את תשומת הלב שלך.</p>
+          <h2><span className="welcome-accent">תמונה אחת ברורה.</span></h2>
         </div>
         <div className="welcome-actions">
+          <details className="dashboard-display-options"><summary><SlidersHorizontal size={16}/>התאמת תצוגה</summary><div><label><input type="checkbox" checked={display.metrics} onChange={e=>changeDisplay('metrics',e.target.checked)}/>הצגת מדדים</label><label><input type="checkbox" checked={display.charts} onChange={e=>changeDisplay('charts',e.target.checked)}/>הצגת גרפים ותכנון</label></div></details>
           <button
             className={`dashboard-task-button ${insights?.stats?.overdue > 0 ? "urgent" : ""}`}
             onClick={() => setPage("tasks")}
@@ -2191,8 +2197,8 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
         {userCanAccess(user,'my-work') && <button className="command-card" onClick={() => setPage('my-work')}><span className="command-card-icon"><CheckCircle2 size={23}/></span><span className="workspace-eyebrow">הפוקוס שלך</span><strong>העבודה שלי</strong><span>משימות, חסמים והצעד הבא שלך.</span><span className="command-card-link">לסדר היום האישי <ArrowLeft size={16}/></span></button>}
         {userCanAccess(user,'tasks') && <button className="command-card attention" onClick={() => setPage('tasks')}><span className="command-card-icon"><Clock3 size={23}/></span><span className="workspace-eyebrow">דורש טיפול</span><strong>{insights ? (insights.stats?.overdue || 0) : '—'} <small>משימות באיחור</small></strong><span>{insights?.stats?.overdue ? 'זה הזמן לבדוק מה מעכב את ההתקדמות.' : 'בדיקת המשימות והתאריכים במקום אחד.'}</span><span className="command-card-link">למרכז המשימות <ArrowLeft size={16}/></span></button>}
       </section>
-      <div className="dashboard-section-title"><div><span>01</span><strong>מדדים מרכזיים</strong></div><small>תמונה מהירה של מצב כלל הפרויקטים</small></div>
-      <section className="kpi-grid">
+      <div className="dashboard-section-title" hidden={!display.metrics}><div><strong>מדדים מרכזיים</strong></div></div>
+      <section className="kpi-grid" hidden={!display.metrics}>
         <KpiCard
           icon={FolderKanban}
           tone="purple"
@@ -2227,7 +2233,7 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
           onClick={() => setPage("finance")}
         />}
       </section>
-      <div className="dashboard-section-title"><div><span>02</span><strong>דורש תשומת לב</strong></div><small>חריגות, סיכונים ופעולות שכדאי לקדם עכשיו</small></div>
+      <div className="dashboard-section-title"><div><strong>דורש תשומת לב</strong></div></div>
       <section className="dashboard-priority-zone"><RiskCenter api={api} projects={projects} openProject={openProject}/></section>
       <section className="dashboard-grid top">
         {projects.some((p) => p.flag) && <div className="panel portfolio-panel">
@@ -2287,8 +2293,8 @@ function Dashboard({ api, projects, openProject, setPage, insights, insightsRefr
           </div>
         </div>}
       </section>
-      <div className="dashboard-section-title"><div><span>03</span><strong>תכנון וביצוע</strong></div><small>מגמות כספיות והמשימות הקרובות</small></div>
-      <section className={`dashboard-grid bottom planning-overview ${canViewFinance ? "" : "without-finance"}`}>
+      <div className="dashboard-section-title" hidden={!display.charts}><div><strong>תכנון וביצוע</strong></div></div>
+      <section hidden={!display.charts} className={`dashboard-grid bottom planning-overview ${canViewFinance ? "" : "without-finance"}`}>
         <div className="panel stage-panel">
           <PanelHead title="התפלגות לפי שלב" subtitle="כלל הפרויקטים" />
           <div className="stage-chart-wrap">
@@ -2488,7 +2494,7 @@ function ProjectsPage({
       const result = await api(`/projects?scope=${scope}`);
       setArchivedProjects(result.projects);
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setArchiveLoading(false);
     }
@@ -2511,7 +2517,7 @@ function ProjectsPage({
       setDeleteTarget(null);
       setNotice("הפרויקט וכל הנתונים המשויכים אליו נמחקו לצמיתות");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setDeleting(false);
     }
@@ -3745,6 +3751,7 @@ function NewProjectModal({
   );
   const [step, setStep] = useState(1);
   const savingProject = useRef(false);
+  const [projectSaving,setProjectSaving]=useState(false);
   const [form, setForm] = useState({
     name: "",
     clientMode: "existing",
@@ -3807,7 +3814,7 @@ function NewProjectModal({
             city: form.clientCity,
           }
         : undefined;
-    savingProject.current = true;
+    savingProject.current = true;setProjectSaving(true);
     try { await onCreate({
       name: form.name,
       clientId: client?.id || null,
@@ -3851,28 +3858,14 @@ function NewProjectModal({
       health: 100,
       tasksDone: 0,
       tasksTotal: 0,
-    }); } finally { savingProject.current = false; }
+    }); } finally { savingProject.current = false;setProjectSaving(false); }
   };
   const categories = equipment.filter(
     (item) => item.itemType === "system_type" && item.active,
   );
   if (step === 1)
     return (
-      <ModalPortal>
-      <div className="modal-backdrop" onMouseDown={onClose}>
-        <div
-          className="modal project-wizard"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <div className="modal-head">
-            <div>
-              <span>אשף פרויקט חדש · שלב 1 מתוך 3</span>
-              <h2>לקוח וזהות הפרויקט</h2>
-            </div>
-            <button onClick={onClose}>
-              <X />
-            </button>
-          </div>
+      <AppModal title="לקוח וזהות הפרויקט" subtitle="פרויקט חדש · 1 מתוך 3" className="project-wizard" onClose={onClose} busy={projectSaving}>
           <div className="wizard-progress">
             <i style={{ width: "33.333%" }} />
           </div>
@@ -4025,37 +4018,15 @@ function NewProjectModal({
               <button type="button" onClick={onClose}>
                 ביטול
               </button>
-              <button className="primary-button" type="submit">
+              <button className="primary-button" type="submit" disabled={projectSaving}>
                 המשך <ArrowLeft size={16} />
               </button>
             </div>
           </form>
-        </div>
-      </div>
-      </ModalPortal>
+      </AppModal>
     );
   return (
-    <ModalPortal>
-    <div className="modal-backdrop" onMouseDown={onClose}>
-      <div
-        className="modal project-wizard"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="modal-head">
-          <div>
-            <span>אשף פרויקט חדש · שלב {step} מתוך 3</span>
-            <h2>
-              {step === 1
-                ? "לקוח וזהות הפרויקט"
-                : step === 2
-                  ? "ניהול ולוחות זמנים"
-                  : "מערכות וסקירה"}
-            </h2>
-          </div>
-          <button onClick={onClose}>
-            <X />
-          </button>
-        </div>
+    <AppModal title={step===2?'ניהול ולוחות זמנים':'מערכות וסקירה'} subtitle={`פרויקט חדש · ${step} מתוך 3`} className="project-wizard" onClose={onClose} busy={projectSaving}>
         <div className="wizard-progress">
           <i style={{ width: `${(step / 3) * 100}%` }} />
         </div>
@@ -4367,14 +4338,12 @@ function NewProjectModal({
             >
               {step === 1 ? "ביטול" : "חזרה"}
             </button>
-            <button className="primary-button" type="submit">
-              {step === 3 ? "יצירת פרויקט" : "המשך"} <ArrowLeft size={16} />
+            <button className="primary-button" type="submit" disabled={projectSaving}>
+              {projectSaving?"שומר…":step === 3 ? "יצירת פרויקט" : "המשך"} <ArrowLeft size={16} />
             </button>
           </div>
         </form>
-      </div>
-    </div>
-    </ModalPortal>
+    </AppModal>
   );
 }
 

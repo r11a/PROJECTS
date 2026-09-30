@@ -101,6 +101,12 @@ body > .modal-backdrop .app-modal-content > :only-child {
   max-width: 100%;
 }
 
+/* Keep the form's natural grid height. Shrinking it makes overflowing fields
+   overlap the sticky footer even at the end of the scroll container. */
+body > .modal-backdrop .app-modal-content > form {
+  flex: 0 0 auto;
+}
+
 body > :is(.modal-backdrop, .ops-modal-backdrop)
   :is(.modal-actions, .ops-modal-actions, .form-actions),
 body > .cg-dialog-backdrop .cg-schedule-dialog > footer,

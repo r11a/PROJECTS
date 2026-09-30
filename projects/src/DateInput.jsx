@@ -21,6 +21,9 @@ function DateField({type='date',value,defaultValue='',onChange,onBlur,name,min,m
   const [open,setOpen]=useState(false);
   const [month,setMonth]=useState(()=>new Date(`${current.slice(0,10)||localDateValue()}T12:00:00`));
   const inputRef=useRef(null);
+  const calendarRef=useRef(null);
+  const [focusDay,setFocusDay]=useState('');
+  useEffect(()=>{if(open&&focusDay)calendarRef.current?.querySelector(`[data-date="${focusDay}"]`)?.focus();},[month,open,focusDay]);
   useEffect(()=>{setText(display(current));},[current]);
   const parse=(input)=>{
     const match=input.trim().match(type==='datetime-local'?/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/:/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -34,7 +37,7 @@ function DateField({type='date',value,defaultValue='',onChange,onBlur,name,min,m
   useEffect(()=>{
     inputRef.current?.setCustomValidity(text&&!valid(parse(text))?'יש להזין תאריך תקין בטווח המותר בפורמט DD/MM/YYYY'+(type==='datetime-local'?' HH:MM':''):'');
   },[text,rangeMin,rangeMax,type]);
-  const emit=(iso)=>{setInternal(iso);onChange?.({target:{value:iso,name},currentTarget:{value:iso,name}});};
+  const emit=(iso)=>{if(iso!==current)inputRef.current?.dispatchEvent(new Event('projects:form-changed',{bubbles:true}));setInternal(iso);onChange?.({target:{value:iso,name},currentTarget:{value:iso,name}});};
   const choose=(iso)=>{setText(display(iso));emit(iso);setOpen(false);};
   const days=new Date(month.getFullYear(),month.getMonth()+1,0).getDate();
   const offset=new Date(month.getFullYear(),month.getMonth(),1).getDay();
@@ -54,10 +57,21 @@ function DateField({type='date',value,defaultValue='',onChange,onBlur,name,min,m
           <select aria-label="שנה" value={month.getFullYear()} onChange={e=>setMonth(new Date(+e.target.value,month.getMonth(),1))}>{years.map(year=><option key={year}>{year}</option>)}</select>
           <button type="button" aria-label="החודש הבא" disabled={lastMonth} onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()+1,1))}><ChevronLeft size={18}/></button>
         </div>
-        <div className="he-calendar-grid">
+        <div className="he-calendar-grid" ref={calendarRef} onKeyDown={event=>{
+          const iso=event.target.dataset.date;
+          if(!iso)return;
+          const date=new Date(`${iso}T12:00:00`);
+          const delta={ArrowLeft:1,ArrowRight:-1,ArrowUp:-7,ArrowDown:7,Home:-date.getDay(),End:6-date.getDay()}[event.key];
+          if(delta===undefined)return;
+          event.preventDefault();date.setDate(date.getDate()+delta);
+          const next=localDateValue(date),full=next+(type==='datetime-local'?`T${current.slice(11,16)||'09:00'}`:'');
+          if(!valid(full))return;
+          if(date.getMonth()!==month.getMonth()||date.getFullYear()!==month.getFullYear())setMonth(new Date(date.getFullYear(),date.getMonth(),1));
+          setFocusDay(next);
+        }}>
           {weekdays.map(day=><small key={day}>{day}</small>)}
           {Array.from({length:offset},(_,i)=><span key={`empty-${i}`}/>)}
-          {Array.from({length:days},(_,i)=>{const iso=localDateValue(new Date(month.getFullYear(),month.getMonth(),i+1)),next=iso+(type==='datetime-local'?`T${current.slice(11,16)||'09:00'}`:'');return <button type="button" key={iso} aria-label={formatDateIL(iso)} aria-pressed={iso===current.slice(0,10)} disabled={!valid(next)} onClick={()=>choose(next)}>{i+1}</button>;})}
+          {Array.from({length:days},(_,i)=>{const iso=localDateValue(new Date(month.getFullYear(),month.getMonth(),i+1)),next=iso+(type==='datetime-local'?`T${current.slice(11,16)||'09:00'}`:'');return <button type="button" key={iso} data-date={iso} aria-label={formatDateIL(iso)} aria-pressed={iso===current.slice(0,10)} disabled={!valid(next)} onClick={()=>choose(next)}>{i+1}</button>;})}
         </div>
         <button type="button" className="he-calendar-today" disabled={!valid(localDateValue()+(type==='datetime-local'?`T${current.slice(11,16)||'09:00'}`:''))} onClick={()=>choose(localDateValue()+(type==='datetime-local'?`T${current.slice(11,16)||'09:00'}`:''))}>היום</button>
         {type==='datetime-local'&&<small>אפשר לערוך את השעה בשדה התאריך והשעה.</small>}

@@ -27,7 +27,7 @@ export function MessageCenter({
         setMessages(result.messages);
         onUnread(result.unread);
       })
-      .catch((error) => setNotice(error.message));
+      .catch((error) => setNotice({type:'error',message:error.message}));
   useEffect(() => {
     load();
     const live = (event) => {
@@ -53,7 +53,7 @@ export function MessageCenter({
       setNotice(result.offlineQueued?'✓ ההודעה נשמרה במכשיר ותישלח אוטומטית בחזרת החיבור':`✓ ההודעה נשלחה${result.notification?.sent?" והתראת Push נמסרה למכשיר היעד":" · היא זמינה מיד בתיבת ההודעות"}`);
       load();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const reply = (message) => {
@@ -62,7 +62,7 @@ export function MessageCenter({
     setCompose(true);
   };
   const insertMention=(item)=>setForm(current=>({...current,body:`${current.body}${current.body&&!current.body.endsWith(' ')?' ':''}@${item.displayName} `}));
-  const remove=async(ids)=>{if(!ids.length||!confirm(`למחוק ${ids.length===1?'את ההודעה':`${ids.length} הודעות`} מהתצוגה שלך?`))return;try{await api('/messages',{method:'DELETE',body:JSON.stringify({ids})});setSelected([]);setNotice('ההודעות שנבחרו נמחקו');load()}catch(error){setNotice(error.message)}};
+  const remove=async(ids)=>{if(!ids.length||!confirm(`למחוק ${ids.length===1?'את ההודעה':`${ids.length} הודעות`} מהתצוגה שלך?`))return;try{await api('/messages',{method:'DELETE',body:JSON.stringify({ids})});setSelected([]);setNotice('ההודעות שנבחרו נמחקו');load()}catch(error){setNotice({type:'error',message:error.message})}};
   const openLinked = async (event, message) => {
     event.preventDefault();
     event.stopPropagation();

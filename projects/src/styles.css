@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap');
+@font-face { font-family: 'Heebo'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('./assets/fonts/Heebo-Variable.ttf') format('truetype'); }
 /* Shared visual foundation. Semantic values also apply to portaled dialogs. */
 :root {
   --surface: #ffffff; --surface-subtle: #f7f8fc; --canvas: #f2f4fa;

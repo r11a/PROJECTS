@@ -121,14 +121,14 @@ export function MyWorkWorkspace({api,user,projects,professionals,setNotice,openP
   const [loading,setLoading]=useState(true);const [section,setSection]=useState("all");const [projectId,setProjectId]=useState("");const [priority,setPriority]=useState("");
   const [views,setViews]=useState([]);const [editor,setEditor]=useState(null);const [undo,setUndo]=useState(null);
   const loadRequest=useRef(0);
-  const load=useCallback(async({silent=false}={})=>{const requestId=++loadRequest.current;try{if(!silent)setLoading(true);const [work,saved]=await Promise.all([api("/my-work"),api("/saved-views?workspace=my-work")]);if(requestId!==loadRequest.current)return;setData(work);setViews(saved.views);}catch(error){if(requestId===loadRequest.current)setNotice(error.message)}finally{if(requestId===loadRequest.current)setLoading(false)}},[]);
+  const load=useCallback(async({silent=false}={})=>{const requestId=++loadRequest.current;try{if(!silent)setLoading(true);const [work,saved]=await Promise.all([api("/my-work"),api("/saved-views?workspace=my-work")]);if(requestId!==loadRequest.current)return;setData(work);setViews(saved.views);}catch(error){if(requestId===loadRequest.current)setNotice({type:'error',message:error.message})}finally{if(requestId===loadRequest.current)setLoading(false)}},[]);
   useEffect(()=>{load();const live=(event)=>{if(event.detail?.table && !["tasks","projects","user_messages","professionals"].includes(event.detail?.table))return;load({silent:true})};window.addEventListener("projects:live-change",live);return()=>window.removeEventListener("projects:live-change",live)},[load]);
   const source=section==='all'?Object.values(data.sections||{}).flat():data.sections[section]||[];
   const tasks=useMemo(()=>source.filter(task=>(!projectId||String(task.project_id)===projectId)&&(!priority||task.priority===priority)),[source,projectId,priority]);
-  const update=async(task,patch,message)=>{try{const result=await api(`/operations/tasks/${task.id}`,{method:"PATCH",body:JSON.stringify({...patch,expectedVersion:task.version})});setUndo(result.offlineQueued?null:{task,patch:{status:task.status,expectedVersion:result.task?.version},message});setNotice(result.offlineQueued?"נשמר במכשיר · ממתין לסנכרון":message);if(!result.offlineQueued&&result.task?.status==="done"&&task.status!=="done"&&result.task.task_type==="supervision")window.dispatchEvent(new CustomEvent("projects:supervision-completed",{detail:result.task}));await load({silent:true})}catch(error){setNotice(error.message)}};
-  const saveView=async()=>{const name=prompt("שם לתצוגה השמורה");if(!name)return;try{await api("/saved-views",{method:"POST",body:JSON.stringify({workspace:"my-work",name,filters:{section,projectId,priority}})});setNotice("התצוגה נשמרה עבורך");load({silent:true})}catch(error){setNotice(error.message)}};
+  const update=async(task,patch,message)=>{try{const result=await api(`/operations/tasks/${task.id}`,{method:"PATCH",body:JSON.stringify({...patch,expectedVersion:task.version})});setUndo(result.offlineQueued?null:{task,patch:{status:task.status,expectedVersion:result.task?.version},message});setNotice(result.offlineQueued?"נשמר במכשיר · ממתין לסנכרון":message);if(!result.offlineQueued&&result.task?.status==="done"&&task.status!=="done"&&result.task.task_type==="supervision")window.dispatchEvent(new CustomEvent("projects:supervision-completed",{detail:result.task}));await load({silent:true})}catch(error){setNotice({type:'error',message:error.message})}};
+  const saveView=async()=>{const name=prompt("שם לתצוגה השמורה");if(!name)return;try{await api("/saved-views",{method:"POST",body:JSON.stringify({workspace:"my-work",name,filters:{section,projectId,priority}})});setNotice("התצוגה נשמרה עבורך");load({silent:true})}catch(error){setNotice({type:'error',message:error.message})}};
   const applyView=(view)=>{const filters=view.filters||{};setSection(filters.section||"overdue");setProjectId(String(filters.projectId||""));setPriority(filters.priority||"")};
-  const saveTask=async(value)=>{try{const result=await api(`/operations/tasks/${editor.id}`,{method:"PATCH",body:JSON.stringify(value)});setEditor(null);setNotice(result.offlineQueued?"נשמר במכשיר · ממתין לסנכרון":"המשימה עודכנה");load({silent:true});return result}catch(error){setNotice(error.message);return false}};
+  const saveTask=async(value)=>{try{const result=await api(`/operations/tasks/${editor.id}`,{method:"PATCH",body:JSON.stringify(value)});setEditor(null);setNotice(result.offlineQueued?"נשמר במכשיר · ממתין לסנכרון":"המשימה עודכנה");load({silent:true});return result}catch(error){setNotice({type:'error',message:error.message});return false}};
   const sections=[["all","הכול",data.stats.total,ListChecks],["overdue","באיחור",data.stats.overdue,ShieldAlert],["today","היום",data.stats.today,Clock3],["upcoming","בהמשך",(data.sections.upcoming||[]).length,ArrowLeft]];
   const personalName=String(user?.displayName||user?.username||"").trim().split(/\s+/)[0]||"שלך";
   const nextTask = [...Object.values(data.sections || {}).flat()].sort((a,b) => {
@@ -137,21 +137,21 @@ export function MyWorkWorkspace({api,user,projects,professionals,setNotice,openP
   })[0];
   const nextReason = nextTask?.critical ? 'משימה שסומנה כקריטית' : nextTask && dateOnly(nextTask.due_date) < localDateValue() ? 'תאריך היעד כבר עבר' : 'לפי העדיפות ותאריך היעד';
   return <div className="productivity-page my-work-page">
-    <section className="productivity-hero personal-hero"><div><span className="workspace-eyebrow"><Sparkles size={16}/> מרכז העבודה של {personalName}</span><h2>שלום {personalName},<br/>במה מתקדמים היום?</h2><p>המשימות שלך, הפרויקטים שלך והדברים שכדאי לטפל בהם קודם.</p><span className="personal-date">{new Date().toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'})}</span></div><button onClick={() => load()} disabled={loading} aria-label="רענון סביבת העבודה"><RefreshCw size={17} className={loading?"spin":""}/> רענון</button></section>
-    {!loading && nextTask && <section className="next-action-card"><div className="next-action-symbol"><Sparkles size={24}/></div><div><span className="workspace-eyebrow">הצעד הבא המומלץ</span><h3>{nextTask.title}</h3><p>{nextTask.project_name || 'משימה אישית'} · {nextReason}</p><small>מבוסס על נתוני המשימות שלך</small></div><button className="primary-button" onClick={() => setEditor(nextTask)}>פתיחת המשימה <ArrowLeft size={16}/></button></section>}
+    <section className="productivity-hero personal-hero"><div><span className="workspace-eyebrow"><Sparkles size={16}/> מרכז העבודה של {personalName}</span><h2>העבודה שלי</h2><span className="personal-date">{new Date().toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'})}</span></div><button onClick={() => load()} disabled={loading} aria-label="רענון סביבת העבודה"><RefreshCw size={17} className={loading?"spin":""}/> רענון</button></section>
+    {!loading && nextTask && <section className="next-action-card"><div className="next-action-symbol"><Sparkles size={24}/></div><div><span className="workspace-eyebrow">הצעד הבא המומלץ</span><h3>{nextTask.title}</h3><p>{nextTask.project_name || 'משימה אישית'} · {nextReason}</p></div><button className="primary-button" onClick={() => setEditor(nextTask)}>פתיחת המשימה <ArrowLeft size={16}/></button></section>}
     <div className="work-focus-stats">{sections.map(([id,label,count,Icon])=><button key={id} className={section===id?"active":""} onClick={()=>setSection(id)}><Icon size={20}/><span>{label}</span><strong>{count||0}</strong></button>)}</div>
     <section className="productivity-toolbar panel"><div className="saved-view-strip"><button onClick={saveView}><Save size={16}/> שמירת תצוגה</button>{views.map(view=><button key={view.id} onClick={()=>applyView(view)}>{view.name}</button>)}</div><div><select aria-label="סינון לפי פרויקט" value={projectId} onChange={e=>setProjectId(e.target.value)}><option value="">כל הפרויקטים</option>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select><select aria-label="סינון לפי עדיפות" value={priority} onChange={e=>setPriority(e.target.value)}><option value="">כל העדיפויות</option>{Object.entries(priorityLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>{(projectId||priority)&&<button onClick={()=>{setProjectId("");setPriority("")}}>ניקוי</button>}</div></section>
     <section className="my-work-list panel">{loading?<div className="productivity-empty"><RefreshCw className="spin"/>טוען את סביבת העבודה...</div>:tasks.length?tasks.map(task=>{const overdue=dateOnly(task.due_date)<localDateValue();return <article key={task.id} className={`focus-task ${task.critical?"critical":""} ${overdue?'overdue':''}`}><button className="task-complete" title="סימון כהושלמה" onClick={()=>update(task,{status:"done"},"המשימה הושלמה")}><Check size={18}/></button><button type="button" className="focus-task-main" onClick={()=>setEditor(task)}><span>{task.project_name||"ללא פרויקט"} <i className={`task-relevance ${task.relevance||"related"}`}>{relevanceLabels[task.relevance]||relevanceLabels.related}</i></span><strong>{task.title}</strong><small>{task.dependency_title?`תלות: ${task.dependency_title} · `:''}{taskTiming(task)} · {priorityLabels[task.priority]||task.priority}</small></button><div className="focus-task-actions"><button onClick={()=>update(task,{dueDate:localDateValue(new Date(Date.now()+86400000))},"המשימה הועברה למחר")}><Clock3 size={15}/> מחר</button><button onClick={()=>{const project=projects.find(item=>item.id===task.project_id);if(project)openProject(project)}}><FolderKanban size={15}/> פרויקט</button></div></article>}):<div className="productivity-empty"><CheckCircle2 size={34}/><strong>הכול מטופל בתצוגה הזו</strong><span>אפשר לעבור לתצוגה אחרת או להסיר מסננים.</span></div>}</section>
     {(data.followUps?.length>0||data.attention?.length>0)&&<section className="my-work-context-grid"><div className="panel"><header><CheckCircle2 size={18}/><strong>המשכי טיפול</strong><span>{data.followUps.length}</span></header>{data.followUps.slice(0,6).map(item=><button key={`${item.kind}-${item.id}`} onClick={()=>{const project=projects.find(project=>String(project.id)===String(item.project_id));if(project)openProject(project)}}><b>{item.project_name}</b><span>{item.follow_up}</span></button>)}</div><div className="panel"><header><ShieldAlert size={18}/><strong>דורש תשומת לב</strong><span>{data.attention.length}</span></header>{data.attention.slice(0,6).map(item=><button key={item.id} onClick={()=>{const project=projects.find(project=>String(project.id)===String(item.id));if(project)openProject(project)}}><b>{item.name}</b><span>{item.flag||`ציון בריאות ${item.health}`}</span></button>)}</div></section>}
     {!!data.messages.length&&<section className="attention-messages panel"><header><BellRing size={18}/><strong>הודעות שמחכות לך</strong><span>{data.messages.length}</span></header>{data.messages.slice(0,4).map(message=><button type="button" key={message.id} onClick={()=>{if(message.linked_url)window.location.assign(message.linked_url)}}><b>{message.subject}</b><span>{message.sender_name}</span></button>)}</section>}
-    {undo&&<div className="productivity-undo"><span>{undo.message}</span><button onClick={async()=>{try{await api(`/operations/tasks/${undo.task.id}`,{method:"PATCH",body:JSON.stringify(undo.patch)});setUndo(null);load({silent:true})}catch(error){setNotice(error.message)}}}>ביטול פעולה</button><button onClick={()=>setUndo(null)}><X size={14}/></button></div>}
+    {undo&&<div className="productivity-undo"><span>{undo.message}</span><button onClick={async()=>{try{await api(`/operations/tasks/${undo.task.id}`,{method:"PATCH",body:JSON.stringify(undo.patch)});setUndo(null);load({silent:true})}catch(error){setNotice({type:'error',message:error.message})}}}>ביטול פעולה</button><button onClick={()=>setUndo(null)}><X size={14}/></button></div>}
     {editor&&<TaskEditor api={api} setNotice={setNotice} projects={projects} professionals={professionals} initial={editor} onClose={()=>setEditor(null)} onSave={saveTask}/>}
   </div>
 }
 
 export function PortfolioControlWorkspace({api,setNotice,openProject,projects}){
   const [tab,setTab]=useState("health");const [health,setHealth]=useState([]);const [resources,setResources]=useState([]);const [loading,setLoading]=useState(true);
-  const load=async()=>{try{setLoading(true);const [a,b]=await Promise.all([api("/portfolio-health"),api("/resource-workload")]);setHealth(a.projects);setResources(b.resources)}catch(error){setNotice(error.message)}finally{setLoading(false)}};
+  const load=async()=>{try{setLoading(true);const [a,b]=await Promise.all([api("/portfolio-health"),api("/resource-workload")]);setHealth(a.projects);setResources(b.resources)}catch(error){setNotice({type:'error',message:error.message})}finally{setLoading(false)}};
   useEffect(()=>{load()},[]);
   const counts=useMemo(()=>({good:health.filter(x=>x.health.tone==="good").length,warning:health.filter(x=>x.health.tone==="warning").length,risk:health.filter(x=>x.health.tone==="risk").length}),[health]);
   return <div className="productivity-page"><section className="productivity-hero"><div><span><Gauge size={16}/> בקרת ביצוע</span><h2>תמונה ניהולית שאפשר לפעול ממנה</h2><p>בריאות פרויקטים ועומסי צוות מחושבים מנתוני אמת ומתורגמים לפעולה הבאה.</p></div><button onClick={load}><RefreshCw size={17}/> רענון</button></section><nav className="productivity-tabs"><button className={tab==="health"?"active":""} onClick={()=>setTab("health")}><Gauge size={17}/> בריאות פרויקטים</button><button className={tab==="resources"?"active":""} onClick={()=>setTab("resources")}><Users size={17}/> עומסי צוות</button></nav>
@@ -215,7 +215,7 @@ export function ProductivitySettings({ api, user, setNotice }) {
       setRules((b.rules || []).map(normalizeAutomationFromBackend));
       setRuns(b.runs || []);
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   useEffect(() => {
@@ -230,7 +230,7 @@ export function ProductivitySettings({ api, user, setNotice }) {
       setNotice("התבנית נוספה");
       load();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
 
@@ -244,7 +244,7 @@ export function ProductivitySettings({ api, user, setNotice }) {
       });
       load();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
 
@@ -270,7 +270,7 @@ export function ProductivitySettings({ api, user, setNotice }) {
       });
       load();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
 
@@ -281,7 +281,7 @@ export function ProductivitySettings({ api, user, setNotice }) {
       load();
       setNotice("האוטומציה נמחקה");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
 
@@ -314,7 +314,7 @@ export function ProductivitySettings({ api, user, setNotice }) {
       setEditorOpen(false);
       load();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setSaving(false);
     }
@@ -807,10 +807,10 @@ export function ProductivitySettings({ api, user, setNotice }) {
 export function ProjectGovernancePanel({project,api,user,setNotice}){
   const canViewFinance=user?.financeAccess!==false;
   const [baselines,setBaselines]=useState([]);const [changes,setChanges]=useState([]);const [form,setForm]=useState({title:"",description:"",priceImpact:"",scheduleImpactDays:""});
-  const load=async()=>{try{const [a,b]=await Promise.all([api(`/projects/${project.id}/baselines`),api(`/projects/${project.id}/change-requests`)]);setBaselines(a.baselines);setChanges(b.changes)}catch(error){setNotice(error.message)}};useEffect(()=>{load()},[project.id]);
-  const createBaseline=async()=>{try{await api(`/projects/${project.id}/baselines`,{method:"POST",body:JSON.stringify({label:`תכנית בסיס ${new Date().toLocaleDateString("he-IL")}`})});setNotice("תכנית הבסיס נשמרה");load()}catch(error){setNotice(error.message)}};
-  const createChange=async(event)=>{event.preventDefault();try{await api(`/projects/${project.id}/change-requests`,{method:"POST",body:JSON.stringify({...form,...(!canViewFinance?{priceImpact:""}:{}),status:"pending"})});setForm({title:"",description:"",priceImpact:"",scheduleImpactDays:""});setNotice("בקשת השינוי נפתחה");load()}catch(error){setNotice(error.message)}};
-  const decide=async(change,status)=>{try{await api(`/projects/${project.id}/change-requests/${change.id}`,{method:"PATCH",body:JSON.stringify({status})});setNotice(status==="approved"?"השינוי אושר":"השינוי נדחה");load()}catch(error){setNotice(error.message)}};
+  const load=async()=>{try{const [a,b]=await Promise.all([api(`/projects/${project.id}/baselines`),api(`/projects/${project.id}/change-requests`)]);setBaselines(a.baselines);setChanges(b.changes)}catch(error){setNotice({type:'error',message:error.message})}};useEffect(()=>{load()},[project.id]);
+  const createBaseline=async()=>{try{await api(`/projects/${project.id}/baselines`,{method:"POST",body:JSON.stringify({label:`תכנית בסיס ${new Date().toLocaleDateString("he-IL")}`})});setNotice("תכנית הבסיס נשמרה");load()}catch(error){setNotice({type:'error',message:error.message})}};
+  const createChange=async(event)=>{event.preventDefault();try{await api(`/projects/${project.id}/change-requests`,{method:"POST",body:JSON.stringify({...form,...(!canViewFinance?{priceImpact:""}:{}),status:"pending"})});setForm({title:"",description:"",priceImpact:"",scheduleImpactDays:""});setNotice("בקשת השינוי נפתחה");load()}catch(error){setNotice({type:'error',message:error.message})}};
+  const decide=async(change,status)=>{try{await api(`/projects/${project.id}/change-requests/${change.id}`,{method:"PATCH",body:JSON.stringify({status})});setNotice(status==="approved"?"השינוי אושר":"השינוי נדחה");load()}catch(error){setNotice({type:'error',message:error.message})}};
   return <div className="governance-grid"><section className="panel baseline-card"><header><div><span><BarChart3 size={17}/> תכנית בסיס</span><h3>השוואת תכנון מול ביצוע</h3></div>{["admin","manager"].includes(user.role)&&<button onClick={createBaseline}><Save size={16}/> שמירת מצב נוכחי</button>}</header>{baselines.length?<div className="baseline-list">{baselines.map(item=><div key={item.id}><strong>{item.label}</strong><span>{new Date(item.created_at).toLocaleString("he-IL")}</span><small>{item.snapshot?.tasks?.length||0} משימות בנקודת הייחוס</small></div>)}</div>:<div className="productivity-empty">עדיין לא נשמרה תכנית בסיס. מומלץ לשמור לאחר אישור הלו״ז.</div>}</section><section className="panel change-card"><header><span><SlidersHorizontal size={17}/> בקרת שינויים</span><h3>{canViewFinance?"השפעה על זמן ותקציב לפני ביצוע":"השפעה על לוח הזמנים לפני ביצוע"}</h3></header><form onSubmit={createChange}><input required value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="כותרת השינוי"/><textarea value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="מה השתנה ולמה?"/><div>{canViewFinance&&<label>השפעה כספית<input type="number" value={form.priceImpact} onChange={e=>setForm({...form,priceImpact:e.target.value})}/></label>}<label>השפעה בימים<input type="number" value={form.scheduleImpactDays} onChange={e=>setForm({...form,scheduleImpactDays:e.target.value})}/></label></div><button><Plus size={16}/> פתיחת בקשת שינוי</button></form><div className="change-list">{changes.map(change=><article key={change.id}><div><strong>{change.title}</strong><span>{change.status}{canViewFinance&&<> · ₪{Number(change.price_impact).toLocaleString("he-IL")}</>} · {change.schedule_impact_days} ימים</span></div>{change.status==="pending"&&["admin","manager"].includes(user.role)&&<aside><button onClick={()=>decide(change,"approved")}><Check size={15}/> אישור</button><button onClick={()=>decide(change,"rejected")}>דחייה</button></aside>}</article>)}</div></section></div>
 }
 

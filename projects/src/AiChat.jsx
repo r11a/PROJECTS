@@ -58,11 +58,10 @@ export function AiChat({ apiRoot, onClose, onNavigate, initialProjectId = '' }) 
   const [chatProject,setChatProject]=useState(initialProjectId);
   const [projectError,setProjectError]=useState('');
   const [equipmentDetailsOpen,setEquipmentDetailsOpen]=useState(true);
-  const [product,setProduct]=useState({manufacturer:'',model:'',category:'',projectId:''});
+  const [product,setProduct]=useState({manufacturer:'',model:'',category:'',projectId:initialProjectId});
   const [projects,setProjects]=useState([]);
   const [freeSearch,setFreeSearch]=useState(false);
   useEffect(()=>{
-    if(!equipmentMode&&!checkMode)return;
     const controller=new AbortController();
     setProjectError('');
     fetch(`${apiRoot}/projects`,{credentials:'same-origin',signal:controller.signal}).then(r=>{if(!r.ok)throw new Error('לא ניתן לטעון פרויקטים. עברו למצב אחר וחזרו כדי לנסות שוב.');return r.json();}).then(data=>setProjects(data.projects||[])).catch(error=>{if(error.name!=='AbortError')setProjectError(error.message);});
@@ -206,8 +205,9 @@ export function AiChat({ apiRoot, onClose, onNavigate, initialProjectId = '' }) 
           {helpGroups.map((group)=><article key={group.title}><h4>{group.title}</h4><div>{group.examples.map((example)=><button type="button" key={example} onClick={()=>useExample(example)}>{example}</button>)}</div></article>)}
           <p><b>טיפ:</b> אפשר לבקש מדריך צעד-אחר-צעד, הסבר על מסך מסוים או תשובה מתוך הנתונים החיים. לדוגמה: “הסבר לי איך לנהל ביקורת אתר בפרויקט” או “מה המשימות הפתוחות בפרויקט משפחת כהן בשבועיים הקרובים?”</p>
         </section>}
+        {!helpOpen&&<div className="research-context"><span>פרויקט</span><strong>{projects.find(p=>String(p.id)===String(checkMode?checkProject:equipmentMode?product.projectId:chatProject))?.name||((checkMode?checkProject:equipmentMode?product.projectId:chatProject)?'פרויקט נבחר':'זיהוי מתוך השאלה')}</strong>{chatProject&&!equipmentMode&&!checkMode&&<button type="button" disabled={busy} onClick={()=>setChatProject('')}>ניקוי</button>}</div>}
         <div className="ai-chat-thread" ref={threadRef}>
-          {chatProject&&!equipmentMode&&!checkMode&&<button type="button" disabled={busy} onClick={()=>setChatProject("")}>נקה הקשר פרויקט</button>}{messages.map((message,index)=><article key={index} className={message.role}>
+          {messages.map((message,index)=><article key={index} className={message.role}>
             {message.role !== "user" && <span><Sparkles size={15}/></span>}
             <div>{message.projectChoices?.length>0&&<nav className="ai-chat-actions">{message.projectChoices.map(project=><button type="button" key={project.id} disabled={busy} onClick={()=>{setChatProject(project.id);ask(null,{mode:"chat",projectId:project.id,question:message.question});}}>{project.name}</button>)}</nav>}{message.check&&<ProjectCheckResult result={message.check}/>}<ResearchText text={message.text} research={message.research}/><ResearchResults research={message.research} busy={busy} onProject={projectId=>{setProduct(current=>({...current,projectId,manufacturer:'',model:''}));ask(null,{mode:'equipment',projectId,manufacturer:'',model:'',question:message.question});}} onProduct={selected=>{setEquipmentMode(true);setProduct(current=>({...current,manufacturer:selected.manufacturer,model:selected.model}));if(selected.manufacturer&&selected.model){setFreeSearch(false);ask(null,{mode:'equipment',manufacturer:selected.manufacturer,model:selected.model,freeSearch:false,question:message.question});}else {setEquipmentDetailsOpen(true);setQuestion(message.question);}}}/>{message.actions?.length>0&&<nav className="ai-chat-actions">{message.actions.map((action)=><button type="button" key={action.page} onClick={()=>typeof onNavigate==='function'&&onNavigate(action.page)}>{action.label}<ArrowLeft size={14}/></button>)}</nav>}{message.meta && <small>{message.meta}</small>}</div>
           </article>)}

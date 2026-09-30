@@ -273,12 +273,12 @@ export function AlertCenter({ alerts, api, onSnoozed, onClose, setNotice, onOpen
       setNotice(`ההתראות נדחו עד ${result?.snoozedUntil?new Date(result.snoozedUntil).toLocaleString('he-IL'):'המועד שנבחר'}`);
       if (typeof onSnoozed === "function") await onSnoozed(result);
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy(false);
     }
   };
-  const dismiss=async()=>{setBusy(true);try{await api('/alerts/dismiss',{method:'POST',body:JSON.stringify({keys:alerts.map(alert=>alert.key)})});setNotice('ההתראות בוטלו עבורך');if(typeof onSnoozed==='function')await onSnoozed()}catch(error){setNotice(error.message)}finally{setBusy(false)}};
+  const dismiss=async()=>{setBusy(true);try{await api('/alerts/dismiss',{method:'POST',body:JSON.stringify({keys:alerts.map(alert=>alert.key)})});setNotice('ההתראות בוטלו עבורך');if(typeof onSnoozed==='function')await onSnoozed()}catch(error){setNotice({type:'error',message:error.message})}finally{setBusy(false)}};
   return (
     <ModalPortal>
     <div className="alert-backdrop">
@@ -349,11 +349,14 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
   const [events, setEvents] = useState([]);
   const [selectedDay, setSelectedDay] = useState(null);
   const [creating, setCreating] = useState(false);
-  const [view, setView] = useState("month");
+  const calendarPreferenceKey=`projects:calendar-display:${user.id}`;
+  const [savedDisplay]=useState(()=>{try{return JSON.parse(localStorage.getItem(calendarPreferenceKey)||'{}')||{};}catch{return {};}});
+  const [view, setView] = useState(['day','week','month','monthDetail','year'].includes(savedDisplay.view)?savedDisplay.view:'month');
   const [lastUpdated, setLastUpdated] = useState(null);
   const [projects, setProjects] = useState([]);
-  const [projectFilter, setProjectFilter] = useState("");
-  const [userFilter, setUserFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState(savedDisplay.projectFilter||"");
+  const [userFilter, setUserFilter] = useState(savedDisplay.userFilter||"");
+  useEffect(()=>{try{localStorage.setItem(calendarPreferenceKey,JSON.stringify({view,projectFilter,userFilter}));}catch{}},[calendarPreferenceKey,view,projectFilter,userFilter]);
   const [calendarUsers, setCalendarUsers] = useState([]);
   const [calendarFeed, setCalendarFeed] = useState(null);
   const [workCalendar, setWorkCalendar] = useState({ includeFriday: false, includeSaturday: false });
@@ -420,7 +423,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
       setProjects(result.projects || []);
       setLastUpdated(new Date());
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   useEffect(() => {
@@ -468,7 +471,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
       setCalendarFeed({ active: true, token: result.token });
       setNotice("קישור Outlook לקריאה בלבד נוצר");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const calendarFeedUrl = calendarFeed?.feedUrl || "";
@@ -487,7 +490,7 @@ export function CalendarWorkspace({ api, apiRoot, user, setNotice, onOpenEvent }
       setCalendarFeed({ active: false, token: null });
       setNotice("קישור Outlook בוטל");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const first = new Date(year, month, 1),
@@ -889,7 +892,7 @@ function CalendarEventModal({ api, onClose, onDone, setNotice, workCalendar = {}
   useEffect(() => {
     api("/calendar-options")
       .then(setOptions)
-      .catch((error) => setNotice(error.message));
+      .catch((error) => setNotice({type:'error',message:error.message}));
   }, []);
   const submit = async (event) => {
     event.preventDefault();
@@ -903,7 +906,7 @@ function CalendarEventModal({ api, onClose, onDone, setNotice, workCalendar = {}
       setNotice("האירוע נוסף ללוח השנה");
       onDone();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   return (
@@ -1053,7 +1056,7 @@ export function ClientsWorkspace({
       if (requestId !== clientsRequest.current) return;
       setClients(result.clients);
     } catch (error) {
-      if (requestId === clientsRequest.current) setNotice(error.message);
+      if (requestId === clientsRequest.current) setNotice({type:'error',message:error.message});
     } finally {
       if (requestId === clientsRequest.current) setLoading(false);
     }
@@ -1066,7 +1069,7 @@ export function ClientsWorkspace({
       setDetail(nextDetail);
       setSelectedId(id);
     } catch (error) {
-      if (requestId === detailRequest.current) setNotice(error.message);
+      if (requestId === detailRequest.current) setNotice({type:'error',message:error.message});
     }
   }, []);
   useEffect(() => {
@@ -1076,7 +1079,7 @@ export function ClientsWorkspace({
   useEffect(() => {
     api("/settings")
       .then(setConfiguration)
-      .catch((error) => setNotice(error.message));
+      .catch((error) => setNotice({type:'error',message:error.message}));
   }, []);
   useEffect(() => {
     const live = (event) => {
@@ -1104,7 +1107,7 @@ export function ClientsWorkspace({
       if (typeof onDataChanged === "function") await onDataChanged();
       await loadDetail(result.client.id);
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const sortedClients = useMemo(
@@ -1897,7 +1900,7 @@ function ClientDetail({
       setNotice("פרטי הלקוח נשמרו");
       onRefresh();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const deleteClient = async () => {
@@ -1908,7 +1911,7 @@ function ClientDetail({
       setNotice("כרטיס הלקוח נמחק");
       onDeleted();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const completeTask = async (task) => {
@@ -1922,7 +1925,7 @@ function ClientDetail({
       setNotice(task.status === "done" ? "המשימה נפתחה מחדש" : "המשימה הושלמה");
       onRefresh();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   return (
@@ -2434,7 +2437,7 @@ function ClientDetail({
               setNotice("פרטי הלקוח נשמרו");
               onRefresh();
             } catch (error) {
-              setNotice(error.message);
+              setNotice({type:'error',message:error.message});
             }
           }}
         />
@@ -2505,7 +2508,7 @@ function ContactForm({ clientId, api, onDone, setNotice }) {
       setNotice("איש הקשר נוסף");
       onDone();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   return (
@@ -2580,7 +2583,7 @@ function ClientEquipmentForm({ clientId, api, onDone, setNotice }) {
   useEffect(() => {
     api("/equipment-catalog")
       .then((result) => setCatalog(result.items))
-      .catch((error) => setNotice(error.message));
+      .catch((error) => setNotice({type:'error',message:error.message}));
   }, []);
   const categories = catalog.filter(
     (item) => item.itemType === "system_type" && item.active,
@@ -2595,7 +2598,7 @@ function ClientEquipmentForm({ clientId, api, onDone, setNotice }) {
       setNotice("המערכת שויכה ללקוח");
       onDone();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   return (
@@ -2689,7 +2692,7 @@ function TaskForm({ clientId, api, onDone, setNotice }) {
       setNotice("המשימה נוספה");
       onDone();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   return (
@@ -2778,7 +2781,7 @@ function InspectionForm({ clientId, api, onDone, setNotice }) {
       setNotice("ביקורת האתר נשמרה");
       onDone();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   return (
@@ -2848,7 +2851,7 @@ function FileUpload({ clientId, api, onDone, setNotice }) {
       setNotice("הקובץ הועלה לתיקיית המסמכים הראשית");
       onDone();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setUploading(false);
     }
@@ -2912,13 +2915,13 @@ export function OperationalSettings({
       setData(result);
       if (typeof onConfigurationChanged === "function") onConfigurationChanged(result);
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const loadAudit = () =>
     api(`/audit?q=${encodeURIComponent(auditQuery)}`)
       .then((result) => setAudit(result.entries))
-      .catch((error) => setNotice(error.message));
+      .catch((error) => setNotice({type:'error',message:error.message}));
   const clearAudit = async () => {
     if (
       !window.confirm(
@@ -2933,7 +2936,7 @@ export function OperationalSettings({
       setAudit(refreshed.entries);
       setNotice(`${result.deletedCount} רשומות נמחקו מיומן הפעולות`);
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const applySavedSetting = (key, value) => {
@@ -2953,7 +2956,7 @@ export function OperationalSettings({
         setBackups(result.backups);
         setBackupPolicy(result.policy);
       })
-      .catch((error) => setNotice(error.message));
+      .catch((error) => setNotice({type:'error',message:error.message}));
   useEffect(() => {
     if (tab === "backup") loadBackups();
   }, [tab]);
@@ -3094,7 +3097,7 @@ function RecycleBinSettings({ api, setNotice }) {
       const result = await api("/operations/recycle-bin");
       setItems(result.items || []);
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setLoading(false);
     }
@@ -3105,7 +3108,7 @@ function RecycleBinSettings({ api, setNotice }) {
       await api(`/operations/recycle-bin/${item.id}/restore`, { method: "POST" });
       setNotice("הפריט שוחזר בהצלחה");
       await loadItems();
-    } catch (error) { setNotice(error.message); }
+    } catch (error) { setNotice({type:'error',message:error.message}); }
   };
   const remove = async (item) => {
     if (!confirm(`למחוק לצמיתות את „${item.display_name || "הפריט"}”? לא ניתן לבטל פעולה זו.`)) return;
@@ -3113,7 +3116,7 @@ function RecycleBinSettings({ api, setNotice }) {
       await api(`/operations/recycle-bin/${item.id}`, { method: "DELETE" });
       setNotice("הפריט נמחק לצמיתות");
       await loadItems();
-    } catch (error) { setNotice(error.message); }
+    } catch (error) { setNotice({type:'error',message:error.message}); }
   };
   const labels = { task: "משימה", milestone: "אבן דרך" };
   return (
@@ -3156,7 +3159,7 @@ function WorkCalendarSettings({ initial, api, onSaved, setNotice }) {
       window.dispatchEvent(new Event("projects:work-calendar-changed"));
     } catch (error) {
       setValue(value);
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setSaving(false);
     }
@@ -3182,7 +3185,7 @@ function AiSettings({ api, user, setNotice }) {
       setSettings(result);
       setSelectedProvider(result.activeProvider || "gemini");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   useEffect(() => {
@@ -3227,7 +3230,7 @@ function AiSettings({ api, user, setNotice }) {
       await persist();
       setNotice(`הגדרות ${provider.name} נשמרו בהצלחה`);
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy("");
     }
@@ -3243,7 +3246,7 @@ function AiSettings({ api, user, setNotice }) {
       setNotice(result.message);
       await load();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
       await load();
     } finally {
       setBusy("");
@@ -3256,7 +3259,7 @@ function AiSettings({ api, user, setNotice }) {
       await persist({ enabled: false, clearApiKey: true });
       setNotice("המפתח נמחק בצורה מאובטחת");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy("");
     }
@@ -3325,7 +3328,7 @@ function OutlookCalendarShare({ api, setNotice }) {
   const load = () =>
     api("/calendar-feed")
       .then((result)=>{setFeed(result);setPublicBaseUrl(result.publicBaseUrl||'')})
-      .catch((error) => setNotice(error.message));
+      .catch((error) => setNotice({type:'error',message:error.message}));
   useEffect(() => {
     load();
   }, []);
@@ -3340,7 +3343,7 @@ function OutlookCalendarShare({ api, setNotice }) {
       setFeed({ active: true, ...result });
       setNotice("קישור Outlook חדש וללא התחברות נוצר. כעת יש להחליף את המנוי הישן ב-Outlook.");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy(false);
     }
@@ -3361,7 +3364,7 @@ function OutlookCalendarShare({ api, setNotice }) {
       setFeed({ active: false });
       setNotice("קישור Outlook בוטל");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy(false);
     }
@@ -3440,7 +3443,7 @@ function AppearanceSettings({
       onUserChanged({ ...user, appearanceTheme: result.appearanceTheme });
       setNotice("הגדרת המראה נשמרה והוחלה");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setSaving("");
     }
@@ -3458,7 +3461,7 @@ function AppearanceSettings({
       onUserChanged({ ...user, messageSoundEnabled: result.messageSoundEnabled });
       setNotice(result.messageSoundEnabled ? "צליל הודעות הופעל" : "צליל הודעות הושתק");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setSaving("");
     }
@@ -3541,7 +3544,7 @@ function DocumentStorageSettings({ api, setNotice }) {
   const load = () =>
     api("/document-storage")
       .then((result) => setStorage(result.storage))
-      .catch((error) => setNotice(error.message));
+      .catch((error) => setNotice({type:'error',message:error.message}));
   const loadRecycle=()=>api('/documents-recycle-bin').then(result=>setRecycle(result.documents||[])).catch(()=>setRecycle([]));
   useEffect(() => {
     load();loadRecycle();
@@ -3558,7 +3561,7 @@ function DocumentStorageSettings({ api, setNotice }) {
       setDirectories(result.directories);
     } catch (error) {
       setDirectories([]);
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   useEffect(() => {
@@ -3577,7 +3580,7 @@ function DocumentStorageSettings({ api, setNotice }) {
       setStorage(result.storage);
       setNotice("תיקיית המסמכים נבדקה ונשמרה");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy(false);
     }
@@ -3693,7 +3696,7 @@ function DocumentStorageSettings({ api, setNotice }) {
     </section>
     <section className="panel storage-settings document-recycle">
       <header><span><Trash2 size={22}/></span><div><h3>סל מחזור מסמכים</h3><p>מסמכים שנמחקו נשמרים 14 יום לפני מחיקה סופית.</p></div><em>{recycle.length}</em></header>
-      <div className="document-recycle-list">{recycle.map(item=><div key={item.id}><FileText size={17}/><span><b>{item.title||item.original_name}</b><small>נמחק ב־{new Date(item.deleted_at).toLocaleString('he-IL')}</small></span><button className="ops-secondary" onClick={async()=>{try{await api(`/documents/${item.id}/restore`,{method:'POST'});setNotice('המסמך שוחזר');loadRecycle()}catch(error){setNotice(error.message)}}}><RotateCcw size={15}/>שחזור</button></div>)}{!recycle.length&&<small>סל המחזור ריק.</small>}</div>
+      <div className="document-recycle-list">{recycle.map(item=><div key={item.id}><FileText size={17}/><span><b>{item.title||item.original_name}</b><small>נמחק ב־{new Date(item.deleted_at).toLocaleString('he-IL')}</small></span><button className="ops-secondary" onClick={async()=>{try{await api(`/documents/${item.id}/restore`,{method:'POST'});setNotice('המסמך שוחזר');loadRecycle()}catch(error){setNotice({type:'error',message:error.message})}}}><RotateCcw size={15}/>שחזור</button></div>)}{!recycle.length&&<small>סל המחזור ריק.</small>}</div>
     </section>
     </>
   );
@@ -3783,7 +3786,7 @@ function BusinessSettings({ settings, api, apiRoot, onSaved, setNotice }) {
 function DemoDataToggle({ api, setNotice }) {
   const [state,setState]=useState(null);
   const [busy,setBusy]=useState(false);
-  const load=()=>api('/system/demo-data').then(setState).catch((error)=>setNotice(error.message));
+  const load=()=>api('/system/demo-data').then(setState).catch((error)=>setNotice({type:'error',message:error.message}));
   useEffect(()=>{load()},[]);
   const toggle=async(event)=>{
     const enabled=event.target.checked;
@@ -3794,7 +3797,7 @@ function DemoDataToggle({ api, setNotice }) {
       setState(result);
       setNotice(enabled?`נתוני הדמו הופעלו מחדש (${result.projectCount} פרויקטים)`:`נמחקו ${result.deletedProjects} פרויקטי דמו ו־${result.deletedTasks} משימות. משתמשי המערכת נשמרו.`);
       window.dispatchEvent(new Event('projects:data-changed'));
-    }catch(error){setNotice(error.message)}finally{setBusy(false)}
+    }catch(error){setNotice({type:'error',message:error.message})}finally{setBusy(false)}
   };
   return <section className="panel demo-data-card">
     <header><span><Database size={20}/></span><div><h3>נתוני דמו</h3><p>הצגה או הסרה של הרשומות הפיקטיביות המובנות</p></div><label className="setting-toggle" title={state?.activationLocked?'לא ניתן להפעיל דמו לאחר יצירת מידע אמיתי':''}><input type="checkbox" checked={Boolean(state?.enabled)} disabled={busy||!state||state.activationLocked} onChange={toggle}/><i/></label></header>
@@ -3832,7 +3835,7 @@ function SettingCard({
       onSaved(settingKey, result.setting.value);
       setNotice(`${title} נשמרו בהצלחה`);
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setSaving(false);
     }
@@ -3852,7 +3855,7 @@ function SettingCard({
       setForm(result.setting.value);
       setNotice("לוגו החברה נשמר");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setUploadingLogo(false);
       event.target.value = "";
@@ -3981,7 +3984,7 @@ function CatalogSettings({ catalogs, api, reload, setNotice }) {
       setNotice("הפריט נוסף לקטלוג");
       reload();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const toggle = async (item) => {
@@ -3992,7 +3995,7 @@ function CatalogSettings({ catalogs, api, reload, setNotice }) {
       });
       reload();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   return (
@@ -4113,7 +4116,7 @@ function CustomFields({ fields, api, reload, setNotice }) {
       setNotice("השדה המותאם נוצר");
       reload();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const toggle = async (field) => {
@@ -4124,7 +4127,7 @@ function CustomFields({ fields, api, reload, setNotice }) {
       });
       reload();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   const remove = async (field) => {
@@ -4134,7 +4137,7 @@ function CustomFields({ fields, api, reload, setNotice }) {
       setNotice("השדה נמחק");
       reload();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     }
   };
   return (
@@ -4367,7 +4370,7 @@ function BackupSettings({ api, apiRoot, backups, policy, reload, setNotice }) {
       setNotice("מדיניות הגיבוי נשמרה והיעד נבדק לכתיבה");
       reload();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy("");
     }
@@ -4379,7 +4382,7 @@ function BackupSettings({ api, apiRoot, backups, policy, reload, setNotice }) {
       setNotice("חבילת הגיבוי המלאה נוצרה");
       reload();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy("");
     }
@@ -4399,7 +4402,7 @@ function BackupSettings({ api, apiRoot, backups, policy, reload, setNotice }) {
       });
       setNotice("השחזור אומת והמערכת מופעלת מחדש");
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
       setBusy("");
     }
   };
@@ -4417,7 +4420,7 @@ function BackupSettings({ api, apiRoot, backups, policy, reload, setNotice }) {
       setNotice("חבילת הגיבוי יובאה ואומתה");
       reload();
     } catch (error) {
-      setNotice(error.message);
+      setNotice({type:'error',message:error.message});
     } finally {
       setBusy("");
     }
